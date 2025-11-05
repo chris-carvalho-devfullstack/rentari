@@ -1,6 +1,7 @@
 // src/app/(rentou)/imoveis/page.tsx
 
 import { Metadata } from 'next';
+import ListaImoveis from '@/components/imoveis/ListaImoveis'; 
 
 export const metadata: Metadata = {
   title: 'Meus Imóveis - Rentou',
@@ -16,12 +17,13 @@ export default function ImoveisPage() {
       <p className="text-gray-600 dark:text-gray-400">
         Gerencie seus imóveis, edite anúncios e acompanhe o status de locação.
       </p>
-      <button className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+      {/* CORREÇÃO FORÇADA: Usa !bg-rentou-primary e !text-white para garantir o contraste. */}
+      <button className="mt-4 px-4 py-2 !bg-rentou-primary !text-white rounded-md hover:bg-blue-700 transition-colors">
         + Adicionar Novo Imóvel
       </button>
-      {/* Tabela de imóveis placeholder */}
-      <div className="mt-8 bg-white dark:bg-zinc-800 p-6 rounded-lg shadow">
-        <p className="text-gray-500 dark:text-gray-400">Tabela de imóveis será implementada aqui.</p>
+      
+      <div className="mt-8">
+        <ListaImoveis />
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 // src/components/auth/LoginForm.tsx
 
-'use client'; // <--- ESTA LINHA É CRÍTICA!
+'use client'; 
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // <-- Importa o hook
+import { useRouter } from 'next/navigation'; 
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
@@ -11,6 +11,17 @@ import { useAuthStore } from '@/hooks/useAuthStore';
 interface LoginFormProps {
   onSuccess?: () => void;
 }
+
+// *** FUNÇÃO DE CORREÇÃO: Define o cookie de autenticação para o Middleware ***
+const setAuthCookie = (token: string, days: number = 7) => {
+  const date = new Date();
+  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+  const expires = "; expires=" + date.toUTCString();
+  // Define o cookie para que o Middleware possa ler na próxima requisição.
+  document.cookie = `rentou-auth-token=${token}${expires}; path=/; SameSite=Lax; Secure`;
+  console.log("--- [DEBUG] Cookie 'rentou-auth-token' mockado definido.");
+};
+// *****************************************************************************
 
 /**
  * @fileoverview Formulário de login para o Portal Rentou.
@@ -20,7 +31,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter(); // <-- Uso do hook
+  const router = useRouter(); 
   const { fetchUserData, setUser } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,23 +40,41 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     setError(null);
 
     try {
+      console.log('--- [DEBUG] Iniciando tentativa de login.');
+      
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
+      // Se chegar aqui, o login com Firebase Auth foi um sucesso.
+      console.log('--- [DEBUG] Login Firebase SUCESSO. UID:', userCredential.user.uid);
+
+      // --- PASSO CRÍTICO AQUI: Definir o cookie com o UID ---
+      // Mockamos o token com o UID. Na produção, seria um Session Cookie seguro.
+      setAuthCookie(userCredential.user.uid); 
+      // -----------------------------------------------------
+      
       const user = userCredential.user;
+      
       const userData = await fetchUserData(user.uid, user.email || '', user.displayName || 'Usuário Rentou');
       setUser(userData);
+      
+      console.log('--- [DEBUG] Dados do usuário carregados. Redirecionando...');
 
-      // CORREÇÃO DE ROTA JÁ APLICADA: Sem o grupo de rotas (auth)
+      // O router.push agora deve funcionar, pois o cookie está setado.
       router.push('/dashboard'); 
       onSuccess?.();
     } catch (err: any) {
-      console.error(err);
+      console.error('--- [DEBUG] ERRO DURANTE O PROCESSO DE LOGIN CATCH:', err);
+      if (err && typeof err === 'object' && err.code) {
+          console.error('--- [DEBUG] Código de Erro:', err.code);
+      }
+      
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('E-mail ou senha inválidos. Tente novamente.');
       } else {
-        setError('Ocorreu um erro ao fazer login. Verifique sua conexão e credenciais do Firebase.');
+        setError(`Ocorreu um erro inesperado. Verifique o console para detalhes.`);
       }
     } finally {
+      console.log('--- [DEBUG] Finalizando tentativa de login. Loading = false');
       setLoading(false);
     }
   };
