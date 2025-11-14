@@ -3,8 +3,8 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { NovoImovelData, adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService';
-import { Imovel, ImovelCategoria, ImovelFinalidade } from '@/types/imovel'; 
+import { adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService'; // Importação do serviço corrigida (apenas funções)
+import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData } from '@/types/imovel'; // CORREÇÃO: NovoImovelData importado daqui
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; // Importa a nova estrutura
 
 interface FormularioImovelProps {

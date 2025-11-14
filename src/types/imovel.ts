@@ -50,3 +50,6 @@ export interface Imovel {
   linkVideoTour?: string;
   visitaVirtual360: boolean;
 }
+
+// NOVO: Define a estrutura de dados para o formulário (exclui campos auto-gerados)
+export type NovoImovelData = Omit<Imovel, 'id' | 'proprietarioId'>; // <--- CORREÇÃO
