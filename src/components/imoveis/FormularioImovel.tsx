@@ -3,8 +3,10 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService'; // Importação do serviço corrigida (apenas funções)
-import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData } from '@/types/imovel'; // CORREÇÃO: NovoImovelData importado daqui
+// CORREÇÃO 1: Apenas funções no import do Service
+import { adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService'; 
+// CORREÇÃO 1: Incluir NovoImovelData no import de tipos
+import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData } from '@/types/imovel'; 
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; // Importa a nova estrutura
 
 interface FormularioImovelProps {
@@ -100,14 +102,17 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type, checked } = e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    // CORREÇÃO 2: Destruturar apenas as propriedades comuns
+    const { name, value, type } = e.target;
+    const target = e.target; 
     
     setFormData((prevData: NovoImovelData) => ({
       ...prevData,
       [name]: (type === 'number') 
                 ? parseFloat(value) 
+                // CORREÇÃO 2: Acessa 'checked' usando casting SE for um checkbox
                 : (type === 'checkbox') 
-                  ? checked 
+                  ? (target as HTMLInputElement).checked 
                   : value,
     }));
   }, []);
