@@ -4,6 +4,8 @@
 import { Metadata } from 'next';
 import { useDashboard } from '@/hooks/useDashboard'; 
 import { DashboardMetrics } from '@/types/dashboard'; 
+import { useState } from 'react'; // Import useState
+import { Imovel, ImovelCategoria } from '@/types/imovel'; // Import types for filtering
 
 // A Metadata precisa ser exportada em um arquivo 'layout.tsx' se for usar 'use client' no 'page.tsx'
 // Para fins de demonstração, manteremos aqui (o Next.js usará a mais externa, se houver)
@@ -61,6 +63,96 @@ const ChartPlaceholder: React.FC<{ title: string; data: DashboardMetrics['fluxoC
     </div>
   );
 };
+
+
+// --- NOVO COMPONENTE: DEMONSTRAÇÃO DE FILTRO COM DADOS RICOS ---
+
+const STATUS_OPTIONS: (Imovel['status'] | 'TODOS')[] = ['TODOS', 'VAGO', 'ALUGADO', 'ANUNCIADO', 'MANUTENCAO'];
+const CATEGORY_OPTIONS: (ImovelCategoria | 'TODOS')[] = ['TODOS', 'Residencial', 'Comercial', 'Terrenos', 'Rural', 'Imóveis Especiais'];
+
+const FilteredDataDemo: React.FC<{ metrics: DashboardMetrics }> = ({ metrics }) => {
+    // Definimos os estados de filtro
+    const [selectedCategory, setSelectedCategory] = useState<ImovelCategoria | 'TODOS'>('TODOS');
+    const [selectedStatus, setSelectedStatus] = useState<Imovel['status'] | 'TODOS'>('TODOS');
+    
+    // Lógica Simplista de Filtro (Simulação para demonstrar UI com dados agregados)
+    const getFilteredCount = () => {
+        let baseCount = metrics.imoveisAtivos;
+        
+        // Simulação de distribuição do total de imóveis por status/categoria.
+        // Em um app real, esta função usaria a lista completa de Imóveis, ou
+        // a API retornaria o dado já filtrado.
+        
+        if (selectedStatus === 'ALUGADO') {
+            baseCount = Math.round(metrics.imoveisAtivos * (metrics.taxaOcupacao / 100));
+        } else if (selectedStatus === 'VAGO') {
+            baseCount = metrics.imoveisAtivos - Math.round(metrics.imoveisAtivos * (metrics.taxaOcupacao / 100));
+        } else if (selectedStatus === 'MANUTENCAO') {
+            baseCount = Math.max(1, metrics.pendencias - 1); // Pendências - 1 (alerta financeiro mockado)
+        } else { // status === 'ANUNCIADO' ou 'TODOS'
+             baseCount = metrics.imoveisAtivos;
+        }
+
+        // Simulação de filtragem por categoria (ex: 33% dos ativos são 'Residencial')
+        if (selectedCategory === 'Residencial') {
+             return Math.max(1, Math.round(baseCount * 0.33));
+        }
+        if (selectedCategory === 'Rural') {
+             return Math.max(1, Math.round(baseCount * 0.25));
+        }
+        
+        // Se ambos são "TODOS", retorna o total de ativos.
+        return baseCount;
+    }
+    
+    const filteredCount = Math.round(getFilteredCount());
+
+
+    return (
+        <div className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow-xl">
+             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 border-b pb-2">Análise Detalhada (Filtro)</h2>
+
+            {/* Dropdowns de Filtro */}
+            <div className="grid grid-cols-1 gap-4">
+                <div>
+                    <label htmlFor="category-filter" className="block text-sm font-medium text-gray-500 dark:text-gray-400">Filtrar por Categoria</label>
+                    <select
+                        id="category-filter"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value as ImovelCategoria | 'TODOS')}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                    >
+                        {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+                
+                <div>
+                    <label htmlFor="status-filter" className="block text-sm font-medium text-gray-500 dark:text-gray-400">Filtrar por Status</label>
+                    <select
+                        id="status-filter"
+                        value={selectedStatus}
+                        onChange={(e) => setSelectedStatus(e.target.value as Imovel['status'] | 'TODOS')}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                    >
+                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+            </div>
+            
+            {/* Métrica Dinâmica Filtrada */}
+            <div className="pt-4 border-t border-gray-200 dark:border-zinc-700">
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Imóveis Correspondentes</p>
+                <p className={`text-4xl font-bold mt-1 text-rentou-primary dark:text-blue-400`}>
+                    {filteredCount}
+                </p>
+                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">
+                    Resultado dinâmico para os filtros selecionados.
+                </p>
+            </div>
+        </div>
+    );
+};
+// --- FIM NOVO COMPONENTE ---
 
 
 /**
@@ -139,12 +231,16 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Seção de Análise (Gráfico Placeholder) - Painel principal de visualização */}
+      {/* Seção de Análise (Gráfico Placeholder + Novo Filtro/Análise) */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-8">
         <ChartPlaceholder 
             title="Performance Financeira (Últimos 6 Meses)"
             data={metrics!.fluxoCaixaMensal}
         />
+        
+        {/* NOVO COMPONENTE DE DEMONSTRAÇÃO DE FILTRO/DADO RICO */}
+        <FilteredDataDemo metrics={metrics!} /> 
+        
         {/* Outro Widget de Dashboard: Alertas Operacionais */}
         <div className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow-xl">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Alertas e Notificações</h2>
