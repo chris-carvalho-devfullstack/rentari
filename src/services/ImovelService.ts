@@ -1,4 +1,5 @@
 // src/services/ImovelService.ts
+
 import { Imovel, NovoImovelData } from '@/types/imovel';
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; // Importa a hierarquia
 
@@ -167,8 +168,7 @@ export async function adicionarNovoImovel(data: NovoImovelData): Promise<Imovel>
   const newImovel: Imovel = {
     id: newId,
     proprietarioId: 'prop-123', 
-    caracteristicas: data.caracteristicas || [],
-    fotos: data.fotos || [],
+    // Linhas de 'caracteristicas' e 'fotos' removidas para evitar colisão de propriedade (Type Error)
     ...data,
   };
 
@@ -198,6 +198,8 @@ export async function atualizarImovel(id: string, data: NovoImovelData): Promise
   const updatedImovel: Imovel = {
     ...mockImoveis[index], 
     ...data,
+    // O spread '...data' já inclui as listas de caracteristicas e fotos. 
+    // Mantenho a lógica de fallback, mas o spread de 'data' deve ser a fonte primária.
     caracteristicas: data.caracteristicas || mockImoveis[index].caracteristicas,
     fotos: data.fotos || mockImoveis[index].fotos,
   };

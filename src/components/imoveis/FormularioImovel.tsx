@@ -3,11 +3,9 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-// CORREÇÃO 1: Apenas funções no import do Service
 import { adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService'; 
-// CORREÇÃO 1: Incluir NovoImovelData no import de tipos
 import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData } from '@/types/imovel'; 
-import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; // Importa a nova estrutura
+import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
 
 interface FormularioImovelProps {
     initialData?: Imovel;
@@ -15,7 +13,7 @@ interface FormularioImovelProps {
 
 // Define os passos do formulário
 const formSteps = [
-    { id: 1, name: 'Classificação e Finalidade' }, // Etapa 1 atualizada
+    { id: 1, name: 'Classificação e Finalidade' },
     { id: 2, name: 'Estrutura e Área' },
     { id: 3, name: 'Valores e Contrato' },
     { id: 4, name: 'Descrição e Mídia' },
@@ -25,7 +23,7 @@ const defaultFormData: NovoImovelData = {
     titulo: '',
     categoriaPrincipal: 'Residencial', 
     tipoDetalhado: 'Apartamento Padrão', 
-    finalidades: ['Venda'], // Padrão
+    finalidades: ['Venda'], 
     endereco: '',
     cidade: '',
     quartos: 1,
@@ -38,7 +36,7 @@ const defaultFormData: NovoImovelData = {
     aceitaAnimais: false,
     andar: 1,
     status: 'VAGO',
-    valorAluguel: 0, // Valor pode ser 0 se for apenas venda
+    valorAluguel: 0, 
     valorCondominio: 0,
     valorIPTU: 0,
     dataDisponibilidade: new Date().toISOString().split('T')[0],
@@ -102,15 +100,15 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    // CORREÇÃO 2: Destruturar apenas as propriedades comuns
+    // Destrutura apenas propriedades comuns
     const { name, value, type } = e.target;
-    const target = e.target; 
+    const target = e.target;
     
     setFormData((prevData: NovoImovelData) => ({
       ...prevData,
       [name]: (type === 'number') 
                 ? parseFloat(value) 
-                // CORREÇÃO 2: Acessa 'checked' usando casting SE for um checkbox
+                // Acessa 'checked' com segurança fazendo o cast condicional para HTMLInputElement
                 : (type === 'checkbox') 
                   ? (target as HTMLInputElement).checked 
                   : value,
