@@ -1,5 +1,5 @@
 // src/app/(auth)/login/page.tsx
-import { LoginForm } from '@/components/auth/LoginForm';
+import LoginForm from '@/components/auth/LoginForm'; // CORREÇÃO: Removido as chaves
 import { Metadata } from 'next';
 
 /**
