@@ -1,14 +1,15 @@
 // src/services/DashboardService.ts
 import { DashboardMetrics } from '@/types/dashboard'; 
 import { Imovel } from '@/types/imovel'; // Import Imovel
-import { fetchImoveisDoProprietario } from './ImovelService'; // Import ImovelService
+// Importa o serviço que agora busca dados do Firestore
+import { fetchImoveisDoProprietario } from './ImovelService'; 
 
 /**
- * @fileoverview Serviço mockado para simular a busca de métricas e KPIs para o Dashboard.
- * ATUALIZADO: Agora calcula métricas a partir da lista real de Imóveis (via mock do ImovelService).
+ * @fileoverview Serviço para buscar métricas e KPIs para o Dashboard,
+ * agora calculando dados operacionais a partir do ImovelService (Firestore).
  */
 
-// Dados mockados originais - Mantenho apenas a parte que não depende do Imovel (como fluxo de caixa)
+// Dados mockados - Mantidos apenas para o histórico/gráfico
 const mockFinancialData = {
   fluxoCaixaMensal: [
     { mes: 'Jan', receita: 14500, despesa: 1200 },
@@ -27,6 +28,7 @@ function calculateMetrics(imoveis: Imovel[]): Omit<DashboardMetrics, 'fluxoCaixa
   const imoveisAlugados = imoveis.filter(i => i.status === 'ALUGADO');
   const imoveisAtivos = imoveis.length;
   const imoveisEmManutencao = imoveis.filter(i => i.status === 'MANUTENCAO');
+  const alugueisAnunciados = imoveis.filter(i => i.status === 'ANUNCIADO');
 
   // 1. Receita Mês: Soma do valor do aluguel para imóveis ALUGADOS (simplificação)
   const receitaMes = imoveisAlugados.reduce((sum, imovel) => sum + imovel.valorAluguel, 0);
@@ -39,8 +41,8 @@ function calculateMetrics(imoveis: Imovel[]): Omit<DashboardMetrics, 'fluxoCaixa
   // 3. Projeção Anual: Receita Mensal * 12
   const projecaoAnual = receitaMes * 12;
 
-  // 4. Pendências: Contagem de imóveis em MANUTENCAO + 1 (simulação de alerta financeiro fixo)
-  const pendencias = imoveisEmManutencao.length + 1; // 1 é a pendência financeira simulada
+  // 4. Pendências: Contagem de imóveis em MANUTENCAO/ANUNCIADO + 1 (alerta financeiro simulado)
+  const pendencias = imoveisEmManutencao.length + alugueisAnunciados.length + 1; 
 
   return {
     imoveisAtivos,
@@ -57,9 +59,9 @@ function calculateMetrics(imoveis: Imovel[]): Omit<DashboardMetrics, 'fluxoCaixa
  * @returns Promise<DashboardMetrics> Objeto com as métricas e dados de gráfico.
  */
 export async function fetchDashboardMetrics(): Promise<DashboardMetrics> {
-  console.log('[DashboardService] Simulação: Buscando métricas do Dashboard (usando dados reais de Imóveis)...');
+  console.log('[DashboardService] Buscando métricas do Dashboard (usando dados reais de Imóveis do Firestore)...');
   
-  // 1. Busca os dados reais de imóveis
+  // 1. Busca os dados reais de imóveis do ImovelService (agora conectado ao Firestore)
   const imoveis = await fetchImoveisDoProprietario();
 
   // 2. Calcula as métricas a partir dos dados reais

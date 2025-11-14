@@ -59,16 +59,23 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
   const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
 
   const [formData, setFormData] = useState<NovoImovelData>(() => {
-    const initialDataAsNovoImovelData = (initialData || {}) as NovoImovelData; 
+    // Usamos Omit<Imovel, 'id' | 'smartId' | 'proprietarioId'> para garantir que o initialData não polua o form
+    const initialDataPayload = initialData ? Object.keys(defaultFormData).reduce((acc, key) => {
+        if (key in initialData) {
+            (acc as any)[key] = (initialData as any)[key];
+        }
+        return acc;
+    }, {}) : {};
+
     return {
         ...defaultFormData, 
-        ...initialDataAsNovoImovelData,
+        ...initialDataPayload as Partial<NovoImovelData>,
         // Garante que os novos campos tenham valor
-        categoriaPrincipal: initialDataAsNovoImovelData.categoriaPrincipal || defaultFormData.categoriaPrincipal,
-        tipoDetalhado: initialDataAsNovoImovelData.tipoDetalhado || defaultFormData.tipoDetalhado,
-        finalidades: initialDataAsNovoImovelData.finalidades || defaultFormData.finalidades,
-        dataDisponibilidade: initialDataAsNovoImovelData.dataDisponibilidade || defaultFormData.dataDisponibilidade,
-        andar: initialDataAsNovoImovelData.andar || 0,
+        categoriaPrincipal: initialData?.categoriaPrincipal || defaultFormData.categoriaPrincipal,
+        tipoDetalhado: initialData?.tipoDetalhado || defaultFormData.tipoDetalhado,
+        finalidades: initialData?.finalidades || defaultFormData.finalidades,
+        dataDisponibilidade: initialData?.dataDisponibilidade || defaultFormData.dataDisponibilidade,
+        andar: initialData?.andar || 0,
     };
   });
 
@@ -172,8 +179,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     setError(null);
     
     try {
-      if (formData.valorAluguel <= 0 || isNaN(formData.valorAluguel)) {
-        setError('O valor do aluguel deve ser um número maior que zero.');
+      if (formData.valorAluguel < 0 || isNaN(formData.valorAluguel)) {
+        setError('O valor do aluguel deve ser um número válido (maior ou igual a zero).');
         setLoading(false);
         return;
       }
@@ -190,9 +197,9 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
       
       router.push(`/imoveis/${result.id}`); // Redireciona para o novo Hub de Detalhes
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro na operação de imóvel:', err);
-      setError(`Falha ao ${isEditing ? 'atualizar' : 'adicionar'} o imóvel. Tente novamente mais tarde.`);
+      setError(`Falha ao ${isEditing ? 'atualizar' : 'adicionar'} o imóvel. Detalhe: ${err.message || 'Erro desconhecido.'}`);
     } finally {
       setLoading(false);
     }
