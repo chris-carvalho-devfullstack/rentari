@@ -46,7 +46,7 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Página de Visualização/Detalhes de um Imóvel (Modern UI).
- * Este é o novo hub de gerenciamento para o imóvel, incluindo o ID Inteligente.
+ * Este é o novo hub de gerenciamento para o imóvel.
  */
 export default function ImovelDetalhePage() {
     const params = useParams();
@@ -200,13 +200,13 @@ export default function ImovelDetalhePage() {
             {/* Seção 2: Estrutura e Detalhes */}
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 pt-4 border-t border-gray-200 dark:border-zinc-700">Detalhes do Imóvel</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <DataBlock label="Tipo" value={TipoImovelMap[imovel.tipoImovel]} />
+                <DataBlock label="Tipo" value={imovel.tipoDetalhado} />
                 <DataBlock label="Quartos" value={imovel.quartos} />
                 <DataBlock label="Banheiros" value={imovel.banheiros} />
                 <DataBlock label="Vagas de Garagem" value={imovel.vagasGaragem} />
                 <DataBlock label="Área Total (m²)" value={imovel.areaTotal} />
                 <DataBlock label="Área Útil (m²)" value={imovel.areaUtil} />
-                {imovel.tipoImovel === 'APARTAMENTO' && <DataBlock label="Andar" value={imovel.andar || 'Térreo/Não Aplicável'} />}
+                {imovel.categoriaPrincipal === 'Residencial' && imovel.tipoDetalhado.includes('Apartamento') && <DataBlock label="Andar" value={imovel.andar || 'Térreo/Não Aplicável'} />}
                 <DataBlock label="Aceita Animais?" value={imovel.aceitaAnimais ? 'Sim' : 'Não'} />
             </div>
             

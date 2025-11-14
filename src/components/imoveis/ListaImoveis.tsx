@@ -5,15 +5,12 @@ import React from 'react';
 import { Imovel } from '@/types/imovel'; 
 import { useImoveis } from '@/hooks/useImoveis'; 
 import Link from 'next/link'; 
-// A função 'removerImovel' é removida daqui para limpar a UI
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
-
-// ... (StatusBadge inalterado)
 
 const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
   let classes = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ';
@@ -32,6 +29,10 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
       classes += 'bg-blue-100 text-rentou-primary dark:bg-blue-900 dark:text-blue-300';
       text = 'Anunciado';
       break;
+    case 'MANUTENCAO':
+      classes += 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
+      text = 'Manutenção';
+      break;
     default:
       classes += 'bg-gray-500 text-white';
       text = status;
@@ -44,12 +45,11 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Componente de tabela para listar imóveis do proprietário.
- * Refatorado para uma UI mais limpa, movendo o CRUD para a página de detalhes.
+ * Implementa o ID Inteligente e linka para a página de Detalhes/Gerenciamento.
  */
 export default function ListaImoveis() {
   const { imoveis, loading, error, refetch } = useImoveis();
   
-  // A função handleDelete é removida.
   
   if (loading) {
     return (
@@ -91,7 +91,7 @@ export default function ListaImoveis() {
               scope="col"
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-300"
             >
-              Título
+              Título / ID
             </th>
             <th
               scope="col"
@@ -121,7 +121,9 @@ export default function ListaImoveis() {
           {imoveis.map((imovel) => (
             <tr key={imovel.id} className="hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors">
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                {imovel.titulo}
+                <div className="font-bold">{imovel.titulo}</div>
+                {/* ID INTELIGENTE NA TABELA */}
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{imovel.id}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {imovel.endereco}, {imovel.cidade}
@@ -135,9 +137,9 @@ export default function ListaImoveis() {
                 <StatusBadge status={imovel.status} />
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                {/* O link de gerenciar agora aponta para a rota de edição */}
+                {/* CORREÇÃO: Link agora aponta para a nova página de detalhes */}
                 <Link 
-                    href={`/imoveis/${imovel.id}/editar`}
+                    href={`/imoveis/${imovel.id}`}
                     className="text-rentou-primary hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                 >
                     Gerenciar

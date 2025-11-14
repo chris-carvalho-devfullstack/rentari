@@ -1,30 +1,29 @@
 // src/components/imoveis/FormularioImovel.tsx
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { NovoImovelData, adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService';
-import { Imovel } from '@/types/imovel'; 
+import { Imovel, ImovelCategoria, ImovelFinalidade } from '@/types/imovel'; 
+import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; // Importa a nova estrutura
 
 interface FormularioImovelProps {
-    // Se presente, estamos no modo de edição (Update).
     initialData?: Imovel;
 }
 
 // Define os passos do formulário
 const formSteps = [
-    { id: 1, name: 'Localização e Tipo' },
+    { id: 1, name: 'Classificação e Finalidade' }, // Etapa 1 atualizada
     { id: 2, name: 'Estrutura e Área' },
     { id: 3, name: 'Valores e Contrato' },
     { id: 4, name: 'Descrição e Mídia' },
 ];
 
-/**
- * Valor inicial default completo com os novos campos.
- */
 const defaultFormData: NovoImovelData = {
     titulo: '',
-    tipoImovel: 'APARTAMENTO', // Padrão
+    categoriaPrincipal: 'Residencial', 
+    tipoDetalhado: 'Apartamento Padrão', 
+    finalidades: ['Venda'], // Padrão
     endereco: '',
     cidade: '',
     quartos: 1,
@@ -33,15 +32,15 @@ const defaultFormData: NovoImovelData = {
     areaTotal: 0, 
     areaUtil: 0, 
     descricaoLonga: '',
-    caracteristicas: [], // Array vazio
+    caracteristicas: [], 
     aceitaAnimais: false,
     andar: 1,
     status: 'VAGO',
-    valorAluguel: 0,
+    valorAluguel: 0, // Valor pode ser 0 se for apenas venda
     valorCondominio: 0,
     valorIPTU: 0,
-    dataDisponibilidade: new Date().toISOString().split('T')[0], // Data de hoje em YYYY-MM-DD
-    fotos: [], // Array vazio
+    dataDisponibilidade: new Date().toISOString().split('T')[0],
+    fotos: [], 
     linkVideoTour: undefined,
     visitaVirtual360: false,
 };
@@ -49,6 +48,7 @@ const defaultFormData: NovoImovelData = {
 
 /**
  * @fileoverview Formulário multi-step (inteligente) para a criação e edição de imóveis.
+ * Implementa a hierarquia de tipos de imóveis.
  */
 export default function FormularioImovel({ initialData }: FormularioImovelProps) {
   const router = useRouter();
@@ -58,25 +58,52 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
   const isEditing = !!initialData;
   const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
 
-  // Inicializa o estado do formulário usando initialData (para edição) ou defaultFormData (para criação)
   const [formData, setFormData] = useState<NovoImovelData>(() => {
-    // A coerção é necessária porque initialData é um 'Imovel' completo, mas o estado inicial deve ser 'NovoImovelData'
     const initialDataAsNovoImovelData = (initialData || {}) as NovoImovelData; 
     return {
         ...defaultFormData, 
         ...initialDataAsNovoImovelData,
-        // Garante que a data não seja undefined no estado do formulário se o mock inicial não fornecer uma
+        // Garante que os novos campos tenham valor
+        categoriaPrincipal: initialDataAsNovoImovelData.categoriaPrincipal || defaultFormData.categoriaPrincipal,
+        tipoDetalhado: initialDataAsNovoImovelData.tipoDetalhado || defaultFormData.tipoDetalhado,
+        finalidades: initialDataAsNovoImovelData.finalidades || defaultFormData.finalidades,
         dataDisponibilidade: initialDataAsNovoImovelData.dataDisponibilidade || defaultFormData.dataDisponibilidade,
-        andar: initialDataAsNovoImovelData.andar || 0, // Garante que andar seja 0 se não estiver definido
+        andar: initialDataAsNovoImovelData.andar || 0,
     };
   });
+
+  // Mapeia os tipos disponíveis com base na categoria principal selecionada
+  const tiposDisponiveis = useMemo(() => {
+    return IMÓVEIS_HIERARQUIA.find(c => c.categoria === formData.categoriaPrincipal)?.tipos || [];
+  }, [formData.categoriaPrincipal]);
+  
+  // Mapeia as finalidades disponíveis com base no tipo selecionado (Tipo de Categoria + Subtipo)
+  const finalidadesDisponiveis = useMemo(() => {
+    const tipo = tiposDisponiveis.find(t => formData.tipoDetalhado.startsWith(t.nome));
+    return tipo?.finalidade || [];
+  }, [formData.tipoDetalhado, tiposDisponiveis]);
+
+  // Efeito para resetar tipoDetalhado e finalidades ao mudar a categoria
+  useEffect(() => {
+    const firstTipo = tiposDisponiveis[0];
+    if (firstTipo) {
+      const defaultTipoDetalhado = firstTipo.subtipos ? `${firstTipo.nome} - ${firstTipo.subtipos[0]}` : firstTipo.nome;
+      
+      setFormData(prevData => ({
+        ...prevData,
+        tipoDetalhado: defaultTipoDetalhado,
+        // Remove finalidades que não são mais válidas (mantendo pelo menos uma se houver)
+        finalidades: prevData.finalidades.filter(f => firstTipo.finalidade.includes(f))
+      }));
+    }
+  }, [formData.categoriaPrincipal, tiposDisponiveis]); 
+
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type, checked } = e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
     
     setFormData((prevData: NovoImovelData) => ({
       ...prevData,
-      // Lógica para tipos específicos
       [name]: (type === 'number') 
                 ? parseFloat(value) 
                 : (type === 'checkbox') 
@@ -85,24 +112,54 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     }));
   }, []);
 
+  const handleFinalidadeChange = useCallback((finalidade: ImovelFinalidade) => {
+    setFormData((prevData: NovoImovelData) => {
+        const isSelected = prevData.finalidades.includes(finalidade);
+        let newFinalidades;
+        
+        if (isSelected) {
+            newFinalidades = prevData.finalidades.filter(f => f !== finalidade);
+        } else {
+            newFinalidades = [...prevData.finalidades, finalidade];
+        }
+        
+        // Garante que o array não fique vazio para evitar bugs de persistência (pelo menos 'Venda' se não for Locação)
+        if (newFinalidades.length === 0) {
+            return prevData;
+        }
+
+        return {
+            ...prevData,
+            finalidades: newFinalidades,
+        };
+    });
+  }, []);
+
+
   const handleCaracteristicaChange = useCallback((caracteristica: string) => {
     setFormData((prevData: NovoImovelData) => {
         const isSelected = prevData.caracteristicas.includes(caracteristica);
         return {
             ...prevData,
             caracteristicas: isSelected
-                ? prevData.caracteristicas.filter(c => c !== caracteristica) // Remove
-                : [...prevData.caracteristicas, caracteristica], // Adiciona
+                ? prevData.caracteristicas.filter(c => c !== caracteristica) 
+                : [...prevData.caracteristicas, caracteristica], 
         };
     });
   }, []);
 
   const handleNextStep = (e: React.FormEvent) => {
-    e.preventDefault(); // Impede o envio completo do formulário
-    // Validação básica por etapa (pode ser expandida)
+    e.preventDefault(); 
+    // Validação de Finalidade na Etapa 1
+    if (currentStep === 1 && formData.finalidades.length === 0) {
+      setError("Selecione pelo menos uma finalidade para o imóvel (Venda ou Locação).");
+      return;
+    }
+
     if (currentStep < formSteps.length) {
       setCurrentStep(currentStep + 1);
-      window.scrollTo(0, 0); // Scrolla para o topo para melhor UX
+      setError(null);
+      window.scrollTo(0, 0); 
     }
   };
 
@@ -117,23 +174,18 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         setLoading(false);
         return;
       }
-      
-      // Validação final de campos obrigatórios (a ser expandida)
 
       let result: Imovel;
       
       if (isEditing && initialData) {
-        // Modo de Edição
         result = await atualizarImovel(initialData.id, formData);
         console.log('Imóvel atualizado com sucesso:', result);
       } else {
-        // Modo de Criação
         result = await adicionarNovoImovel(formData);
         console.log('Imóvel adicionado com sucesso:', result);
       }
       
-      // Redireciona para a lista de imóveis após o sucesso
-      router.push('/imoveis');
+      router.push(`/imoveis/${result.id}`); // Redireciona para o novo Hub de Detalhes
 
     } catch (err) {
       console.error('Erro na operação de imóvel:', err);
@@ -149,9 +201,68 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         case 1:
             return (
                 <div className="space-y-6">
-                    <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">1. Localização e Identificação</h3>
+                    <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">1. Classificação e Finalidade</h3>
                     
-                    {/* Campo Título */}
+                    {/* Seleção de Categoria Principal */}
+                    <div>
+                        <label htmlFor="categoriaPrincipal" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria Principal</label>
+                        <select
+                            id="categoriaPrincipal"
+                            name="categoriaPrincipal"
+                            required
+                            value={formData.categoriaPrincipal}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        >
+                            {IMÓVEIS_HIERARQUIA.map(c => (
+                                <option key={c.categoria} value={c.categoria}>{c.categoria}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Seleção de Tipo Detalhado (Cascata) */}
+                    <div>
+                        <label htmlFor="tipoDetalhado" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo e Subtipo Detalhado</label>
+                        <select
+                            id="tipoDetalhado"
+                            name="tipoDetalhado"
+                            required
+                            value={formData.tipoDetalhado}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        >
+                            {tiposDisponiveis.flatMap(tipo => 
+                                tipo.subtipos ? tipo.subtipos.map(sub => (
+                                    <option key={`${tipo.nome} - ${sub}`} value={`${tipo.nome} - ${sub}`}>{`${tipo.nome} - ${sub}`}</option>
+                                )) : (
+                                    <option key={tipo.nome} value={tipo.nome}>{tipo.nome}</option>
+                                )
+                            )}
+                        </select>
+                    </div>
+                    
+                    {/* Seleção de Múltiplas Finalidades */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Finalidade do Imóvel (Múltipla Seleção)</label>
+                        <div className="flex flex-wrap gap-2">
+                            {finalidadesDisponiveis.map((finalidade) => (
+                                <button
+                                    key={finalidade}
+                                    type="button" 
+                                    onClick={() => handleFinalidadeChange(finalidade as ImovelFinalidade)}
+                                    className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 ${
+                                        formData.finalidades.includes(finalidade as ImovelFinalidade)
+                                            ? 'bg-rentou-primary text-white shadow-md'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-600'
+                                    }`}
+                                >
+                                    {finalidade}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Campos Título, Endereço, Cidade movidos para cá */}
                     <div>
                         <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Título do Anúncio</label>
                         <input
@@ -165,30 +276,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
                         />
                     </div>
-                    
-                    {/* Campo Tipo de Imóvel (ATUALIZADO) */}
-                    <div>
-                        <label htmlFor="tipoImovel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Imóvel</label>
-                        <select
-                            id="tipoImovel"
-                            name="tipoImovel"
-                            required
-                            value={formData.tipoImovel}
-                            onChange={handleChange}
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-                        >
-                            <option value="APARTAMENTO">Apartamento</option>
-                            <option value="CASA">Casa</option>
-                            <option value="TERRENO">Terreno</option>
-                            <option value="COMERCIAL">Comercial</option>
-                            <option value="SITIO">Sítio</option>
-                            <option value="FAZENDA">Fazenda</option>
-                            <option value="CHACARA">Chácara</option>
-                            <option value="OUTRO">Outro</option>
-                        </select>
-                    </div>
-
-                    {/* Campo Endereço */}
                     <div>
                         <label htmlFor="endereco" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Endereço Completo</label>
                         <input
@@ -202,8 +289,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
                         />
                     </div>
-
-                    {/* Campo Cidade/UF */}
                     <div>
                         <label htmlFor="cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade e UF</label>
                         <input
@@ -217,12 +302,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
                         />
                     </div>
+
                 </div>
             );
         case 2:
             return (
                 <div className="space-y-6">
                     <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Características</h3>
+                    {/* ... (Conteúdo da Etapa 2 permanece igual) ... */}
                     
                     {/* Linha: Quartos, Banheiros, Vagas */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -238,7 +325,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                     
                     {/* Campo Andar (Condicional) */}
-                    {formData.tipoImovel === 'APARTAMENTO' && (
+                    {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') && (
                         <NumericInput label="Andar" name="andar" value={formData.andar || 0} onChange={handleChange} min={0} placeholder="Ex: 5" />
                     )}
 
@@ -246,6 +333,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     <ComodidadesSelector selected={formData.caracteristicas} onSelect={handleCaracteristicaChange} />
                 </div>
             );
+        // ... (Cases 3 e 4 permanecem iguais) ...
         case 3:
             return (
                 <div className="space-y-6">
@@ -260,7 +348,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 name="valorAluguel"
                                 type="number"
                                 step="0.01"
-                                min="0.01"
+                                min="0.00" // Permite 0 se for apenas Venda/Permuta
                                 required
                                 placeholder="3500.00"
                                 value={formData.valorAluguel}
@@ -439,7 +527,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 {availableFeatures.map((feature) => (
                     <button
                         key={feature}
-                        type="button" // Importante: evita o submit
+                        type="button" 
                         onClick={() => onSelect(feature)}
                         className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 ${
                             selected.includes(feature)
@@ -469,7 +557,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         </p>
       )}
 
-      {/* Usamos onSubmit no formulário, mas o handler real é no botão de submissão final */}
       <form onSubmit={currentStep === formSteps.length ? handleSubmit : handleNextStep} className="space-y-8">
         
         {renderStepContent()}
@@ -487,12 +574,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 </button>
             )}
             
-            <div className="flex-1"></div> {/* Espaçador */}
+            <div className="flex-1"></div>
 
             {/* Botão Próximo/Salvar */}
             <button
                 type={currentStep === formSteps.length ? 'submit' : 'button'}
-                onClick={currentStep < formSteps.length ? handleNextStep : undefined} // Usa o handler para o Next Step
+                onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
                 disabled={loading}
                 className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-colors ${
                   loading 

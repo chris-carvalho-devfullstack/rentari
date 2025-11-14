@@ -1,36 +1,22 @@
 // src/services/ImovelService.ts
-import { Imovel } from '@/types/imovel';
+import { Imovel, NovoImovelData } from '@/types/imovel';
+import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; // Importa a hierarquia
 
 /**
  * @fileoverview Serviço mockado para simular chamadas à API (Backend NestJS)
  * para o módulo de Imóveis, incluindo operações CRUD.
  */
 
-/**
- * Define a estrutura de dados para criação/edição, conforme esperado pelo FormulárioImovel.
- * Propriedades que são geradas pelo backend (id, proprietarioId) são omitidas.
- */
-export type NovoImovelData = Omit<Imovel, 'id' | 'proprietarioId'>;
-
 // Variáveis para manter o estado do contador sequencial para o mock
 let nextIdSequence = 4; // Começa após os IDs mockados iniciais
 
-const getTypePrefix = (type: Imovel['tipoImovel']): string => {
-  switch (type) {
-    case 'APARTAMENTO': return 'AP';
-    case 'CASA': return 'CS';
-    case 'SITIO': return 'ST';
-    case 'FAZENDA': return 'FZ';
-    case 'CHACARA': return 'CH';
-    case 'TERRENO': return 'TR';
-    case 'COMERCIAL': return 'CM';
-    case 'OUTRO': return 'OT';
-    default: return 'OT';
-  }
+const getCategoryPrefix = (categoria: Imovel['categoriaPrincipal']): string => {
+  const mapping = IMÓVEIS_HIERARQUIA.find(c => c.categoria === categoria);
+  return mapping ? mapping.prefixoID : 'OT'; 
 };
 
 /**
- * Gera um ID inteligente e descritivo: [Tipo(2)][Quartos(2)][Mês(2)][Ano(2)][Ordem(2)]
+ * Gera um ID inteligente e descritivo: [Categoria(2)][Quartos(2)][Mês(2)][Ano(2)][Ordem(2)]
  * @param data Os dados do novo imóvel.
  * @returns O ID inteligente formatado.
  */
@@ -40,12 +26,15 @@ const generateNewSmartId = (data: NovoImovelData): string => {
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const year = date.getFullYear().toString().slice(-2);
   
-  const prefix = getTypePrefix(data.tipoImovel);
+  const prefix = getCategoryPrefix(data.categoriaPrincipal);
   const quartos = data.quartos.toString().padStart(2, '0');
-  // CORRIGIDO: Ponto e vírgula e incremento mantidos na sintaxe válida
-  const ordem = nextIdSequence++.toString().padStart(2, '0'); 
+  
+  // Correção de Sintaxe (Incremento isolado)
+  const currentSequence = nextIdSequence;
+  nextIdSequence++;
+  const ordem = currentSequence.toString().padStart(2, '0'); 
 
-  // Formato: AP03112501
+  // Formato: RS03112504 (Residencial, 3 Quartos, Nov/25, Ordem 04)
   return `${prefix}${quartos}${month}${year}${ordem}`;
 };
 
@@ -53,11 +42,12 @@ const generateNewSmartId = (data: NovoImovelData): string => {
 // Usamos 'let' para que a lista possa ser mutável (adicionar/remover/editar)
 let mockImoveis: Imovel[] = [
   {
-    // Novo formato de ID inteligente
-    id: 'AP03112501',
+    id: 'RS03112501',
     proprietarioId: 'prop-123',
     titulo: 'Apartamento de Luxo (Vista Mar)',
-    tipoImovel: 'APARTAMENTO',
+    categoriaPrincipal: 'Residencial', 
+    tipoDetalhado: 'Apartamento Padrão', 
+    finalidades: ['Locação Residencial', 'Venda'], 
     endereco: 'Rua do Sol, 456',
     cidade: 'Florianópolis, SC',
     quartos: 3,
@@ -79,24 +69,25 @@ let mockImoveis: Imovel[] = [
     visitaVirtual360: true,
   },
   {
-    // Novo formato de ID inteligente
-    id: 'CS04112502',
+    id: 'RU04112502',
     proprietarioId: 'prop-123',
-    titulo: 'Casa Térrea com Piscina',
-    tipoImovel: 'CASA',
-    endereco: 'Avenida das Flores, 100',
-    cidade: 'São Paulo, SP',
+    titulo: 'Sítio de Lazer com Cachoeira',
+    categoriaPrincipal: 'Rural', 
+    tipoDetalhado: 'Sítio Lazer', 
+    finalidades: ['Venda', 'Locação Temporada'], 
+    endereco: 'Estrada do Pinhal, Km 10',
+    cidade: 'Serra Negra, SP',
     quartos: 4,
     banheiros: 3,
     vagasGaragem: 3,
-    areaTotal: 250,
+    areaTotal: 25000, 
     areaUtil: 200,
-    descricaoLonga: 'Excelente casa térrea em condomínio fechado, com área de lazer completa e piscina privativa.',
-    caracteristicas: ['Piscina', 'Churrasqueira', 'Quintal'],
+    descricaoLonga: 'Excelente sítio de lazer, com área de lazer completa, piscina e riacho com cachoeira privativa.',
+    caracteristicas: ['Piscina', 'Churrasqueira', 'Quintal', 'Cachoeira', 'Área de Cultivo'],
     aceitaAnimais: true,
     status: 'VAGO',
-    valorAluguel: 3500.00,
-    valorCondominio: 450.00,
+    valorAluguel: 3500.00, 
+    valorCondominio: 0.00,
     valorIPTU: 200.00,
     dataDisponibilidade: '2025-11-20',
     fotos: ['url-foto-3', 'url-foto-4'],
@@ -104,22 +95,23 @@ let mockImoveis: Imovel[] = [
     visitaVirtual360: false,
   },
   {
-    // Novo formato de ID inteligente
-    id: 'AP01112503',
+    id: 'CM01112503',
     proprietarioId: 'prop-123',
-    titulo: 'Estúdio Compacto (Próx. Metrô)',
-    tipoImovel: 'APARTAMENTO',
+    titulo: 'Loja de Rua - Ponto Central',
+    categoriaPrincipal: 'Comercial', 
+    tipoDetalhado: 'Loja de Rua', 
+    finalidades: ['Locação Comercial'], 
     endereco: 'Rua da Consolação, 89',
     cidade: 'São Paulo, SP',
-    quartos: 1,
+    quartos: 1, 
     banheiros: 1,
     vagasGaragem: 0,
     areaTotal: 35,
     areaUtil: 35,
-    descricaoLonga: 'Estúdio mobiliado e funcional, ideal para estudantes e jovens profissionais. A 2 minutos do metrô.',
-    caracteristicas: ['Lavanderia Comum', 'Internet Fibra'],
+    descricaoLonga: 'Loja bem localizada, excelente para varejo ou escritório. Próximo ao metrô.',
+    caracteristicas: ['Ar Condicionado', 'Internet Fibra'],
     aceitaAnimais: false,
-    andar: 8,
+    andar: 0,
     status: 'ANUNCIADO',
     valorAluguel: 1850.00,
     valorCondominio: 300.00,
