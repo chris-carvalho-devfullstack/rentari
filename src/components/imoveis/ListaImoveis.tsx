@@ -3,57 +3,7 @@
 
 import React from 'react';
 import { Imovel } from '@/types/imovel'; 
-
-/**
- * Dados mockados para simular a lista de imóveis.
- */
-const mockImoveis: Imovel[] = [
-  {
-    id: 'imovel-001',
-    proprietarioId: 'prop-123',
-    titulo: 'Apartamento de Luxo (Vista Mar)',
-    endereco: 'Rua do Sol, 456',
-    cidade: 'Florianópolis, SC',
-    status: 'ALUGADO',
-    valorAluguel: 4800.00,
-  },
-  {
-    id: 'imovel-002',
-    proprietarioId: 'prop-123',
-    titulo: 'Casa Térrea com Piscina',
-    endereco: 'Avenida das Flores, 100',
-    cidade: 'São Paulo, SP',
-    status: 'VAGO',
-    valorAluguel: 3500.00,
-  },
-  {
-    id: 'imovel-003',
-    proprietarioId: 'prop-123',
-    titulo: 'Estúdio Compacto (Próx. Metrô)',
-    endereco: 'Rua da Consolação, 89',
-    cidade: 'São Paulo, SP',
-    status: 'ANUNCIADO',
-    valorAluguel: 1850.00,
-  },
-  {
-    id: 'imovel-004',
-    proprietarioId: 'prop-123',
-    titulo: 'Loft Moderno (Mobiliado)',
-    endereco: 'Rua XV de Novembro, 203',
-    cidade: 'Curitiba, PR',
-    status: 'ALUGADO',
-    valorAluguel: 2900.00,
-  },
-  {
-    id: 'imovel-005',
-    proprietarioId: 'prop-123',
-    titulo: 'Sobrado em Condomínio Fechado',
-    endereco: 'Rua das Gardênias, 50',
-    cidade: 'Campinas, SP',
-    status: 'ANUNCIADO',
-    valorAluguel: 4100.00,
-  },
-];
+import { useImoveis } from '@/hooks/useImoveis'; // <-- Novo Hook importado
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
@@ -75,7 +25,7 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
       text = 'Vago';
       break;
     case 'ANUNCIADO':
-      // Usando a cor 'rentou-primary' definida no tailwind.config.ts
+      // Usando a cor 'rentou-primary'
       classes += 'bg-blue-100 text-rentou-primary dark:bg-blue-900 dark:text-blue-300';
       text = 'Anunciado';
       break;
@@ -91,8 +41,43 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Componente de tabela para listar imóveis do proprietário.
+ * Agora utiliza o hook useImoveis para buscar dados e gerenciar estados assíncronos.
  */
 export default function ListaImoveis() {
+  // *** USANDO O HOOK DE DADOS DA NOVA CAMADA DE SERVIÇO ***
+  const { imoveis, loading, error, refetch } = useImoveis();
+  
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-48 bg-white dark:bg-zinc-800 p-6 rounded-lg shadow">
+          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-rentou-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-gray-600 dark:text-gray-300 font-medium">Carregando imóveis...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative dark:bg-red-900 dark:text-red-300 dark:border-red-600" role="alert">
+          <strong className="font-bold">Erro:</strong>
+          <span className="block sm:inline"> {error} </span>
+          <button onClick={refetch} className="ml-4 font-semibold hover:underline">Tentar Novamente</button>
+      </div>
+    );
+  }
+
+  if (imoveis.length === 0) {
+    return (
+      <div className="text-center p-12 bg-white dark:bg-zinc-800 rounded-lg shadow">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">Nenhum imóvel encontrado.</h2>
+          <p className="text-gray-600 dark:text-gray-400">Adicione seu primeiro imóvel para começar a gerenciar.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-zinc-700">
@@ -128,7 +113,7 @@ export default function ListaImoveis() {
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-zinc-800 divide-y divide-gray-200 dark:divide-zinc-700">
-          {mockImoveis.map((imovel) => (
+          {imoveis.map((imovel) => (
             <tr key={imovel.id} className="hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors">
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                 {imovel.titulo}
@@ -159,3 +144,5 @@ export default function ListaImoveis() {
     </div>
   );
 }
+
+// Substitua o conteúdo de: src/components/imoveis/ListaImoveis.tsx

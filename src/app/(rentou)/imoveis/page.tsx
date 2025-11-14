@@ -2,6 +2,7 @@
 
 import { Metadata } from 'next';
 import ListaImoveis from '@/components/imoveis/ListaImoveis'; 
+import Link from 'next/link'; // <-- Importar Link
 
 export const metadata: Metadata = {
   title: 'Meus Imóveis - Rentou',
@@ -17,10 +18,14 @@ export default function ImoveisPage() {
       <p className="text-gray-600 dark:text-gray-400">
         Gerencie seus imóveis, edite anúncios e acompanhe o status de locação.
       </p>
-      {/* CORREÇÃO FORÇADA: Usa !bg-rentou-primary e !text-white para garantir o contraste. */}
-      <button className="mt-4 px-4 py-2 !bg-rentou-primary !text-white rounded-md hover:bg-blue-700 transition-colors">
+      
+      {/* BOTÃO ATUALIZADO PARA USAR LINK */}
+      <Link 
+        href="/imoveis/novo" 
+        className="inline-block mt-4 px-4 py-2 !bg-rentou-primary !text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+      >
         + Adicionar Novo Imóvel
-      </button>
+      </Link>
       
       <div className="mt-8">
         <ListaImoveis />
