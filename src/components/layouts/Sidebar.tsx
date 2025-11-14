@@ -4,7 +4,8 @@
 import React from 'react';
 import Link from 'next/link';
 import Image from 'next/image'; 
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation'; 
+import { useAuthStore } from '@/hooks/useAuthStore'; 
 
 // Definição dos links de navegação
 const navItems = [
@@ -44,6 +45,15 @@ const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean }> =
  */
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter(); 
+  const { logout } = useAuthStore(); 
+
+  // FUNÇÃO DE LOGOUT COMPLETA E FUNCIONAL
+  const handleLogout = async () => {
+    await logout(); // Dispara o logout (Firebase e limpeza de cookie)
+    // ALTERAÇÃO AQUI: Redireciona para a Landing Page (/) em vez de /login
+    router.push('/'); 
+  };
 
   return (
     // Sidebar: w-64, bg-white no modo claro (padrão)
@@ -75,12 +85,17 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Rodapé/Sair (Placeholder) */}
+      {/* Rodapé/Sair (Logout Funcional e Estilizado) */}
       <div className="p-4 border-t border-gray-200 dark:border-zinc-700">
         <button 
-            onClick={() => console.log('Simulação de Logout')}
-            className="w-full text-left p-3 rounded-lg text-red-600 hover:bg-red-100 dark:hover:bg-zinc-700 transition-colors duration-200 font-medium"
+            onClick={handleLogout}
+            title="Sair do Portal do Proprietário e encerrar a sessão." // Adicionado o title para o tooltip
+            className="w-full text-left p-3 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-zinc-700 transition-colors duration-200 font-medium flex items-center cursor-pointer" // Adicionado cursor-pointer
         >
+            {/* Ícone de Log Out (Placeholder para visualização, pode ser substituído por um ícone real de "Sair") */}
+            <span className="w-5 h-5 mr-3 flex items-center justify-center">
+                →
+            </span>
             Sair
         </button>
       </div>
