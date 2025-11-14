@@ -70,7 +70,7 @@ export default function ImovelDetalhePage() {
             setLoading(true);
             try {
                 const data = await fetchImovelPorId(id as string);
-                setImovel(data);
+                setImovel(data || null); // CORREÇÃO APLICADA AQUI
             } catch (err) {
                 console.error('Erro ao buscar imóvel:', err);
                 setError(err instanceof Error ? err.message : 'Falha ao carregar os dados do imóvel.');
