@@ -1,7 +1,7 @@
 // src/components/imoveis/FormularioImovel.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { NovoImovelData, adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService';
 import { Imovel } from '@/types/imovel'; 
@@ -11,34 +11,99 @@ interface FormularioImovelProps {
     initialData?: Imovel;
 }
 
+// Define os passos do formulário
+const formSteps = [
+    { id: 1, name: 'Localização e Tipo' },
+    { id: 2, name: 'Estrutura e Área' },
+    { id: 3, name: 'Valores e Contrato' },
+    { id: 4, name: 'Descrição e Mídia' },
+];
+
 /**
- * @fileoverview Formulário universal para a criação e edição de imóveis.
- * Se initialData for fornecido, ele inicia no modo de edição.
+ * Valor inicial default completo com os novos campos.
+ */
+const defaultFormData: NovoImovelData = {
+    titulo: '',
+    tipoImovel: 'APARTAMENTO', // Padrão
+    endereco: '',
+    cidade: '',
+    quartos: 1,
+    banheiros: 1,
+    vagasGaragem: 0,
+    areaTotal: 0, 
+    areaUtil: 0, 
+    descricaoLonga: '',
+    caracteristicas: [], // Array vazio
+    aceitaAnimais: false,
+    andar: 1,
+    status: 'VAGO',
+    valorAluguel: 0,
+    valorCondominio: 0,
+    valorIPTU: 0,
+    dataDisponibilidade: new Date().toISOString().split('T')[0], // Data de hoje em YYYY-MM-DD
+    fotos: [], // Array vazio
+    linkVideoTour: undefined,
+    visitaVirtual360: false,
+};
+
+
+/**
+ * @fileoverview Formulário multi-step (inteligente) para a criação e edição de imóveis.
  */
 export default function FormularioImovel({ initialData }: FormularioImovelProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
   const isEditing = !!initialData;
   const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
 
-  // Inicializa o estado do formulário usando initialData (para edição) ou valores padrão (para criação)
-  const [formData, setFormData] = useState<NovoImovelData>({
-    titulo: initialData?.titulo || '',
-    endereco: initialData?.endereco || '',
-    cidade: initialData?.cidade || '',
-    status: initialData?.status || 'VAGO', 
-    valorAluguel: initialData?.valorAluguel || 0,
+  // Inicializa o estado do formulário usando initialData (para edição) ou defaultFormData (para criação)
+  const [formData, setFormData] = useState<NovoImovelData>(() => {
+    // A coerção é necessária porque initialData é um 'Imovel' completo, mas o estado inicial deve ser 'NovoImovelData'
+    const initialDataAsNovoImovelData = (initialData || {}) as NovoImovelData; 
+    return {
+        ...defaultFormData, 
+        ...initialDataAsNovoImovelData,
+        // Garante que a data não seja undefined no estado do formulário se o mock inicial não fornecer uma
+        dataDisponibilidade: initialDataAsNovoImovelData.dataDisponibilidade || defaultFormData.dataDisponibilidade,
+        andar: initialDataAsNovoImovelData.andar || 0, // Garante que andar seja 0 se não estiver definido
+    };
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type, checked } = e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
     
-    setFormData((prevData) => ({
+    setFormData((prevData: NovoImovelData) => ({
       ...prevData,
-      // Garante que o valor seja um número para valorAluguel
-      [name]: (type === 'number' && name === 'valorAluguel') ? parseFloat(value) : value,
+      // Lógica para tipos específicos
+      [name]: (type === 'number') 
+                ? parseFloat(value) 
+                : (type === 'checkbox') 
+                  ? checked 
+                  : value,
     }));
+  }, []);
+
+  const handleCaracteristicaChange = useCallback((caracteristica: string) => {
+    setFormData((prevData: NovoImovelData) => {
+        const isSelected = prevData.caracteristicas.includes(caracteristica);
+        return {
+            ...prevData,
+            caracteristicas: isSelected
+                ? prevData.caracteristicas.filter(c => c !== caracteristica) // Remove
+                : [...prevData.caracteristicas, caracteristica], // Adiciona
+        };
+    });
+  }, []);
+
+  const handleNextStep = (e: React.FormEvent) => {
+    e.preventDefault(); // Impede o envio completo do formulário
+    // Validação básica por etapa (pode ser expandida)
+    if (currentStep < formSteps.length) {
+      setCurrentStep(currentStep + 1);
+      window.scrollTo(0, 0); // Scrolla para o topo para melhor UX
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,15 +117,17 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         setLoading(false);
         return;
       }
+      
+      // Validação final de campos obrigatórios (a ser expandida)
 
       let result: Imovel;
       
       if (isEditing && initialData) {
-        // Modo de Edição: Chama a função de atualização
+        // Modo de Edição
         result = await atualizarImovel(initialData.id, formData);
         console.log('Imóvel atualizado com sucesso:', result);
       } else {
-        // Modo de Criação: Chama a função de adição
+        // Modo de Criação
         result = await adicionarNovoImovel(formData);
         console.log('Imóvel adicionado com sucesso:', result);
       }
@@ -76,11 +143,325 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     }
   };
 
+  // Componentes de Passo (Renderização Condicional)
+  const renderStepContent = () => {
+    switch (currentStep) {
+        case 1:
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">1. Localização e Identificação</h3>
+                    
+                    {/* Campo Título */}
+                    <div>
+                        <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Título do Anúncio</label>
+                        <input
+                            id="titulo"
+                            name="titulo"
+                            type="text"
+                            required
+                            placeholder="Ex: Apartamento de Luxo (Vista Mar)"
+                            value={formData.titulo}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        />
+                    </div>
+                    
+                    {/* Campo Tipo de Imóvel (ATUALIZADO) */}
+                    <div>
+                        <label htmlFor="tipoImovel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Imóvel</label>
+                        <select
+                            id="tipoImovel"
+                            name="tipoImovel"
+                            required
+                            value={formData.tipoImovel}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        >
+                            <option value="APARTAMENTO">Apartamento</option>
+                            <option value="CASA">Casa</option>
+                            <option value="TERRENO">Terreno</option>
+                            <option value="COMERCIAL">Comercial</option>
+                            <option value="SITIO">Sítio</option>
+                            <option value="FAZENDA">Fazenda</option>
+                            <option value="CHACARA">Chácara</option>
+                            <option value="OUTRO">Outro</option>
+                        </select>
+                    </div>
+
+                    {/* Campo Endereço */}
+                    <div>
+                        <label htmlFor="endereco" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Endereço Completo</label>
+                        <input
+                            id="endereco"
+                            name="endereco"
+                            type="text"
+                            required
+                            placeholder="Rua, Número, Bairro, CEP"
+                            value={formData.endereco}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        />
+                    </div>
+
+                    {/* Campo Cidade/UF */}
+                    <div>
+                        <label htmlFor="cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade e UF</label>
+                        <input
+                            id="cidade"
+                            name="cidade"
+                            type="text"
+                            required
+                            placeholder="Ex: São Paulo, SP"
+                            value={formData.cidade}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        />
+                    </div>
+                </div>
+            );
+        case 2:
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Características</h3>
+                    
+                    {/* Linha: Quartos, Banheiros, Vagas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <NumericInput label="Quartos" name="quartos" value={formData.quartos} onChange={handleChange} min={0} />
+                        <NumericInput label="Banheiros" name="banheiros" value={formData.banheiros} onChange={handleChange} min={0} />
+                        <NumericInput label="Vagas de Garagem" name="vagasGaragem" value={formData.vagasGaragem} onChange={handleChange} min={0} />
+                    </div>
+
+                    {/* Linha: Áreas */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <NumericInput label="Área Total (m²)" name="areaTotal" value={formData.areaTotal} onChange={handleChange} min={0} />
+                        <NumericInput label="Área Útil (m²)" name="areaUtil" value={formData.areaUtil} onChange={handleChange} min={0} />
+                    </div>
+                    
+                    {/* Campo Andar (Condicional) */}
+                    {formData.tipoImovel === 'APARTAMENTO' && (
+                        <NumericInput label="Andar" name="andar" value={formData.andar || 0} onChange={handleChange} min={0} placeholder="Ex: 5" />
+                    )}
+
+                    {/* Comodidades (Checkboxes) - Layout Inteligente */}
+                    <ComodidadesSelector selected={formData.caracteristicas} onSelect={handleCaracteristicaChange} />
+                </div>
+            );
+        case 3:
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Disponibilidade</h3>
+                    
+                    {/* Linha: Valor Aluguel e Status */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
+                            <input
+                                id="valorAluguel"
+                                name="valorAluguel"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                required
+                                placeholder="3500.00"
+                                value={formData.valorAluguel}
+                                onChange={handleChange}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status do Imóvel</label>
+                            <select
+                                id="status"
+                                name="status"
+                                required
+                                value={formData.status}
+                                onChange={handleChange}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                            >
+                                <option value="VAGO">VAGO (Pronto para anunciar)</option>
+                                <option value="ANUNCIADO">ANUNCIADO (Aguardando locação)</option>
+                                <option value="ALUGADO">ALUGADO (Já locado)</option>
+                                <option value="MANUTENCAO">MANUTENÇÃO (Indisponível)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Linha: Condomínio e IPTU */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <NumericInput label="Valor Condomínio (R$)" name="valorCondominio" value={formData.valorCondominio} onChange={handleChange} min={0} placeholder="0.00" />
+                        <NumericInput label="Valor IPTU (Mensal R$)" name="valorIPTU" value={formData.valorIPTU} onChange={handleChange} min={0} placeholder="0.00" />
+                    </div>
+                    
+                    {/* Campo Data de Disponibilidade */}
+                    <div>
+                        <label htmlFor="dataDisponibilidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Disponível a partir de</label>
+                        <input
+                            id="dataDisponibilidade"
+                            name="dataDisponibilidade"
+                            type="date"
+                            required
+                            value={formData.dataDisponibilidade}
+                            onChange={handleChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        />
+                    </div>
+                    
+                    <CheckboxInput 
+                        label="Aceita Animais?" 
+                        name="aceitaAnimais" 
+                        checked={formData.aceitaAnimais} 
+                        onChange={handleChange} 
+                        description="Marque se a locação permite animais de estimação."
+                    />
+                </div>
+            );
+        case 4:
+            return (
+                <div className="space-y-6">
+                    <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">4. Mídia e Detalhes do Anúncio</h3>
+                    
+                    {/* Campo Descrição Longa */}
+                    <div>
+                        <label htmlFor="descricaoLonga" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição Detalhada para Anúncio</label>
+                        <textarea
+                            id="descricaoLonga"
+                            name="descricaoLonga"
+                            rows={4}
+                            required
+                            value={formData.descricaoLonga}
+                            onChange={handleChange}
+                            placeholder="Descreva o imóvel em detalhes, destacando os pontos fortes e a vizinhança."
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        />
+                    </div>
+
+                    {/* Upload de Fotos (Mocked) */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Galeria de Fotos (Mock)</label>
+                        <div className="mt-1 p-4 border-2 border-dashed border-gray-300 dark:border-zinc-600 rounded-md text-center">
+                            <p className="text-gray-500 dark:text-gray-400">
+                                Funcionalidade de upload de fotos (Cloud Storage) será implementada na fase 2.
+                            </p>
+                            <p className="text-sm mt-1 text-rentou-primary">Atualmente: {formData.fotos.length} fotos mockadas.</p>
+                        </div>
+                    </div>
+                    
+                    {/* Campo Vídeo Tour */}
+                    <div>
+                        <label htmlFor="linkVideoTour" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link do Vídeo Tour (Opcional)</label>
+                        <input
+                            id="linkVideoTour"
+                            name="linkVideoTour"
+                            type="url"
+                            value={formData.linkVideoTour || ''}
+                            onChange={handleChange}
+                            placeholder="Ex: https://youtube.com/watch?v=tour"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        />
+                    </div>
+                    
+                    <CheckboxInput 
+                        label="Visita Virtual 360º Disponível" 
+                        name="visitaVirtual360" 
+                        checked={formData.visitaVirtual360} 
+                        onChange={handleChange} 
+                        description="Marque se você possui um link para tour virtual 360º."
+                    />
+                </div>
+            );
+        default:
+            return null;
+    }
+  };
+  
+  // Progress Indicator (Smart UI)
+  const ProgressIndicator = () => (
+    <div className="flex justify-between items-center mb-6">
+        {formSteps.map((step) => (
+            <div key={step.id} className="flex-1">
+                <div className={`text-center ${step.id <= currentStep ? 'text-rentou-primary dark:text-blue-400 font-bold' : 'text-gray-400 dark:text-gray-600'}`}>
+                    <div className={`w-8 h-8 mx-auto mb-1 flex items-center justify-center rounded-full border-2 ${step.id === currentStep ? 'bg-rentou-primary text-white border-rentou-primary' : step.id < currentStep ? 'bg-green-500 text-white border-green-500' : 'border-gray-300 dark:border-zinc-600'}`}>
+                        {step.id < currentStep ? '✓' : step.id}
+                    </div>
+                    <span className="text-xs hidden sm:block">{step.name}</span>
+                </div>
+                {step.id < formSteps.length && (
+                    <div className={`h-0.5 w-full -mt-4 mx-auto ${step.id < currentStep ? 'bg-rentou-primary' : 'bg-gray-200 dark:bg-zinc-700'}`}></div>
+                )}
+            </div>
+        ))}
+    </div>
+  );
+
+  // --- Helper Components ---
+
+  const NumericInput: React.FC<{ label: string; name: string; value: number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; min: number; placeholder?: string; }> = ({ label, name, value, onChange, min, placeholder }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+        <input
+            id={name}
+            name={name}
+            type="number"
+            min={min}
+            required
+            value={value}
+            onChange={onChange}
+            placeholder={placeholder}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+        />
+    </div>
+  );
+
+  const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
+    <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
+        <input
+            id={name}
+            name={name}
+            type="checkbox"
+            checked={checked}
+            onChange={onChange}
+            className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary"
+        />
+        <div className="flex flex-col">
+            <label htmlFor={name} className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            {description && <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>}
+        </div>
+    </div>
+  );
+  
+  const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => {
+    const availableFeatures = ['Piscina', 'Churrasqueira', 'Academia', 'Portaria 24h', 'Mobiliado', 'Aquecimento a Gás', 'Salão de Festas', 'Quintal/Jardim'];
+    return (
+        <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {availableFeatures.map((feature) => (
+                    <button
+                        key={feature}
+                        type="button" // Importante: evita o submit
+                        onClick={() => onSelect(feature)}
+                        className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 ${
+                            selected.includes(feature)
+                                ? 'bg-rentou-primary text-white shadow-md'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-600'
+                        }`}
+                    >
+                        {feature}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+  };
+
   return (
     <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl">
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6 border-b pb-4">
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6 border-b pb-4">
         {formTitle}
       </h2>
+      
+      <ProgressIndicator />
 
       {error && (
         <p className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300 rounded-lg">
@@ -88,99 +469,41 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Campos do Formulário... (Mantidos como na versão anterior) */}
+      {/* Usamos onSubmit no formulário, mas o handler real é no botão de submissão final */}
+      <form onSubmit={currentStep === formSteps.length ? handleSubmit : handleNextStep} className="space-y-8">
         
-        {/* Campo Título */}
-        <div>
-          <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Título do Imóvel</label>
-          <input
-            id="titulo"
-            name="titulo"
-            type="text"
-            required
-            value={formData.titulo}
-            onChange={handleChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-          />
-        </div>
+        {renderStepContent()}
 
-        {/* Campo Endereço */}
-        <div>
-          <label htmlFor="endereco" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Endereço</label>
-          <input
-            id="endereco"
-            name="endereco"
-            type="text"
-            required
-            value={formData.endereco}
-            onChange={handleChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-          />
-        </div>
-
-        {/* Campo Cidade/UF */}
-        <div>
-          <label htmlFor="cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade e UF</label>
-          <input
-            id="cidade"
-            name="cidade"
-            type="text"
-            required
-            value={formData.cidade}
-            onChange={handleChange}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-          />
-        </div>
-        
-        {/* Campo Valor e Status (lado a lado) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            {/* Campo Valor Aluguel */}
-            <div>
-              <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
-              <input
-                id="valorAluguel"
-                name="valorAluguel"
-                type="number"
-                step="0.01"
-                min="0.01"
-                required
-                value={formData.valorAluguel}
-                onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-              />
-            </div>
+        {/* --- Navigation Buttons --- */}
+        <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center">
+            {/* Botão Voltar */}
+            {currentStep > 1 && (
+                <button
+                    type="button"
+                    onClick={() => setCurrentStep(currentStep - 1)}
+                    className="flex items-center text-gray-500 dark:text-gray-400 hover:text-rentou-primary transition-colors font-medium"
+                >
+                    ← Anterior
+                </button>
+            )}
             
-            {/* Campo Status */}
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status Inicial</label>
-              <select
-                id="status"
-                name="status"
-                required
-                value={formData.status}
-                onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-              >
-                <option value="VAGO">VAGO (Pronto para anunciar)</option>
-                <option value="ANUNCIADO">ANUNCIADO (Aguardando locação)</option>
-                <option value="ALUGADO">ALUGADO (Já locado)</option>
-              </select>
-            </div>
-        </div>
+            <div className="flex-1"></div> {/* Espaçador */}
 
-
-        {/* Botão de Submissão */}
-        <div className="pt-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white !bg-rentou-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary transition-colors ${
-              loading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {loading ? (isEditing ? 'Salvando...' : 'Adicionando...') : (isEditing ? 'Salvar Alterações' : 'Adicionar Imóvel')}
-          </button>
+            {/* Botão Próximo/Salvar */}
+            <button
+                type={currentStep === formSteps.length ? 'submit' : 'button'}
+                onClick={currentStep < formSteps.length ? handleNextStep : undefined} // Usa o handler para o Next Step
+                disabled={loading}
+                className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-colors ${
+                  loading 
+                    ? 'opacity-50 cursor-not-allowed bg-gray-400' 
+                    : 'bg-rentou-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary'
+                }`}
+            >
+                {loading 
+                    ? (isEditing ? 'Salvando...' : 'Adicionando...') 
+                    : (currentStep === formSteps.length ? 'Salvar Imóvel' : 'Próxima Etapa →')}
+            </button>
         </div>
         
         {/* Botão de Cancelar */}

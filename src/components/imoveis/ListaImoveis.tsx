@@ -3,13 +3,17 @@
 
 import React from 'react';
 import { Imovel } from '@/types/imovel'; 
-import { useImoveis } from '@/hooks/useImoveis'; // <-- Novo Hook importado
+import { useImoveis } from '@/hooks/useImoveis'; 
+import Link from 'next/link'; 
+// A função 'removerImovel' é removida daqui para limpar a UI
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+
+// ... (StatusBadge inalterado)
 
 const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
   let classes = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ';
@@ -25,7 +29,6 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
       text = 'Vago';
       break;
     case 'ANUNCIADO':
-      // Usando a cor 'rentou-primary'
       classes += 'bg-blue-100 text-rentou-primary dark:bg-blue-900 dark:text-blue-300';
       text = 'Anunciado';
       break;
@@ -41,11 +44,12 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Componente de tabela para listar imóveis do proprietário.
- * Agora utiliza o hook useImoveis para buscar dados e gerenciar estados assíncronos.
+ * Refatorado para uma UI mais limpa, movendo o CRUD para a página de detalhes.
  */
 export default function ListaImoveis() {
-  // *** USANDO O HOOK DE DADOS DA NOVA CAMADA DE SERVIÇO ***
   const { imoveis, loading, error, refetch } = useImoveis();
+  
+  // A função handleDelete é removida.
   
   if (loading) {
     return (
@@ -107,8 +111,9 @@ export default function ListaImoveis() {
             >
               Status
             </th>
-            <th scope="col" className="relative px-6 py-3">
-              <span className="sr-only">Ações</span>
+            <th scope="col" className="relative px-6 py-3 text-right">
+              <span className="sr-only">Ação</span>
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Gerenciar</span>
             </th>
           </tr>
         </thead>
@@ -130,12 +135,13 @@ export default function ListaImoveis() {
                 <StatusBadge status={imovel.status} />
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <button 
-                    onClick={() => console.log(`Ação: ${imovel.titulo}`)}
+                {/* O link de gerenciar agora aponta para a rota de edição */}
+                <Link 
+                    href={`/imoveis/${imovel.id}/editar`}
                     className="text-rentou-primary hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                 >
-                    Ver Detalhes
-                </button>
+                    Gerenciar
+                </Link>
               </td>
             </tr>
           ))}
@@ -144,5 +150,3 @@ export default function ListaImoveis() {
     </div>
   );
 }
-
-// Substitua o conteúdo de: src/components/imoveis/ListaImoveis.tsx
