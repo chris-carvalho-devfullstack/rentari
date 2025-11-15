@@ -14,7 +14,7 @@ const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  // 1. Usa o nome hardcoded para garantir que o initializeApp tenha o valor correto
+  // Usa o nome hardcoded na configuração
   storageBucket: ACTIVE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
@@ -26,6 +26,5 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Exporta os serviços
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-
-// 2. Inicializa o Storage APENAS com o app (a URL já está na config do app).
+// Aqui, o getStorage usará o bucket definido em firebaseConfig (ACTIVE_STORAGE_BUCKET)
 export const storage = getStorage(app);
