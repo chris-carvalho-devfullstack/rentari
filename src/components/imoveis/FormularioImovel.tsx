@@ -57,9 +57,18 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
   const [currentStep, setCurrentStep] = useState(1);
   const isEditing = !!initialData;
   const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
+  
+  // Função auxiliar para determinar se um campo armazena um valor numérico (CORRIGIDO: MOVIDO PARA O TOPO)
+  const isNumericField = (name: string): boolean => 
+    ['quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 
+     'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar'].includes(name);
+
+  // Usamos um estado auxiliar para manter os valores dos inputs numéricos como string,
+  // apenas para a renderização, prevenindo a perda de foco.
+  const [localNumericInputs, setLocalNumericInputs] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState<NovoImovelData>(() => {
-    // Usamos Omit<Imovel, 'id' | 'smartId' | 'proprietarioId'> para garantir que o initialData não polua o form
+    // Inicializa o formData com valores numéricos
     const initialDataPayload = initialData ? Object.keys(defaultFormData).reduce((acc, key) => {
         if (key in initialData) {
             (acc as any)[key] = (initialData as any)[key];
@@ -67,16 +76,31 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         return acc;
     }, {}) : {};
 
-    return {
+    const initialFormData = {
         ...defaultFormData, 
         ...initialDataPayload as Partial<NovoImovelData>,
-        // Garante que os novos campos tenham valor
         categoriaPrincipal: initialData?.categoriaPrincipal || defaultFormData.categoriaPrincipal,
         tipoDetalhado: initialData?.tipoDetalhado || defaultFormData.tipoDetalhado,
         finalidades: initialData?.finalidades || defaultFormData.finalidades,
         dataDisponibilidade: initialData?.dataDisponibilidade || defaultFormData.dataDisponibilidade,
         andar: initialData?.andar || 0,
     };
+    
+    // Inicializa o estado local com os valores de formData como string
+    const initialLocalInputs: Record<string, string> = {};
+    
+    // CORREÇÃO DE TIPAGEM: Itera sobre as chaves válidas e assegura a tipagem correta.
+    Object.keys(initialFormData).filter(isNumericField).forEach(keyString => {
+        const key = keyString as keyof NovoImovelData;
+        const numericValue = initialFormData[key] as number; // Assumimos que é número
+        
+        // Conversão segura para string, evitando '0' em inputs vazios
+        initialLocalInputs[keyString] = String(numericValue === 0 ? '' : numericValue);
+    });
+    
+    setLocalNumericInputs(initialLocalInputs);
+
+    return initialFormData;
   });
 
   // Mapeia os tipos disponíveis com base na categoria principal selecionada
@@ -105,22 +129,32 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     }
   }, [formData.categoriaPrincipal, tiposDisponiveis]); 
 
-
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    // Destrutura apenas propriedades comuns
     const { name, value, type } = e.target;
     const target = e.target;
+
+    if (isNumericField(name)) {
+        // PASSO 1: Atualiza o estado local de string primeiro para que o input mantenha o valor e o foco.
+        setLocalNumericInputs(prev => ({ ...prev, [name]: value }));
+
+        // PASSO 2: Converte e armazena o valor numérico no estado principal (formData).
+        const cleanedValue = value.replace(',', '.');
+        const numericValue = parseFloat(cleanedValue) || 0; 
+        
+        setFormData(prevData => ({
+            ...prevData,
+            [name]: numericValue,
+        }));
+        
+        return; // Sai da função, campos numéricos tratados.
+    }
     
+    // Lógica para campos não numéricos (mantida)
     setFormData((prevData: NovoImovelData) => ({
       ...prevData,
-      [name]: (type === 'number') 
-                ? parseFloat(value) 
-                // Acessa 'checked' com segurança fazendo o cast condicional para HTMLInputElement
-                : (type === 'checkbox') 
-                  ? (target as HTMLInputElement).checked 
-                  : value,
+      [name]: (type === 'checkbox') ? (target as HTMLInputElement).checked : value,
     }));
-  }, []);
+  }, []); 
 
   const handleFinalidadeChange = useCallback((finalidade: ImovelFinalidade) => {
     setFormData((prevData: NovoImovelData) => {
@@ -321,22 +355,22 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Características</h3>
                     {/* ... (Conteúdo da Etapa 2 permanece igual) ... */}
                     
-                    {/* Linha: Quartos, Banheiros, Vagas */}
+                    {/* Linha: Quartos, Banheiros, Vagas - Agora usam type="text" */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <NumericInput label="Quartos" name="quartos" value={formData.quartos} onChange={handleChange} min={0} />
-                        <NumericInput label="Banheiros" name="banheiros" value={formData.banheiros} onChange={handleChange} min={0} />
-                        <NumericInput label="Vagas de Garagem" name="vagasGaragem" value={formData.vagasGaragem} onChange={handleChange} min={0} />
+                        <NumericInput name="quartos" label="Quartos" currentValue={formData.quartos} localValue={localNumericInputs.quartos} onChange={handleChange} />
+                        <NumericInput name="banheiros" label="Banheiros" currentValue={formData.banheiros} localValue={localNumericInputs.banheiros} onChange={handleChange} />
+                        <NumericInput name="vagasGaragem" label="Vagas de Garagem" currentValue={formData.vagasGaragem} localValue={localNumericInputs.vagasGaragem} onChange={handleChange} />
                     </div>
 
-                    {/* Linha: Áreas */}
+                    {/* Linha: Áreas - Agora usam type="text" */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <NumericInput label="Área Total (m²)" name="areaTotal" value={formData.areaTotal} onChange={handleChange} min={0} />
-                        <NumericInput label="Área Útil (m²)" name="areaUtil" value={formData.areaUtil} onChange={handleChange} min={0} />
+                        <NumericInput name="areaTotal" label="Área Total (m²)" currentValue={formData.areaTotal} localValue={localNumericInputs.areaTotal} onChange={handleChange} />
+                        <NumericInput name="areaUtil" label="Área Útil (m²)" currentValue={formData.areaUtil} localValue={localNumericInputs.areaUtil} onChange={handleChange} />
                     </div>
                     
-                    {/* Campo Andar (Condicional) */}
+                    {/* Campo Andar (Condicional) - Agora usa type="text" */}
                     {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') && (
-                        <NumericInput label="Andar" name="andar" value={formData.andar || 0} onChange={handleChange} min={0} placeholder="Ex: 5" />
+                        <NumericInput name="andar" label="Andar" currentValue={formData.andar || 0} localValue={localNumericInputs.andar} onChange={handleChange} placeholder="Ex: 5" />
                     )}
 
                     {/* Comodidades (Checkboxes) - Layout Inteligente */}
@@ -349,19 +383,18 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 <div className="space-y-6">
                     <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Disponibilidade</h3>
                     
-                    {/* Linha: Valor Aluguel e Status */}
+                    {/* Linha: Valor Aluguel e Status - Alterado para type="text" e adicionada correção de valor */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
                             <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
                             <input
                                 id="valorAluguel"
                                 name="valorAluguel"
-                                type="number"
-                                step="0.01"
-                                min="0.00" // Permite 0 se for apenas Venda/Permuta
+                                type="text" // <--- Permite digitação livre
                                 required
                                 placeholder="3500.00"
-                                value={formData.valorAluguel}
+                                // CORREÇÃO: Usa o estado local de string, ou o valor formatado do formData como fallback
+                                value={localNumericInputs.valorAluguel !== undefined ? localNumericInputs.valorAluguel : (formData.valorAluguel === 0 ? '' : String(formData.valorAluguel))}
                                 onChange={handleChange}
                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
                             />
@@ -385,10 +418,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         </div>
                     </div>
 
-                    {/* Linha: Condomínio e IPTU */}
+                    {/* Linha: Condomínio e IPTU - Agora usam type="text" */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <NumericInput label="Valor Condomínio (R$)" name="valorCondominio" value={formData.valorCondominio} onChange={handleChange} min={0} placeholder="0.00" />
-                        <NumericInput label="Valor IPTU (Mensal R$)" name="valorIPTU" value={formData.valorIPTU} onChange={handleChange} min={0} placeholder="0.00" />
+                        <NumericInput name="valorCondominio" label="Valor Condomínio (R$)" currentValue={formData.valorCondominio} localValue={localNumericInputs.valorCondominio} onChange={handleChange} placeholder="0.00" />
+                        <NumericInput name="valorIPTU" label="Valor IPTU (Mensal R$)" currentValue={formData.valorIPTU} localValue={localNumericInputs.valorIPTU} onChange={handleChange} placeholder="0.00" />
                     </div>
                     
                     {/* Campo Data de Disponibilidade */}
@@ -473,51 +506,75 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     }
   };
   
-  // Progress Indicator (Smart UI)
-  const ProgressIndicator = () => (
-    <div className="flex justify-between items-center mb-6">
-        {formSteps.map((step) => (
-            <div key={step.id} className="flex-1">
-                <div className={`text-center ${step.id <= currentStep ? 'text-rentou-primary dark:text-blue-400 font-bold' : 'text-gray-600 dark:text-gray-600'}`}>
-                    {/* CORREÇÃO 1 & 2: Aumenta mb-1 para mb-2 para espaçamento visual e garante estilo da etapa atual */}
-                    <div className={`w-8 h-8 mx-auto mb-2 flex items-center justify-center rounded-full border-2 
-                        ${step.id === currentStep 
-                            ? 'bg-white text-rentou-primary border-rentou-primary shadow-md' // CORRENTE: Fundo Branco, Texto e Borda Azul (Destaque)
-                            : step.id < currentStep 
-                            ? 'bg-green-500 !text-white border-green-500' // COMPLETO: Fundo Verde, Texto Branco
-                            : 'border-gray-400 text-gray-600 dark:border-zinc-600 dark:text-gray-600' // FUTURO: Borda e Texto escuro (melhor contraste)
-                        }`}
-                    >
-                        {step.id < currentStep ? '✓' : step.id}
-                    </div>
-                    {/* CORREÇÃO 3: Adicionado mt-2 no nome para espaçamento */}
-                    <span className="text-xs hidden sm:block mt-2">{step.name}</span> 
-                </div>
-                {/* Linha de progresso futuro (deve ser mais escura que a linha de fundo) */}
-                <div className={`h-0.5 w-full -mt-4 mx-auto ${step.id < currentStep ? 'bg-rentou-primary' : 'bg-gray-300 dark:bg-zinc-700'}`}></div>
+  // Progress Indicator (Smart UI) - NOVO COMPONENTE DE BARRA DE PROGESSO
+  const ProgressIndicator = () => {
+    // Calcula a porcentagem de conclusão (Ex: 1/4 = 25%, 4/4 = 100%)
+    const percentage = Math.round((currentStep / formSteps.length) * 100);
+    const stepName = formSteps[currentStep - 1].name;
+
+    return (
+        <div className="space-y-3 mb-6">
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex justify-between items-center">
+                <span>
+                    Etapa {currentStep} de {formSteps.length}: <strong className="text-rentou-primary dark:text-blue-400">{stepName}</strong>
+                </span>
             </div>
-        ))}
-    </div>
-  );
+            
+            {/* Barra de Progresso Customizada com Porcentagem Interna */}
+            <div className="w-full bg-gray-200 dark:bg-zinc-700 rounded-full h-8 overflow-hidden relative">
+                {/* Barra Preenchida */}
+                <div 
+                    className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out flex items-center justify-center" 
+                    style={{ width: `${percentage}%` }}
+                >
+                    {/* Texto da Porcentagem (usa position absolute para ficar no centro da área do container) */}
+                    <span 
+                        className={`absolute inset-0 flex items-center justify-center text-sm font-bold transition-colors duration-200 
+                            ${percentage > 15 ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}
+                    >
+                        {percentage}% Completo
+                    </span>
+                </div>
+            </div>
+        </div>
+    );
+  };
+  // FIM Progress Indicator
 
   // --- Helper Components ---
 
-  const NumericInput: React.FC<{ label: string; name: string; value: number; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; min: number; placeholder?: string; }> = ({ label, name, value, onChange, min, placeholder }) => (
-    <div>
-        <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-        <input
-            id={name}
-            name={name}
-            type="number"
-            min={min}
-            required
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-        />
-    </div>
-  );
+  // Componente Auxiliar para Entradas Numéricas (CORRIGIDO PARA FIXAR O FOCO)
+  const NumericInput: React.FC<{ 
+    label: string; 
+    name: string; 
+    currentValue: number; // Valor numérico armazenado no formData
+    localValue: string | undefined; // Valor string (digitado pelo usuário)
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
+    placeholder?: string; 
+  }> = ({ label, name, currentValue, localValue, onChange, placeholder }) => {
+    
+    // Calcula o valor a ser exibido no input
+    // 1. Prioriza o valor string do estado local (localValue) se estiver sendo digitado.
+    const displayValue = localValue !== undefined ? localValue : (currentValue === 0 ? '' : String(currentValue));
+
+    return (
+        <div>
+            <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            <input
+                id={name}
+                name={name}
+                type="text" 
+                required
+                // CORREÇÃO: Utiliza o displayValue que prioriza a string digitada
+                value={displayValue} 
+                onChange={onChange}
+                placeholder={placeholder}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+            />
+        </div>
+    );
+  };
+
 
   const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
     <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
@@ -567,6 +624,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         {formTitle}
       </h2>
       
+      {/* Novo Indicador de Progresso em Barra */}
       <ProgressIndicator />
 
       {error && (
@@ -594,12 +652,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             
             <div className="flex-1"></div>
 
-            {/* Botão Próximo/Salvar - CORREÇÃO CRÍTICA: Força !bg-rentou-primary e cursor-pointer */}
+            {/* Botão Próximo/Salvar - Agora deve funcionar, pois depende da correção no globals.css e está limpo localmente */}
             <button
                 type={currentStep === formSteps.length ? 'submit' : 'button'}
                 onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
                 disabled={loading}
-                className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium !text-white !bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer ${
+                className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer ${
                   loading 
                     ? 'opacity-50 cursor-not-allowed bg-gray-400' 
                     : ''

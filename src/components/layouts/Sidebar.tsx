@@ -63,14 +63,15 @@ export default function Sidebar() {
     <div className="fixed top-0 left-0 h-screen w-64 bg-white dark:bg-zinc-800 shadow-xl z-20 flex flex-col border-r border-gray-200 dark:border-zinc-700">
       {/* Logomarca */}
       <div className="p-4 h-16 flex items-center justify-center border-b border-gray-200 dark:border-zinc-700">
-        <Link href="/dashboard" className="w-full h-full flex items-center justify-center">
+        {/* CORREÇÃO: Adicionado 'relative' ao Link e 'fill' no Image para preencher o container */}
+        <Link href="/dashboard" className="w-full h-full flex items-center justify-center relative">
           <Image
             src="/media/Rentou logomarcca.png"
             alt="Rentou Logomarca"
-            width={120} 
-            height={40} 
+            fill // Define que a imagem deve preencher as dimensões do pai
             priority 
-            className="h-full w-auto object-contain" 
+            // object-contain é ideal para logos, pois maximiza o tamanho sem cortar
+            className="object-contain" 
           />
         </Link>
       </div>

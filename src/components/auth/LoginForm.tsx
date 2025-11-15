@@ -95,10 +95,10 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             Ainda não tem conta? <a href="/signup" className="text-rentou-primary font-medium hover:underline">Faça seu cadastro</a>
         </p>
         
-        {/* Botão de Login Social (SIMULADO - Alude Style) - CORREÇÃO: FORÇA !text-white */}
+        {/* Botão de Login Social (SIMULADO - Alude Style) - CORREÇÃO: Removido !text-white */}
         <button
             type="button"
-            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium !text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4"
+            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4"
         >
             <span className="text-lg mr-2">G</span> 
             Fazer Login com o Google
@@ -161,8 +161,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             <button
               type="submit"
               disabled={loading}
-              // Botão Principal Azul (Rentou Primary), com ajuste dark:hover e FORÇA !text-white
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold !text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary ${
+              // Botão Principal Azul (Rentou Primary), com ajuste dark:hover e CORREÇÃO: Removido !text-white
+              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >

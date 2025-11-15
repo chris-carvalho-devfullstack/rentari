@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* === CORREÇÃO CRÍTICA: GARANTE VISIBILIDADE DO BOTÃO PRIMÁRIO NO MODO CLARO === */
+/* Força o fundo azul e o texto branco para a classe primária em todos os lugares. */
+.bg-rentou-primary {
+  background-color: #1D4ED8 !important; /* Azul Rentou Primário (do tailwind.config.ts) */
+  color: #ffffff !important; /* Texto Branco */
+}
+/* ============================================================================== */
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

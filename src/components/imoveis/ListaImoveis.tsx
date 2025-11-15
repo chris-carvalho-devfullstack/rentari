@@ -122,8 +122,8 @@ export default function ListaImoveis() {
             <tr key={imovel.id} className="hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors">
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                 <div className="font-bold">{imovel.titulo}</div>
-                {/* ID INTELIGENTE NA TABELA */}
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{imovel.id}</div>
+                {/* CORREÇÃO: ID Inteligente (smartId) */}
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{imovel.smartId}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 {imovel.endereco}, {imovel.cidade}
@@ -137,7 +137,6 @@ export default function ListaImoveis() {
                 <StatusBadge status={imovel.status} />
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                {/* CORREÇÃO: Link agora aponta para a nova página de detalhes */}
                 <Link 
                     href={`/imoveis/${imovel.id}`}
                     className="text-rentou-primary hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
