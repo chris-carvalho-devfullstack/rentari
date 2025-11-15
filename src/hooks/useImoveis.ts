@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Imovel } from '@/types/imovel';
 import { subscribeToImoveis } from '@/services/ImovelService'; 
+import { useAuthStore } from './useAuthStore'; // <-- NOVO: Importa o hook de autenticação
 
 interface UseImoveisResult {
   imoveis: Imovel[];
@@ -14,19 +15,27 @@ interface UseImoveisResult {
 
 /**
  * @fileoverview Custom Hook para buscar e gerenciar o estado da lista de imóveis.
- * AGORA IMPLEMENTA REAL-TIME com onSnapshot.
+ * CORRIGIDO: Agora filtra pelo ID do usuário autenticado.
  */
 export const useImoveis = (): UseImoveisResult => {
+  const { user, isAuthenticated } = useAuthStore(); // <-- NOVO: Obtém o usuário
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // Função para configurar a subscrição (usada no useEffect)
-  const startSubscription = useCallback(() => {
+  const startSubscription = useCallback((proprietarioId: string) => {
     setError(null);
     
-    // Inicia a escuta em tempo real no Firestore
+    if (!proprietarioId) {
+        setLoading(false);
+        setError('Proprietário não autenticado.');
+        return () => {}; // Retorna função vazia de limpeza
+    }
+    
+    // Inicia a escuta em tempo real no Firestore, passando o ID do proprietário
     const unsubscribe = subscribeToImoveis(
+        proprietarioId, // <-- NOVO: Passa o ID
         (data) => {
             setImoveis(data);
             setLoading(false);
@@ -46,15 +55,22 @@ export const useImoveis = (): UseImoveisResult => {
   }, []); 
 
   useEffect(() => {
-    // Inicia a escuta
-    const unsubscribe = startSubscription();
+    if (!isAuthenticated || !user?.id) {
+        setLoading(false);
+        setImoveis([]);
+        setError('Usuário não autenticado. Imóveis não podem ser carregados.');
+        return;
+    }
+    
+    // Inicia a escuta, passando o ID do usuário
+    const unsubscribe = startSubscription(user.id);
     
     // Cleanup: Para a escuta do Firestore quando o componente for desmontado
     return () => {
         console.log('[useImoveis] Unsubscribing from Firestore.');
         unsubscribe();
     };
-  }, [startSubscription]); 
+  }, [isAuthenticated, user?.id, startSubscription]); // Dependências do usuário e autenticação
 
   // A função refetch agora é um no-op
   const refetch = () => {

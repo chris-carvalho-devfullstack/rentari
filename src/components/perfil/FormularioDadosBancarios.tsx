@@ -1,7 +1,7 @@
 // src/components/perfil/FormularioDadosBancarios.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Usuario } from '@/types/usuario';
@@ -9,9 +9,11 @@ import { Icon } from '@/components/ui/Icon';
 import { faSave, faBuildingColumns, faCreditCard, faKey, faMobileAlt, faAt } from '@fortawesome/free-solid-svg-icons';
 
 type PixTipo = Usuario['dadosBancarios']['pixTipo'];
+type TipoConta = Usuario['dadosBancarios']['tipo'];
 
 /**
  * @fileoverview Formulário para edição dos dados bancários e chave PIX do Proprietário.
+ * ATUALIZADO: Inclui a seleção de Tipo de Conta (Corrente/Poupança).
  */
 export default function FormularioDadosBancarios() {
   const { user, updateUser } = useAuthStore();
@@ -22,6 +24,7 @@ export default function FormularioDadosBancarios() {
     banco: user?.dadosBancarios.banco || '',
     agencia: user?.dadosBancarios.agencia || '',
     conta: user?.dadosBancarios.conta || '',
+    tipo: user?.dadosBancarios.tipo || 'CORRENTE', // NOVO: Inicializado com o tipo existente ou 'CORRENTE'
     pixTipo: user?.dadosBancarios.pixTipo || 'EMAIL',
     pixChave: user?.dadosBancarios.pixChave || '',
   });
@@ -48,6 +51,14 @@ export default function FormularioDadosBancarios() {
           pixChave: '', // Limpa a chave ao mudar o tipo
       }));
   };
+  
+  const handleTipoContaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      const newTipoConta = e.target.value as TipoConta;
+      setFormData(prevData => ({
+          ...prevData,
+          tipo: newTipoConta,
+      }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +74,7 @@ export default function FormularioDadosBancarios() {
     }
     
     try {
-        // Envia apenas a subestrutura de dadosBancarios
+        // Envia APENAS a subestrutura de dadosBancarios dentro de um objeto parcial
         await updateUser({ dadosBancarios: formData }); 
         
         setSuccess("Dados bancários e PIX atualizados com sucesso!");
@@ -110,7 +121,7 @@ export default function FormularioDadosBancarios() {
             {/* Seção Dados Bancários */}
             <div className='space-y-4 p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700'>
                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center">
-                    <Icon icon={faBuildingColumns} className="w-4 h-4 mr-2" /> Conta Corrente
+                    <Icon icon={faBuildingColumns} className="w-4 h-4 mr-2" /> Conta Corrente/Poupança
                 </h3>
                 
                 {/* Banco */}
@@ -131,7 +142,7 @@ export default function FormularioDadosBancarios() {
                 </div>
                 
                 {/* Agência e Conta */}
-                <div className='grid grid-cols-2 gap-4'>
+                <div className='grid grid-cols-3 gap-4'>
                     <div>
                         <label htmlFor="agencia" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Agência
@@ -161,6 +172,23 @@ export default function FormularioDadosBancarios() {
                             placeholder="Ex: 123456-7"
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
                         />
+                    </div>
+                    {/* NOVO: Tipo de Conta */}
+                    <div>
+                        <label htmlFor="tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Tipo de Conta
+                        </label>
+                        <select
+                            id="tipo"
+                            name="tipo"
+                            required
+                            value={formData.tipo}
+                            onChange={handleTipoContaChange}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+                        >
+                            <option value="CORRENTE">Corrente</option>
+                            <option value="POUPANCA">Poupança</option>
+                        </select>
                     </div>
                 </div>
             </div>

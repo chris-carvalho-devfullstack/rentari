@@ -2,13 +2,14 @@
 
 'use client'; 
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation'; 
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/services/FirebaseService';
+// Importações Firebase
+import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '@/services/FirebaseService'; 
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faEye, faEyeSlash, faEnvelope, faLock } from '@fortawesome/free-solid-svg-icons'; // Ícones
+import { faEye, faEyeSlash, faEnvelope } from '@fortawesome/free-solid-svg-icons'; // Ícones
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -26,38 +27,24 @@ const setAuthCookie = (token: string, days: number = 7) => {
 // *****************************************************************************
 
 /**
- * @fileoverview Formulário de login para o Portal Rentou, atualizado com design Alude-style e ícones FA.
+ * @fileoverview Formulário de login para o Portal Rentou, atualizado com Google Sign-In.
  */
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false); // Adicionado para toggle de senha
+  const [showPassword, setShowPassword] = useState(false); 
   const router = useRouter(); 
   const { fetchUserData, setUser } = useAuthStore();
   
   const handleTogglePassword = () => setShowPassword(prev => !prev);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    try {
-      console.log('--- [DEBUG] Iniciando tentativa de login.');
+  
+  const handleLoginSuccess = useCallback(async (user: any) => {
+      // 1. Define o cookie
+      setAuthCookie(user.uid); 
       
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
-      // Se chegar aqui, o login com Firebase Auth foi um sucesso.
-      console.log('--- [DEBUG] Login Firebase SUCESSO. UID:', userCredential.user.uid);
-
-      // --- PASSO CRÍTICO AQUI: Definir o cookie com o UID ---
-      setAuthCookie(userCredential.user.uid); 
-      // -----------------------------------------------------
-      
-      const user = userCredential.user;
-      
+      // 2. Busca/Cria o documento do usuário no Firestore (lógica unificada)
       const userData = await fetchUserData(user.uid, user.email || '', user.displayName || 'Usuário Rentou');
       setUser(userData);
       
@@ -65,22 +52,60 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
 
       router.push('/dashboard'); 
       onSuccess?.();
+  }, [fetchUserData, setUser, onSuccess, router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      console.log('--- [DEBUG] Iniciando tentativa de login com Email/Senha.');
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await handleLoginSuccess(userCredential.user);
+
     } catch (err: any) {
       console.error('--- [DEBUG] ERRO DURANTE O PROCESSO DE LOGIN CATCH:', err);
-      if (err && typeof err === 'object' && err.code) {
-          console.error('--- [DEBUG] Código de Erro:', err.code);
-      }
       
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
         setError('E-mail ou senha inválidos. Tente novamente.');
       } else {
-        setError(`Ocorreu um erro inesperado. Verifique o console para detalhes.`);
+        setError(`Ocorreu um erro inesperado. Detalhe: ${err.message || 'Erro desconhecido.'}`);
       }
     } finally {
-      console.log('--- [DEBUG] Finalizando tentativa de login. Loading = false');
       setLoading(false);
     }
   };
+  
+  // --- NOVO: Handler para Login com Google ---
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+        const result = await signInWithPopup(auth, googleProvider);
+        const user = result.user;
+        
+        console.log('--- [DEBUG] Login com Google SUCESSO. UID:', user.uid);
+        
+        await handleLoginSuccess(user);
+        
+    } catch (err: any) {
+        console.error('--- [DEBUG] ERRO DURANTE O LOGIN GOOGLE CATCH:', err);
+        let msg = 'Falha ao autenticar com Google. Tente novamente.';
+        
+        if (err.code === 'auth/account-exists-with-different-credential') {
+            msg = 'Este e-mail já está cadastrado com outro método (Ex: Email/Senha). Por favor, use a opção de login padrão.';
+        } else if (err.code === 'auth/popup-closed-by-user') {
+            msg = 'O pop-up de login foi fechado.';
+        }
+        
+        setError(msg);
+
+    } finally {
+        setLoading(false);
+    }
+  };
+
 
   return (
     <div className="flex flex-col items-center justify-center p-4">
@@ -95,10 +120,14 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             Ainda não tem conta? <a href="/signup" className="text-rentou-primary font-medium hover:underline">Faça seu cadastro</a>
         </p>
         
-        {/* Botão de Login Social (SIMULADO - Alude Style) - CORREÇÃO: Removido !text-white */}
+        {/* Botão de Login Social (Google) - Implementação Real */}
         <button
             type="button"
-            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4"
+            onClick={handleGoogleSignIn} // NOVO HANDLER
+            disabled={loading}
+            className={`w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4 ${
+                 loading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
         >
             <span className="text-lg mr-2">G</span> 
             Fazer Login com o Google
@@ -152,7 +181,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                     onClick={handleTogglePassword}
                     title={showPassword ? 'Esconder senha' : 'Mostrar senha'}
                 >
-                    <Icon icon={showPassword ? faEye : faEyeSlash} className="h-5 w-5" />
+                    <Icon icon={faEye} className="h-5 w-5" />
                 </span>
             </div>
           </div>

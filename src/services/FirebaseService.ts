@@ -2,7 +2,9 @@
 // Certifique-se de que o nome do arquivo no disco é "FirebaseService.ts"
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth'; 
+// getAuth e GoogleAuthProvider vêm de 'firebase/auth'
+import { getAuth, GoogleAuthProvider } from 'firebase/auth'; 
+// getFirestore e getStorage vêm de seus respectivos módulos
 import { getFirestore } from 'firebase/firestore'; 
 import { getStorage } from 'firebase/storage';
 
@@ -28,3 +30,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 // Aqui, o getStorage usará o bucket definido em firebaseConfig (ACTIVE_STORAGE_BUCKET)
 export const storage = getStorage(app);
+
+// NOVO: Exporta o provedor do Google
+export const googleProvider = new GoogleAuthProvider(); // <-- NOVO

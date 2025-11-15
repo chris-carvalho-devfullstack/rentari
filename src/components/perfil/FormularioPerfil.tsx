@@ -1,7 +1,7 @@
 // src/components/perfil/FormularioPerfil.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Usuario } from '@/types/usuario';
@@ -17,24 +17,39 @@ import { faSave, faUser, faEnvelope, faImage, faIdCard, faPhone } from '@fortawe
 interface PerfilFormData {
     nome: string;
     email: string;
-    cpf: string;
+    // Usamos 'documentoIdentificacao' como o campo principal
+    documentoIdentificacao: string; 
     telefone: string;
 }
 
 // Funções de formatação de exibição (usadas apenas no input)
-const displayCpf = (value: string) => {
+const displayDocumento = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
-    const match = cleaned.match(/^(\d{3})(\d{3})(\d{3})(\d{2})$/);
-    return match ? `${match[1]}.${match[2]}.${match[3]}-${match[4]}` : value;
+    
+    // 1. Tenta formatar como CPF (11 dígitos)
+    if (cleaned.length === 11) {
+        const match = cleaned.match(/^(\d{3})(\d{3})(\d{3})(\d{2})$/);
+        return match ? `${match[1]}.${match[2]}.${match[3]}-${match[4]}` : value;
+    }
+    
+    // 2. Tenta formatar como CNPJ (14 dígitos)
+    if (cleaned.length === 14) {
+        const match = cleaned.match(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/);
+        return match ? `${match[1]}.${match[2]}.${match[3]}/${match[4]}-${match[5]}` : value;
+    }
+    
+    return value;
 };
 
 const displayTelefone = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
     let match;
+    // Celular (11 dígitos)
     if (cleaned.length === 11) {
         match = cleaned.match(/^(\d{2})(\d{5})(\d{4})$/);
         return match ? `(${match[1]}) ${match[2]}-${match[3]}` : value;
     }
+    // Fixo (10 dígitos)
     if (cleaned.length === 10) {
         match = cleaned.match(/^(\d{2})(\d{4})(\d{4})$/);
         return match ? `(${match[1]}) ${match[2]}-${match[3]}` : value;
@@ -45,7 +60,7 @@ const displayTelefone = (value: string) => {
 
 /**
  * @fileoverview Formulário para edição das informações pessoais do Proprietário.
- * CORRIGIDO: Lógica de upload e fallback de foto de perfil ajustadas.
+ * Sincronizado com a nova estrutura de `Usuario` (usando `documentoIdentificacao`).
  */
 export default function FormularioPerfil() {
   const { user, updateUser } = useAuthStore();
@@ -53,7 +68,6 @@ export default function FormularioPerfil() {
   
   // --- ESTADOS PARA FOTO DE PERFIL ---
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  // Inicializa o preview com a foto atual do usuário
   const [filePreview, setFilePreview] = useState<string | null>(user?.fotoUrl || null); 
   // ----------------------------------------
     
@@ -61,7 +75,8 @@ export default function FormularioPerfil() {
   const [formData, setFormData] = useState<PerfilFormData>({
     nome: user?.nome || '',
     email: user?.email || '',
-    cpf: user?.cpf || '',
+    // Usa o documentoIdentificacao, ou o cpf se for só o limpo
+    documentoIdentificacao: user?.documentoIdentificacao?.replace(/\D/g, '') || user?.cpf || '',
     telefone: user?.telefone || '',
   });
   
@@ -84,25 +99,18 @@ export default function FormularioPerfil() {
     }
   }, [selectedFile, user?.fotoUrl]);
 
-  useEffect(() => {
-    if (!user) {
-        router.push('/login');
-    }
-  }, [user, router]);
-
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, files } = e.target;
     
     // Handler para o campo de arquivo
     if (name === 'fotoPerfil' && files && files.length > 0) {
         setSelectedFile(files[0]);
-        // Não retorna aqui, permite que o restante do handler processe
+        // Permite que o restante do handler processe
     }
 
-    // Filtra caracteres não numéricos para CPF e Telefone (melhora a usabilidade para salvar limpo)
+    // Filtra caracteres não numéricos para CPF/CNPJ e Telefone
     let cleanedValue = value;
-    if (name === 'cpf' || name === 'telefone') {
+    if (name === 'documentoIdentificacao' || name === 'telefone') {
         // Remove apenas não-dígitos para garantir que o estado interno salve o valor "limpo"
         cleanedValue = value.replace(/\D/g, ''); 
     }
@@ -114,7 +122,7 @@ export default function FormularioPerfil() {
           [name]: cleanedValue,
         }));
     }
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,8 +137,8 @@ export default function FormularioPerfil() {
     }
 
     // Validação básica
-    if (!formData.nome || !formData.email || !formData.cpf || !formData.telefone) {
-      setError("Todos os campos pessoais (Nome, E-mail, CPF e Telefone) são obrigatórios.");
+    if (!formData.nome || !formData.email || !formData.documentoIdentificacao || !formData.telefone) {
+      setError("Todos os campos básicos (Nome, E-mail, CPF/CNPJ e Telefone) são obrigatórios.");
       setLoading(false);
       return;
     }
@@ -139,35 +147,41 @@ export default function FormularioPerfil() {
         let fotoUrl: string | undefined;
 
         if (selectedFile) {
-            // 1. Upload da foto de perfil para o Storage
-            // IMPORTANTE: Se o erro de CORS persistir, a chamada abaixo falhará.
             fotoUrl = await uploadFotoPerfil(selectedFile, user.id); 
             console.log('Upload de foto concluído:', fotoUrl);
         } else if (filePreview === null) {
-            // Caso o usuário tenha removido a foto e não tenha selecionado uma nova (Limpar a foto)
+            // Limpa a foto
              fotoUrl = ''; 
         }
         
-        // 2. Atualiza o perfil do usuário (incluindo o novo URL da foto, se houver)
+        // Determina se o documento é CPF ou CNPJ pelo comprimento
+        const cleanDoc = formData.documentoIdentificacao.replace(/\D/g, '');
+        
+        // 2. Monta o payload de atualização
         const updatePayload: Partial<Usuario> = {
-            ...formData,
+            nome: formData.nome,
+            telefone: formData.telefone,
+            // Sincroniza o CPF (limpo) e o DocumentoIdentificacao (para exibição)
+            // cpf só é definido se for PF (11 dígitos)
+            cpf: cleanDoc.length === 11 ? cleanDoc : undefined,
+            documentoIdentificacao: displayDocumento(cleanDoc),
             // Adiciona a URL apenas se o upload foi feito OU se a foto foi limpa
             ...(fotoUrl !== undefined ? { fotoUrl } : {}) 
         };
+        
+        // NOTE: O email não é atualizável por aqui (mantido 'disabled' no input)
 
         await updateUser(updatePayload); 
         
         setSuccess("Perfil e foto atualizados com sucesso!");
         setSelectedFile(null); 
         
-        // Redireciona para a página de visualização após o sucesso
         setTimeout(() => {
             router.push('/perfil');
         }, 1500);
 
     } catch (err: any) {
       console.error('Erro ao atualizar perfil:', err);
-      // Inclui instrução para verificar o CORS, pois é o problema mais provável neste ponto
       setError(`Falha ao atualizar o perfil. Detalhe: ${err.message || 'Erro desconhecido.'}. **Verifique o CORS no Firebase Storage!**`);
     } finally {
       setLoading(false);
@@ -175,9 +189,8 @@ export default function FormularioPerfil() {
   };
   
   const handleRemovePhoto = () => {
-    setSelectedFile(null); // Limpa o arquivo selecionado
-    setFilePreview(null);  // Limpa o preview para forçar o placeholder
-    // O submit enviará fotoUrl: '' para limpar o valor no store
+    setSelectedFile(null); 
+    setFilePreview(null);  
   };
 
 
@@ -292,42 +305,43 @@ export default function FormularioPerfil() {
                             type="email"
                             required
                             value={formData.email}
-                            onChange={handleChange}
+                            // Email é apenas para exibição neste formulário
                             placeholder="seu.email@exemplo.com"
                             className="mt-1 block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-                            disabled={user.tipo !== 'ADMIN'} 
+                            disabled
                         />
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
                             <Icon icon={faEnvelope} className="h-4 w-4" />
                         </span>
                     </div>
-                    {user.tipo !== 'ADMIN' && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">E-mail de login é protegido. Contate o suporte para alteração.</p>}
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">E-mail de login é protegido e não pode ser alterado aqui.</p>
                 </div>
             </div>
             
-            {/* NOVO: Linha para CPF e Telefone */}
+            {/* NOVO: Linha para CPF/CNPJ e Telefone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                {/* Campo CPF */}
+                {/* Campo CPF/CNPJ */}
                 <div>
-                    <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        CPF
+                    <label htmlFor="documentoIdentificacao" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        CPF ou CNPJ
                     </label>
                     <div className="relative">
                         <input
-                            id="cpf"
-                            name="cpf"
+                            id="documentoIdentificacao"
+                            name="documentoIdentificacao"
                             type="text"
                             required
-                            value={displayCpf(formData.cpf)} 
+                            value={displayDocumento(formData.documentoIdentificacao)} 
                             onChange={handleChange}
-                            placeholder="123.456.789-00"
-                            maxLength={14} 
+                            placeholder="123.456.789-00 ou XX.XXX.XXX/XXXX-XX"
+                            maxLength={18} // Max length para CNPJ formatado
                             className="mt-1 block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
                         />
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
                             <Icon icon={faIdCard} className="h-4 w-4" />
                         </span>
                     </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Para alterar seu tipo de documento ou adicionar a qualificação legal completa, use o botão na página de Perfil.</p>
                 </div>
 
                 {/* Campo Telefone */}

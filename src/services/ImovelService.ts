@@ -14,17 +14,17 @@ import {
     updateDoc, 
     deleteDoc,
     QueryDocumentSnapshot,
-    onSnapshot, // <-- Importado para real-time
+    onSnapshot, 
 } from 'firebase/firestore';
 
 /**
  * @fileoverview Serviço CRUD do Módulo de Imóveis, agora conectado ao Firebase Firestore.
- * Implementa Real-Time (onSnapshot) para a lista principal.
+ * CORRIGIDO: Usa o ID do proprietário dinâmico em vez do mock hardcoded.
  */
 
-// Variáveis para simular o contador sequencial 
+// Variáveis para simular o contador sequencial (mantidas por ser parte do mock de smartId)
 let nextIdSequence = 4; 
-const PROPRIETARIO_ID_MOCK = 'prop-123'; // Simula o ID do usuário autenticado
+// PROPRIETARIO_ID_MOCK removido.
 
 /**
  * UTILITY: Remove todas as propriedades com valor 'undefined' de um objeto.
@@ -70,13 +70,14 @@ const generateNewSmartId = (data: NovoImovelData): string => {
 
 /**
  * Busca de imóveis do proprietário no Firestore (Read - All - ONE-TIME fetch).
+ * CORRIGIDO: Recebe o ID do proprietário como argumento.
  */
-export async function fetchImoveisDoProprietarioOnce(): Promise<Imovel[]> {
-  console.log('[ImovelService] Fetching all Imoveis for user from Firestore (One-Time)...');
+export async function fetchImoveisDoProprietarioOnce(proprietarioId: string): Promise<Imovel[]> {
+  console.log(`[ImovelService] Fetching all Imoveis for user ${proprietarioId} from Firestore (One-Time)...`);
   
   const q = query(
       collection(db, 'imoveis'), 
-      where('proprietarioId', '==', PROPRIETARIO_ID_MOCK)
+      where('proprietarioId', '==', proprietarioId) // Usa o ID dinâmico
   );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(mapDocToImovel);
@@ -84,15 +85,14 @@ export async function fetchImoveisDoProprietarioOnce(): Promise<Imovel[]> {
 
 /**
  * CHAVE REAL-TIME: Se inscreve para atualizações em tempo real (Read - All).
- * @param callback Função a ser chamada a cada nova lista de imóveis.
- * @returns Função de unsubscribe.
+ * CORRIGIDO: Recebe o ID do proprietário como argumento.
  */
-export function subscribeToImoveis(callback: (imoveis: Imovel[]) => void, onError: (error: Error) => void) {
-  console.log('[ImovelService] Subscribing to Imoveis in Real-Time...');
+export function subscribeToImoveis(proprietarioId: string, callback: (imoveis: Imovel[]) => void, onError: (error: Error) => void) {
+  console.log(`[ImovelService] Subscribing to Imoveis for user ${proprietarioId} in Real-Time...`);
   
   const q = query(
     collection(db, 'imoveis'), 
-    where('proprietarioId', '==', PROPRIETARIO_ID_MOCK)
+    where('proprietarioId', '==', proprietarioId) // Usa o ID dinâmico
   );
 
   const unsubscribe = onSnapshot(
@@ -130,15 +130,16 @@ export async function fetchImovelPorId(id: string): Promise<Imovel | undefined> 
 
 /**
  * Adiciona um novo imóvel (Create).
+ * CORRIGIDO: Recebe o ID do proprietário como argumento.
  */
-export async function adicionarNovoImovel(data: NovoImovelData): Promise<Imovel> {
-  console.log('[ImovelService] Adicionando novo imóvel ao Firestore...');
+export async function adicionarNovoImovel(data: NovoImovelData, proprietarioId: string): Promise<Imovel> {
+  console.log(`[ImovelService] Adicionando novo imóvel para proprietário ${proprietarioId} ao Firestore...`);
   await new Promise(resolve => setTimeout(resolve, 800));
   
   const smartId = generateNewSmartId(data);
   const payload = {
     ...data,
-    proprietarioId: PROPRIETARIO_ID_MOCK,
+    proprietarioId: proprietarioId, // Usa o ID dinâmico
     smartId: smartId, 
   };
   const cleanData = cleanPayload(payload);

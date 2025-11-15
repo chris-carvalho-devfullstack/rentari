@@ -4,7 +4,7 @@
 import { useAuthStore } from '@/hooks/useAuthStore';
 import Link from 'next/link';
 import { Icon } from '@/components/ui/Icon';
-import { faArrowLeft, faUser, faCreditCard, faKey, faCheckCircle, faEnvelope } from '@fortawesome/free-solid-svg-icons';
+import { faArrowLeft, faUser, faCreditCard, faKey, faCheckCircle, faEnvelope, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 
 // Componente auxiliar para formatação de CPF e Telefone (apenas para exibição)
 const formatCpf = (cpf: string) => {
@@ -29,6 +29,14 @@ const formatTelefone = (telefone: string) => {
     return telefone;
 }
 
+const formatDocumento = (doc?: string) => {
+    if (!doc) return 'Pendente';
+    const cleaned = doc.replace(/\D/g, '');
+    if (cleaned.length === 11) return formatCpf(cleaned);
+    if (cleaned.length === 14) return `CNPJ: **.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/**-**`;
+    return doc;
+}
+
 // Componente auxiliar para blocos de informação
 const InfoBlock: React.FC<{ label: string; value: string | number | React.ReactNode; color?: string }> = ({ label, value, color = 'text-gray-900 dark:text-gray-100' }) => (
     <div className="p-4 bg-gray-50 dark:bg-zinc-700 rounded-lg border border-gray-200 dark:border-zinc-600">
@@ -40,7 +48,7 @@ const InfoBlock: React.FC<{ label: string; value: string | number | React.ReactN
 
 /**
  * @fileoverview Página de Perfil do Proprietário: Dados Pessoais, Contato e Dados Bancários.
- * ATUALIZADO: Exibe a foto de perfil, CPF e Telefone do usuário a partir do Store.
+ * ATUALIZADO: Inclui lógica para alertar sobre Qualificação Contratual Pendente.
  */
 export default function PerfilPage() {
   const { user } = useAuthStore();
@@ -48,6 +56,10 @@ export default function PerfilPage() {
   if (!user) {
     return <div className="text-center p-10 text-gray-600 dark:text-gray-300">Carregando dados do usuário...</div>;
   }
+  
+  // VERIFICAÇÃO CHAVE: Se o campo 'qualificacao' está preenchido
+  const isQualificacaoCompleta = !!user.qualificacao;
+  const qualificacaoTipo = user.qualificacao?.documentoTipo;
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
@@ -59,12 +71,30 @@ export default function PerfilPage() {
       <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 border-b pb-4">
         Meu Perfil & Dados de Pagamento
       </h1>
+      
+      {/* NOVO: ALERTA DE QUALIFICAÇÃO PENDENTE */}
+      {!isQualificacaoCompleta && (
+         <div className="p-4 rounded-xl shadow-md border-l-4 border-yellow-500 bg-yellow-100 dark:bg-yellow-900 dark:border-yellow-400">
+             <div className="flex items-center">
+                 <Icon icon={faExclamationTriangle} className="w-6 h-6 mr-3 text-yellow-700 dark:text-yellow-400" />
+                 <div>
+                     <h3 className="text-lg font-bold text-yellow-800 dark:text-yellow-200">Ação Necessária: Qualificação Contratual</h3>
+                     <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                        Preencha sua qualificação legal completa (RG, Endereço, Estado Civil etc.) para poder gerar contratos de locação.
+                     </p>
+                     <Link href="/perfil/qualificacao" className="mt-2 inline-block text-sm font-semibold text-yellow-900 hover:underline dark:text-yellow-400">
+                         → Preencher Qualificação Agora
+                     </Link>
+                 </div>
+             </div>
+         </div>
+      )}
 
       {/* Seção 1: Informações Pessoais (Com Foto de Perfil) */}
       <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-xl">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon icon={faUser} className="w-5 h-5 mr-3 text-rentou-primary" />
-            Dados Pessoais
+            Dados Básicos
         </h2>
         
         <div className="flex items-center space-x-6 mb-6 pb-6 border-b border-gray-100 dark:border-zinc-700">
@@ -91,24 +121,32 @@ export default function PerfilPage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <InfoBlock label="Tipo de Perfil" value={user.tipo} />
             <InfoBlock 
-                label="Status de Verificação" 
-                value={<div className='flex items-center text-green-600 dark:text-green-400'><Icon icon={faCheckCircle} className="w-4 h-4 mr-2" /> Verificado (Completo)</div>} 
+                label="Documento Principal" 
+                value={formatDocumento(user.documentoIdentificacao)} 
             />
-            {/* CPF e Telefone (Usando os novos campos do Store) */}
-            <InfoBlock label="Documento" value={formatCpf(user.cpf)} />
             <InfoBlock label="Telefone" value={formatTelefone(user.telefone)} />
+            
+            <InfoBlock 
+                label="Qualificação Legal" 
+                value={isQualificacaoCompleta 
+                    ? <div className='flex items-center text-green-600 dark:text-green-400'><Icon icon={faCheckCircle} className="w-4 h-4 mr-2" /> {qualificacaoTipo === 'PF' ? 'Pessoa Física Completa' : 'Pessoa Jurídica Completa'}</div> 
+                    : <div className='flex items-center text-red-600 dark:text-red-400'><Icon icon={faExclamationTriangle} className="w-4 h-4 mr-2" /> Pendente</div>} 
+            />
+            <InfoBlock label="Tipo de Perfil" value={user.tipo} />
         </div>
         
-        <div className="mt-6 text-right">
+        <div className="mt-6 text-right flex justify-end space-x-3">
              <Link href="/perfil/editar" className="px-4 py-2 bg-rentou-primary text-white rounded-lg hover:bg-blue-700 font-medium">
-                Editar Informações Pessoais
+                Editar Nome/Contato
+            </Link>
+             <Link href="/perfil/qualificacao" className="px-4 py-2 bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 font-medium">
+                Ver Detalhes Legais
             </Link>
         </div>
       </div>
 
-      {/* Seção 2: Dados Bancários e PIX (USANDO DADOS REAIS DO STORE) */}
+      {/* Seção 2: Dados Bancários e PIX */}
       <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-xl border-l-4 border-rentou-primary">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Icon icon={faCreditCard} className="w-5 h-5 mr-3 text-rentou-primary" />
@@ -128,24 +166,12 @@ export default function PerfilPage() {
         </div>
         
         <div className="mt-6 text-right">
-            {/* NOVO LINK PARA EDIÇÃO FINANCEIRA */}
             <Link href="/perfil/pagamento" className="px-4 py-2 bg-rentou-primary text-white rounded-lg hover:bg-blue-700 font-medium">
                 Editar Dados Bancários
             </Link>
         </div>
       </div>
       
-      {/* Seção 3: Segurança */}
-      <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-xl">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-            <Icon icon={faKey} className="w-5 h-5 mr-3 text-gray-600 dark:text-gray-400" />
-            Segurança da Conta
-        </h2>
-        <button className="text-sm font-medium text-red-600 hover:underline">
-            Alterar Senha de Acesso
-        </button>
-      </div>
-
     </div>
   );
 }
