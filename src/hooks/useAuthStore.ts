@@ -45,7 +45,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // CORREÇÃO: Inicializa os dados bancários com valores padrão no login
+  // CORREÇÃO: Inicializa os dados com valores padrão no login
   fetchUserData: async (id: string, email: string, name: string): Promise<Usuario> => {
     await new Promise(resolve => setTimeout(resolve, 300)); 
     
@@ -54,6 +54,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       email,
       nome: name || 'Proprietário Rentou',
       tipo: 'PROPRIETARIO',
+      fotoUrl: '',
+      // NOVOS CAMPOS COM MOCK INICIAL
+      cpf: '45678912300', // CPF mockado (somente números)
+      telefone: '11987654321', // Telefone mockado (somente números)
+      
       // NOVO: Inicialização dos dados bancários
       dadosBancarios: {
         banco: 'Banco Rentou (Simulado)',
@@ -78,14 +83,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Simula a chamada à API/Firestore (atraso)
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Merge dos dados (incluindo o sub-objeto dadosBancarios, se presente)
+    // Merge dos dados, garantindo que o fotoUrl seja atualizado, mesmo que seja string vazia (para remoção)
     const updatedUser: Usuario = {
         ...currentState.user,
         ...newUserData,
+        // Garante que fotoUrl seja copiado se estiver em newUserData (pode ser string vazia)
+        fotoUrl: newUserData.fotoUrl !== undefined ? newUserData.fotoUrl : currentState.user.fotoUrl,
+        
         dadosBancarios: {
             ...currentState.user.dadosBancarios,
             ...(newUserData.dadosBancarios || {})
         },
+        // Garante que campos essenciais não sejam sobrescritos acidentalmente
         id: currentState.user.id, 
         tipo: currentState.user.tipo,
     };

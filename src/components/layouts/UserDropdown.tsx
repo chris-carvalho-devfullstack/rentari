@@ -11,6 +11,7 @@ import { faUserEdit, faCog, faSignOutAlt, faIdCard, faEnvelope } from '@fortawes
 /**
  * Componente Dropdown de Perfil (Top Menu).
  * Exibe as informações do usuário e o menu de navegação do perfil/logout.
+ * ATUALIZADO: Suporta a exibição da foto de perfil.
  */
 export default function UserDropdown() {
   const { user, logout } = useAuthStore();
@@ -63,6 +64,25 @@ export default function UserDropdown() {
       )}
     </li>
   );
+  
+  // Função auxiliar para renderizar a imagem ou placeholder
+  const renderProfileImage = (sizeClasses: string, textClasses: string, fallbackBg: string) => {
+    if (user?.fotoUrl) {
+      return (
+        <img 
+            src={user.fotoUrl} 
+            alt={`Foto de perfil de ${user.nome}`} 
+            className={`${sizeClasses} object-cover rounded-full shadow-md`}
+        />
+      );
+    }
+    // Placeholder (iniciais)
+    return (
+        <div className={`${sizeClasses} ${fallbackBg} rounded-full flex items-center justify-center ${textClasses} font-bold`}>
+          {userName[0]}
+        </div>
+    );
+  };
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -71,10 +91,9 @@ export default function UserDropdown() {
         className="flex items-center space-x-2 cursor-pointer group p-1 pr-0 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
         onClick={() => setIsOpen(!isOpen)}
       >
-        {/* Foto Miniatura (usando iniciais como placeholder) */}
-        <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
-          {userName[0]}
-        </div>
+        {/* Foto Miniatura */}
+        {renderProfileImage("w-8 h-8", "text-sm", "bg-blue-500 text-white")}
+        
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 hidden sm:block pr-3">
           {userName}
         </span>
@@ -88,9 +107,8 @@ export default function UserDropdown() {
           <div className="p-4 bg-rentou-primary dark:bg-blue-900 rounded-t-xl text-white">
             <div className="flex items-center space-x-4">
               {/* Foto de Perfil Grande */}
-              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-xl font-bold text-rentou-primary">
-                {userName[0]}
-              </div>
+              {renderProfileImage("w-12 h-12", "text-xl", "bg-white text-rentou-primary")}
+              
               <div className='flex flex-col'>
                 <p className="font-semibold">{userName}</p>
                 <p className="text-xs opacity-80">{userEmail}</p>

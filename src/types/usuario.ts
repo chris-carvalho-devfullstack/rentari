@@ -13,6 +13,13 @@ export interface Usuario {
   /** Tipo de perfil do usuário. 'PROPRIETARIO' acessa a plataforma 'Rentou'. */
   tipo: 'PROPRIETARIO' | 'CORRETOR' | 'ADMIN'; 
   
+  // NOVO: URL da foto de perfil no Firebase Storage
+  fotoUrl?: string; 
+  
+  // NOVOS: Campos adicionados para o formulário de Perfil
+  cpf: string;
+  telefone: string;
+
   // === NOVO: DADOS BANCÁRIOS E PIX ===
   dadosBancarios: {
     banco: string;
