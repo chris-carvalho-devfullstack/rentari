@@ -7,21 +7,22 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation'; 
 import { useAuthStore } from '@/hooks/useAuthStore'; 
 import { Icon } from '@/components/ui/Icon'; 
-import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt } from '@fortawesome/free-solid-svg-icons'; 
+// Ícone faUser Adicionado
+import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt, faUser } from '@fortawesome/free-solid-svg-icons'; 
 
 // Definição dos links de navegação com ícones
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: faTachometerAlt },
   { name: 'Imóveis', href: '/imoveis', icon: faBuilding },
   { name: 'Financeiro', href: '/financeiro', icon: faWallet },
+  // NOVO: Perfil do Proprietário
+  { name: 'Meu Perfil', href: '/perfil', icon: faUser }, 
 ];
 
-const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean; icon: any }> = ({
-  href,
-  name,
-  isActive,
-  icon,
-}) => {
+// CORREÇÃO: Recebendo as props de forma mais segura para evitar o ReferenceError
+const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean; icon: any }> = (props) => {
+  const { href, name, isActive, icon } = props; // Desestruturação explícita dentro da função
+
   const baseClasses =
     'flex items-center p-3 rounded-lg transition-colors duration-200 group';
   // CORREÇÃO CRÍTICA: Item ATIVO (Selecionado) usa fundo claro (bg-blue-100), texto da cor primária e borda.

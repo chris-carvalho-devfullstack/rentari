@@ -12,4 +12,13 @@ export interface Usuario {
   nome: string;
   /** Tipo de perfil do usuário. 'PROPRIETARIO' acessa a plataforma 'Rentou'. */
   tipo: 'PROPRIETARIO' | 'CORRETOR' | 'ADMIN'; 
+  
+  // === NOVO: DADOS BANCÁRIOS E PIX ===
+  dadosBancarios: {
+    banco: string;
+    agencia: string;
+    conta: string;
+    pixTipo: 'EMAIL' | 'TELEFONE' | 'CPF_CNPJ' | 'ALEATORIA';
+    pixChave: string;
+  }
 }
