@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
+import { faEye, faEyeSlash, faEnvelope, faLock } from '@fortawesome/free-solid-svg-icons'; // Ícones
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -24,15 +26,18 @@ const setAuthCookie = (token: string, days: number = 7) => {
 // *****************************************************************************
 
 /**
- * @fileoverview Formulário de login para o Portal Rentou, atualizado com design Alude-style.
+ * @fileoverview Formulário de login para o Portal Rentou, atualizado com design Alude-style e ícones FA.
  */
 export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false); // Adicionado para toggle de senha
   const router = useRouter(); 
   const { fetchUserData, setUser } = useAuthStore();
+  
+  const handleTogglePassword = () => setShowPassword(prev => !prev);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,10 +95,10 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             Ainda não tem conta? <a href="/signup" className="text-rentou-primary font-medium hover:underline">Faça seu cadastro</a>
         </p>
         
-        {/* Botão de Login Social (SIMULADO - Alude Style) */}
+        {/* Botão de Login Social (SIMULADO - Alude Style) - CORREÇÃO: FORÇA !text-white */}
         <button
             type="button"
-            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-white bg-rentou-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4"
+            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium !text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4"
         >
             <span className="text-lg mr-2">G</span> 
             Fazer Login com o Google
@@ -112,16 +117,20 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              // Campo com fundo levemente azul/cinza, como no print
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
+            <div className="relative">
+                <input
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+                <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                    <Icon icon={faEnvelope} className="h-4 w-4" />
+                </span>
+            </div>
           </div>
           
           <div>
@@ -130,19 +139,20 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   // Campo com fundo levemente azul/cinza, como no print
                   className="mt-1 block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 />
-                {/* Ícone de "Mostrar/Esconder Senha" (apenas visual, sem funcionalidade) */}
-                <span className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400">
-                    {/* Placeholder de ícone: Olho com corte */}
-                    <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825L10 14.825a1 1 0 010-1.414l3.875-4.004M15 12a3 3 0 11-6 0 3 3 0 016 0zM17.657 16.657A8 8 0 0112 20a8 8 0 01-5.657-3.657M2.343 7.343A8 8 0 0112 4a8 8 0 019.657 3.343" />
-                    </svg>
+                {/* Ícone de "Mostrar/Esconder Senha" com Font Awesome */}
+                <span 
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400"
+                    onClick={handleTogglePassword}
+                    title={showPassword ? 'Esconder senha' : 'Mostrar senha'}
+                >
+                    <Icon icon={showPassword ? faEye : faEyeSlash} className="h-5 w-5" />
                 </span>
             </div>
           </div>
@@ -151,8 +161,8 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
             <button
               type="submit"
               disabled={loading}
-              // Botão Principal Azul (Rentou Primary), como no Alude
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary ${
+              // Botão Principal Azul (Rentou Primary), com ajuste dark:hover e FORÇA !text-white
+              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold !text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >

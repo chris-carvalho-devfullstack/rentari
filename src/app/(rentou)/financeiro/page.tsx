@@ -5,6 +5,8 @@ import { Metadata } from 'next';
 import { useFinanceiro } from '@/hooks/useFinanceiro'; 
 import { FinanceiroData, Transacao } from '@/types/financeiro'; 
 import { useState } from 'react';
+import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
+import { faReceipt, faFileExport, faWrench } from '@fortawesome/free-solid-svg-icons'; // Ícones
 
 // A Metadata precisa ser exportada em um arquivo 'layout.tsx' se for usar 'use client' no 'page.tsx'
 // export const metadata: Metadata = { title: 'Financeiro - Rentou' };
@@ -198,17 +200,20 @@ export default function FinanceiroPage() {
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 border-b pb-2">Ações Financeiras</h2>
                     <ul className="space-y-3">
                         <li>
-                            <button className="w-full text-left p-3 rounded-lg text-sm font-medium bg-rentou-primary text-white hover:bg-blue-700 transition">
+                            <button className="w-full text-left p-3 rounded-lg text-sm font-medium bg-rentou-primary text-white hover:bg-blue-700 dark:hover:bg-blue-600 transition flex items-center">
+                                <Icon icon={faReceipt} className="w-4 h-4 mr-2" />
                                 Gerar Boleto de Aluguel
                             </button>
                         </li>
                         <li>
-                            <button className="w-full text-left p-3 rounded-lg text-sm font-medium bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300">
+                            <button className="w-full text-left p-3 rounded-lg text-sm font-medium bg-yellow-100 text-yellow-800 hover:bg-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-300 flex items-center">
+                                <Icon icon={faFileExport} className="w-4 h-4 mr-2" />
                                 Emitir Relatório (PDF/CSV)
                             </button>
                         </li>
                         <li>
-                            <button className="w-full text-left p-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50">
+                            <button className="w-full text-left p-3 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 flex items-center">
+                                <Icon icon={faWrench} className="w-4 h-4 mr-2" />
                                 Registrar Despesa (Manutenção)
                             </button>
                         </li>

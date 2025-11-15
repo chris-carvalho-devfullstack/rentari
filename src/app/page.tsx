@@ -32,10 +32,10 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Botão de Ação Principal (CTA - Call To Action) */}
+        {/* Botão de Ação Principal (CTA - Call To Action) - CORREÇÃO: FORÇA !text-white */}
         <Link
           href="/login"
-          className="inline-flex items-center justify-center w-full sm:w-2/3 px-8 py-4 border border-transparent text-lg font-semibold rounded-lg text-white bg-rentou-primary hover:bg-blue-700 transition-all duration-300 shadow-xl transform hover:scale-[1.02]"
+          className="inline-flex items-center justify-center w-full sm:w-2/3 px-8 py-4 border border-transparent text-lg font-semibold rounded-lg !text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 transition-all duration-300 shadow-xl transform hover:scale-[1.02]"
         >
           Acessar Portal do Proprietário
         </Link>

@@ -6,6 +6,8 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { DashboardMetrics } from '@/types/dashboard'; 
 import { useState } from 'react';
 import { Imovel, ImovelCategoria } from '@/types/imovel'; 
+import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
+import { faSpinner, faWarning, faClock, faCircleCheck } from '@fortawesome/free-solid-svg-icons'; // Importar ícones
 
 // Componente utilitário para formatação de moeda
 const formatCurrency = (value: number) =>
@@ -157,10 +159,8 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Dashboard Principal</h1>
         <div className="flex justify-center items-center h-48 bg-white dark:bg-zinc-800 p-6 rounded-lg shadow mt-8">
-            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-rentou-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            {/* Substituindo o SVG de loading pelo Icon do Font Awesome */}
+            <Icon icon={faSpinner} spin className="h-5 w-5 text-rentou-primary mr-3" />
             <p className="text-gray-600 dark:text-gray-300 font-medium">Carregando métricas...</p>
         </div>
       </div>
@@ -232,13 +232,22 @@ export default function DashboardPage() {
         {/* NOVO COMPONENTE DE DEMONSTRAÇÃO DE FILTRO/DADO RICO */}
         <FilteredDataDemo metrics={metrics} /> 
         
-        {/* Outro Widget de Dashboard: Alertas Operacionais */}
+        {/* Outro Widget de Dashboard: Alertas Operacionais (Substituindo emojis) */}
         <div className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow-xl">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Alertas e Notificações</h2>
             <ul className="space-y-3 text-sm">
-                <li className="text-red-500 dark:text-red-400">⚠️ Imóvel #004: Aluguel de janeiro em atraso (3 dias).</li>
-                <li className="text-yellow-500 dark:text-yellow-400">⏳ Contrato de Apt. Luxo (Vista Mar) expira em 45 dias.</li>
-                <li className="text-gray-500 dark:text-gray-400">✅ Nenhum novo lead nos últimos 7 dias.</li>
+                <li className="text-red-500 dark:text-red-400 flex items-center">
+                    <Icon icon={faWarning} className="inline-block w-4 h-4 mr-2" />
+                    Imóvel #004: Aluguel de janeiro em atraso (3 dias).
+                </li>
+                <li className="text-yellow-500 dark:text-yellow-400 flex items-center">
+                    <Icon icon={faClock} className="inline-block w-4 h-4 mr-2" />
+                    Contrato de Apt. Luxo (Vista Mar) expira em 45 dias.
+                </li>
+                <li className="text-gray-500 dark:text-gray-400 flex items-center">
+                    <Icon icon={faCircleCheck} className="inline-block w-4 h-4 mr-2 text-green-500" />
+                    Nenhum novo lead nos últimos 7 dias.
+                </li>
             </ul>
             <button className="mt-4 text-sm font-medium text-rentou-primary hover:text-blue-800">Ver Central de Pendências</button>
         </div>

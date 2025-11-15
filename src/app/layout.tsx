@@ -4,6 +4,11 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/providers/AuthProvider";
 
+// Import Font Awesome CSS e configuração
+import '@fortawesome/fontawesome-svg-core/styles.css'; 
+import { config } from '@fortawesome/fontawesome-svg-core';
+config.autoAddCss = false; 
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

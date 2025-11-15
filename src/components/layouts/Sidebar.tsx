@@ -6,35 +6,38 @@ import Link from 'next/link';
 import Image from 'next/image'; 
 import { usePathname, useRouter } from 'next/navigation'; 
 import { useAuthStore } from '@/hooks/useAuthStore'; 
+import { Icon } from '@/components/ui/Icon'; 
+import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt } from '@fortawesome/free-solid-svg-icons'; 
 
-// Definição dos links de navegação
+// Definição dos links de navegação com ícones
 const navItems = [
-  { name: 'Dashboard', href: '/dashboard' },
-  { name: 'Imóveis', href: '/imoveis' },
-  { name: 'Financeiro', href: '/financeiro' },
+  { name: 'Dashboard', href: '/dashboard', icon: faTachometerAlt },
+  { name: 'Imóveis', href: '/imoveis', icon: faBuilding },
+  { name: 'Financeiro', href: '/financeiro', icon: faWallet },
 ];
 
-const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean }> = ({
+const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean; icon: any }> = ({
   href,
   name,
   isActive,
+  icon,
 }) => {
   const baseClasses =
     'flex items-center p-3 rounded-lg transition-colors duration-200 group';
-  const activeClasses = 'bg-rentou-primary text-white shadow-lg';
-  // CORREÇÃO FORÇADA: Usa !text-black no modo padrão para garantir contraste.
+  // CORREÇÃO CRÍTICA: Item ATIVO (Selecionado) usa fundo claro (bg-blue-100), texto da cor primária e borda.
+  const activeClasses = 'bg-blue-100 text-rentou-primary border border-rentou-primary shadow-inner'; 
+  
+  // O estado inativo mantém o texto escuro no modo claro, o que já está correto.
   const inactiveClasses =
-    '!text-black dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
+    'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
 
   return (
     <Link
       href={href}
       className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
     >
-      {/* Ícone placeholder simples (opcional, pode ser substituído por ícones reais como Lucide ou Heroicons) */}
-      <span className="w-5 h-5 mr-3 flex items-center justify-center">
-        {name[0]}
-      </span>
+      {/* Usando o componente Icon do Font Awesome */}
+      <Icon icon={icon} className="w-5 h-5 mr-3" />
       <span className="font-medium">{name}</span>
     </Link>
   );
@@ -79,6 +82,7 @@ export default function Sidebar() {
             key={item.href}
             href={item.href}
             name={item.name}
+            icon={item.icon} // Passando o ícone
             // Verifica se a rota atual começa com o href (para incluir sub-rotas)
             isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
           />
@@ -92,10 +96,8 @@ export default function Sidebar() {
             title="Sair do Portal do Proprietário e encerrar a sessão." // Adicionado o title para o tooltip
             className="w-full text-left p-3 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-zinc-700 transition-colors duration-200 font-medium flex items-center cursor-pointer" // Adicionado cursor-pointer
         >
-            {/* Ícone de Log Out (Placeholder para visualização, pode ser substituído por um ícone real de "Sair") */}
-            <span className="w-5 h-5 mr-3 flex items-center justify-center">
-                →
-            </span>
+            {/* Ícone de Log Out (Font Awesome) */}
+            <Icon icon={faSignOutAlt} className="w-5 h-5 mr-3" />
             Sair
         </button>
       </div>

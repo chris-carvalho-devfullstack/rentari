@@ -262,8 +262,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     onClick={() => handleFinalidadeChange(finalidade as ImovelFinalidade)}
                                     className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 ${
                                         formData.finalidades.includes(finalidade as ImovelFinalidade)
-                                            ? 'bg-rentou-primary text-white shadow-md'
-                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-600'
+                                            ? 'bg-blue-100 text-rentou-primary border border-rentou-primary shadow-md' // Selected: Fundo claro, Texto escuro, Borda destaque
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-600' // Unselected: Fundo claro, Texto escuro
                                     }`}
                                 >
                                     {finalidade}
@@ -280,7 +280,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             name="titulo"
                             type="text"
                             required
-                            placeholder="Ex: Apartamento de Luxo (Vista Mar)"
+                            placeholder="Ex: Apartamento de Luxo (Vista para o Mar)"
                             value={formData.titulo}
                             onChange={handleChange}
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
@@ -478,15 +478,23 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     <div className="flex justify-between items-center mb-6">
         {formSteps.map((step) => (
             <div key={step.id} className="flex-1">
-                <div className={`text-center ${step.id <= currentStep ? 'text-rentou-primary dark:text-blue-400 font-bold' : 'text-gray-400 dark:text-gray-600'}`}>
-                    <div className={`w-8 h-8 mx-auto mb-1 flex items-center justify-center rounded-full border-2 ${step.id === currentStep ? 'bg-rentou-primary text-white border-rentou-primary' : step.id < currentStep ? 'bg-green-500 text-white border-green-500' : 'border-gray-300 dark:border-zinc-600'}`}>
+                <div className={`text-center ${step.id <= currentStep ? 'text-rentou-primary dark:text-blue-400 font-bold' : 'text-gray-600 dark:text-gray-600'}`}>
+                    {/* CORREÇÃO 1 & 2: Aumenta mb-1 para mb-2 para espaçamento visual e garante estilo da etapa atual */}
+                    <div className={`w-8 h-8 mx-auto mb-2 flex items-center justify-center rounded-full border-2 
+                        ${step.id === currentStep 
+                            ? 'bg-white text-rentou-primary border-rentou-primary shadow-md' // CORRENTE: Fundo Branco, Texto e Borda Azul (Destaque)
+                            : step.id < currentStep 
+                            ? 'bg-green-500 !text-white border-green-500' // COMPLETO: Fundo Verde, Texto Branco
+                            : 'border-gray-400 text-gray-600 dark:border-zinc-600 dark:text-gray-600' // FUTURO: Borda e Texto escuro (melhor contraste)
+                        }`}
+                    >
                         {step.id < currentStep ? '✓' : step.id}
                     </div>
-                    <span className="text-xs hidden sm:block">{step.name}</span>
+                    {/* CORREÇÃO 3: Adicionado mt-2 no nome para espaçamento */}
+                    <span className="text-xs hidden sm:block mt-2">{step.name}</span> 
                 </div>
-                {step.id < formSteps.length && (
-                    <div className={`h-0.5 w-full -mt-4 mx-auto ${step.id < currentStep ? 'bg-rentou-primary' : 'bg-gray-200 dark:bg-zinc-700'}`}></div>
-                )}
+                {/* Linha de progresso futuro (deve ser mais escura que a linha de fundo) */}
+                <div className={`h-0.5 w-full -mt-4 mx-auto ${step.id < currentStep ? 'bg-rentou-primary' : 'bg-gray-300 dark:bg-zinc-700'}`}></div>
             </div>
         ))}
     </div>
@@ -541,8 +549,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         onClick={() => onSelect(feature)}
                         className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 ${
                             selected.includes(feature)
-                                ? 'bg-rentou-primary text-white shadow-md'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-600'
+                                ? 'bg-blue-100 text-rentou-primary border border-rentou-primary shadow-md' // Selected: Fundo claro, Texto escuro, Borda destaque
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-700 dark:text-gray-300 dark:hover:bg-zinc-600' // Unselected: Fundo claro, Texto escuro
                         }`}
                     >
                         {feature}
@@ -573,12 +581,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
         {/* --- Navigation Buttons --- */}
         <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center">
-            {/* Botão Voltar */}
+            {/* Botão Voltar - FIX: Adicionado cursor-pointer */}
             {currentStep > 1 && (
                 <button
                     type="button"
                     onClick={() => setCurrentStep(currentStep - 1)}
-                    className="flex items-center text-gray-500 dark:text-gray-400 hover:text-rentou-primary transition-colors font-medium"
+                    className="flex items-center text-gray-500 dark:text-gray-400 hover:text-rentou-primary transition-colors font-medium cursor-pointer"
                 >
                     ← Anterior
                 </button>
@@ -586,15 +594,15 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             
             <div className="flex-1"></div>
 
-            {/* Botão Próximo/Salvar */}
+            {/* Botão Próximo/Salvar - CORREÇÃO CRÍTICA: Força !bg-rentou-primary e cursor-pointer */}
             <button
                 type={currentStep === formSteps.length ? 'submit' : 'button'}
                 onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
                 disabled={loading}
-                className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-colors ${
+                className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium !text-white !bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer ${
                   loading 
                     ? 'opacity-50 cursor-not-allowed bg-gray-400' 
-                    : 'bg-rentou-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary'
+                    : ''
                 }`}
             >
                 {loading 
@@ -603,12 +611,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             </button>
         </div>
         
-        {/* Botão de Cancelar */}
+        {/* Botão de Cancelar - FIX: Adicionado cursor-pointer e hover customizado */}
         <div className="text-center">
             <button
                 type="button"
                 onClick={() => router.push('/imoveis')}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 text-sm font-medium"
+                className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 text-sm font-medium cursor-pointer transition-colors"
             >
                 Cancelar
             </button>
