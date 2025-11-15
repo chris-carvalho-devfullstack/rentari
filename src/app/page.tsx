@@ -5,43 +5,43 @@ import React from 'react';
 
 /**
  * @fileoverview Página inicial (Landing Page) que serve como porta de entrada
- * para o Portal do Proprietário Rentou, antes do login.
+ * para o Portal do Proprietário Rentou, com foco em Minimalismo e Proposta de Valor.
  */
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-zinc-900 p-8">
-      <main className="w-full max-w-lg text-center space-y-8 p-10 bg-white dark:bg-zinc-800 rounded-xl shadow-2xl">
+      <main className="w-full max-w-xl text-center space-y-10 p-10 bg-white dark:bg-zinc-800 rounded-xl shadow-2xl">
         
-        {/* Logomarca Rentou (Usando a imagem correta, que não está vazia) */}
+        {/* Logomarca Rentou (Prominente) */}
         <Image
           src="/media/Rentou logomarcca.png"
           alt="Rentou Logomarca"
-          width={200}
-          height={60}
+          width={250} // Aumentado o tamanho
+          height={75}
           priority
-          className="mx-auto" 
+          className="mx-auto h-auto w-auto max-w-[200px] sm:max-w-[250px]" 
         />
         
-        {/* Título e Descrição */}
+        {/* Título e Proposta de Valor (Hero Text Impactante) */}
         <div className="space-y-4">
-          <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
-            Portal do Proprietário
+          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-gray-100 sm:text-5xl">
+            Sua Gestão de Imóveis, Simplificada.
           </h1>
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Acesse sua área de gestão de locações, imóveis e finanças em tempo real.
+          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+            Acesse o portal para gerenciar locações, acompanhar finanças e ter uma visão completa dos seus ativos em tempo real.
           </p>
         </div>
 
-        {/* Botão de Acesso/Login */}
+        {/* Botão de Ação Principal (CTA - Call To Action) */}
         <Link
           href="/login"
-          className="inline-flex items-center justify-center w-full sm:w-auto px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-rentou-primary hover:bg-blue-700 transition-colors shadow-lg"
+          className="inline-flex items-center justify-center w-full sm:w-2/3 px-8 py-4 border border-transparent text-lg font-semibold rounded-lg text-white bg-rentou-primary hover:bg-blue-700 transition-all duration-300 shadow-xl transform hover:scale-[1.02]"
         >
-          Acessar Área do Proprietário
+          Acessar Portal do Proprietário
         </Link>
         
         <p className="text-sm text-gray-500 dark:text-gray-400 pt-4">
-            Gerencie seus ativos com inteligência.
+            Gerencie seus ativos com inteligência e controle total.
         </p>
       </main>
     </div>
