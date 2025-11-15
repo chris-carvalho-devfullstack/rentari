@@ -8,12 +8,13 @@ export const IMÓVEIS_HIERARQUIA = [
     "categoria": "Residencial",
     "prefixoID": "RS",
     "tipos": [
-      { "nome": "Casa", "subtipos": ["Térrea", "Sobrado", "Geminada", "Condomínio Fechado", "Alto Padrão", "De Vila", "Modular / Pré-moldada", "Container"], "finalidade": ["Venda", "Locação Residencial", "Locação Temporada"] },
-      { "nome": "Apartamento", "subtipos": ["Padrão", "Studio", "Kitnet / Quitinete", "Garden", "Duplex", "Triplex", "Cobertura", "Loft"], "finalidade": ["Venda", "Locação Residencial", "Locação Temporada"] },
-      { "nome": "Condomínio Horizontal", "subtipos": ["Padrão", "Alto Padrão"], "finalidade": ["Venda", "Locação Residencial"] },
+      // Prioridade: Locação Residencial em primeiro
+      { "nome": "Casa", "subtipos": ["Térrea", "Sobrado", "Geminada", "Condomínio Fechado", "Alto Padrão", "De Vila", "Modular / Pré-moldada", "Container"], "finalidade": ["Locação Residencial", "Venda", "Locação Temporada"] },
+      { "nome": "Apartamento", "subtipos": ["Padrão", "Studio", "Kitnet / Quitinete", "Garden", "Duplex", "Triplex", "Cobertura", "Loft"], "finalidade": ["Locação Residencial", "Venda", "Locação Temporada"] },
+      { "nome": "Condomínio Horizontal", "subtipos": ["Padrão", "Alto Padrão"], "finalidade": ["Locação Residencial", "Venda"] },
       { "nome": "Flat", "subtipos": ["Flat", "Apart-Hotel"], "finalidade": ["Locação Residencial", "Locação Temporada"] },
       { "nome": "Moradia Estudantil", "subtipos": ["República", "Moradia Estudantil"], "finalidade": ["Locação Residencial"] },
-      { "nome": "Tiny House", "subtipos": ["Móvel", "Fixa"], "finalidade": ["Venda", "Locação Residencial"] }
+      { "nome": "Tiny House", "subtipos": ["Móvel", "Fixa"], "finalidade": ["Locação Residencial", "Venda"] }
     ]
   },
   {
@@ -39,11 +40,12 @@ export const IMÓVEIS_HIERARQUIA = [
     "categoria": "Rural",
     "prefixoID": "RU",
     "tipos": [
-      { "nome": "Fazenda", "subtipos": ["Pecuária", "Agricultura", "Mista", "Haras"], "finalidade": ["Venda", "Arrendamento"] },
-      { "nome": "Sítio", "subtipos": ["Lazer", "Produtivo"], "finalidade": ["Venda", "Locação Temporada"] },
-      { "nome": "Chácara", "subtipos": ["Lazer", "Residencial", "Produção"], "finalidade": ["Venda", "Locação Residencial"] },
-      { "nome": "Terra Agrícola", "subtipos": ["Cultivo", "Pastagem", "Reflorestamento"], "finalidade": ["Venda", "Arrendamento"] },
-      { "nome": "Outras Áreas Rurais", "subtipos": ["Rancho", "Estância", "Gleba", "Mineração"], "finalidade": ["Venda", "Arrendamento"] }
+      // Alterado: Inclui todas as opções de Locação e Arrendamento.
+      { "nome": "Fazenda", "subtipos": ["Pecuária", "Agricultura", "Mista", "Haras"], "finalidade": ["Venda", "Arrendamento Rural", "Locação Temporada"] },
+      { "nome": "Sítio", "subtipos": ["Lazer", "Produtivo"], "finalidade": ["Locação Residencial", "Venda", "Locação Temporada", "Arrendamento Rural"] },
+      { "nome": "Chácara", "subtipos": ["Lazer", "Residencial", "Produção"], "finalidade": ["Locação Residencial", "Venda", "Locação Temporada"] },
+      { "nome": "Terra Agrícola", "subtipos": ["Cultivo", "Pastagem", "Reflorestamento"], "finalidade": ["Venda", "Arrendamento Rural", "Locação Comercial"] },
+      { "nome": "Outras Áreas Rurais", "subtipos": ["Rancho", "Estância", "Gleba", "Mineração"], "finalidade": ["Venda", "Arrendamento Rural", "Locação Comercial"] }
     ]
   },
   {
