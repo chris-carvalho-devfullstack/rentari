@@ -24,6 +24,16 @@ import {
 let nextIdSequence = 4; 
 const PROPRIETARIO_ID_MOCK = 'prop-123'; // Simula o ID do usuário autenticado
 
+/**
+ * UTILITY: Remove todas as propriedades com valor 'undefined' de um objeto.
+ * O Firestore não permite salvar campos com valor undefined.
+ */
+const cleanPayload = <T extends Record<string, any>>(obj: T): Partial<T> => {
+    return Object.fromEntries(
+        Object.entries(obj).filter(([, value]) => value !== undefined)
+    ) as Partial<T>;
+};
+
 const getCategoryPrefix = (categoria: ImovelCategoria): string => {
   const mapping = IMÓVEIS_HIERARQUIA.find(c => c.categoria === categoria);
   return mapping ? mapping.prefixoID : 'OT'; 
@@ -122,17 +132,20 @@ export async function adicionarNovoImovel(data: NovoImovelData): Promise<Imovel>
   // 1. Gera o ID de Negócio (Smart ID)
   const smartId = generateNewSmartId(data);
 
-  // 2. Cria o payload completo para o Firestore
+  // 2. Cria o payload completo (incluindo o 'undefined' potencial do linkVideoTour)
   const payload = {
     ...data,
     proprietarioId: PROPRIETARIO_ID_MOCK,
     smartId: smartId, // Armazena o ID de Negócio
   };
 
-  // 3. Adiciona ao Firestore
-  const docRef = await addDoc(collection(db, 'imoveis'), payload);
+  // 3. Limpa o payload removendo campos com valor 'undefined'
+  const cleanData = cleanPayload(payload);
 
-  // 4. Retorna o objeto Imovel completo com o ID do Documento
+  // 4. Adiciona ao Firestore
+  const docRef = await addDoc(collection(db, 'imoveis'), cleanData);
+
+  // 5. Retorna o objeto Imovel completo com o ID do Documento
   return {
     id: docRef.id, // ID do Documento Firestore
     ...payload,
@@ -158,8 +171,8 @@ export async function atualizarImovel(id: string, data: NovoImovelData): Promise
      throw new Error(`Imóvel com ID ${id} não encontrado para atualização.`);
   }
   
-  // 2. Cria o payload de atualização, omitindo o smartId e proprietarioId que são imutáveis
-  const updatePayload = data as { [key: string]: any };
+  // 2. Limpa o payload removendo campos com valor 'undefined'
+  const updatePayload = cleanPayload(data as { [key: string]: any });
 
   // 3. Atualiza o Firestore
   await updateDoc(docRef, updatePayload);
