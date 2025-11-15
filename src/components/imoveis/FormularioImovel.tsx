@@ -45,30 +45,14 @@ const defaultFormData: NovoImovelData = {
     visitaVirtual360: false,
 };
 
+// Função auxiliar para determinar se um campo armazena um valor numérico
+const isNumericField = (name: string): boolean => 
+  ['quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 
+   'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar'].includes(name);
 
-/**
- * @fileoverview Formulário multi-step (inteligente) para a criação e edição de imóveis.
- * Implementa a hierarquia de tipos de imóveis.
- */
-export default function FormularioImovel({ initialData }: FormularioImovelProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState(1);
-  const isEditing = !!initialData;
-  const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
-  
-  // Função auxiliar para determinar se um campo armazena um valor numérico (CORRIGIDO: MOVIDO PARA O TOPO)
-  const isNumericField = (name: string): boolean => 
-    ['quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 
-     'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar'].includes(name);
-
-  // Usamos um estado auxiliar para manter os valores dos inputs numéricos como string,
-  // apenas para a renderização, prevenindo a perda de foco.
-  const [localNumericInputs, setLocalNumericInputs] = useState<Record<string, string>>({});
-
-  const [formData, setFormData] = useState<NovoImovelData>(() => {
-    // Inicializa o formData com valores numéricos
+// FUNÇÃO DE INICIALIZAÇÃO CORRIGIDA (EVITA CHAMAR SETTERS NO INITIALIZER)
+const getInitialState = (initialData?: Imovel) => {
+    // 1. Inicializa o formData
     const initialDataPayload = initialData ? Object.keys(defaultFormData).reduce((acc, key) => {
         if (key in initialData) {
             (acc as any)[key] = (initialData as any)[key];
@@ -85,23 +69,40 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         dataDisponibilidade: initialData?.dataDisponibilidade || defaultFormData.dataDisponibilidade,
         andar: initialData?.andar || 0,
     };
-    
-    // Inicializa o estado local com os valores de formData como string
+
+    // 2. Inicializa o estado local de strings para inputs numéricos
     const initialLocalInputs: Record<string, string> = {};
     
-    // CORREÇÃO DE TIPAGEM: Itera sobre as chaves válidas e assegura a tipagem correta.
+    // Itera sobre as chaves válidas e assegura a tipagem correta.
     Object.keys(initialFormData).filter(isNumericField).forEach(keyString => {
-        const key = keyString as keyof NovoImovelData;
-        const numericValue = initialFormData[key] as number; // Assumimos que é número
+        const numericValue = (initialFormData as any)[keyString] as number;
         
         // Conversão segura para string, evitando '0' em inputs vazios
         initialLocalInputs[keyString] = String(numericValue === 0 ? '' : numericValue);
     });
     
-    setLocalNumericInputs(initialLocalInputs);
+    return { initialFormData, initialLocalInputs };
+};
 
-    return initialFormData;
-  });
+
+/**
+ * @fileoverview Formulário multi-step (inteligente) para a criação e edição de imóveis.
+ * Implementa a hierarquia de tipos de imóveis.
+ */
+export default function FormularioImovel({ initialData }: FormularioImovelProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
+  const isEditing = !!initialData;
+  const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
+  
+  // Chama a função de inicialização APENAS uma vez com useMemo
+  const { initialFormData, initialLocalInputs } = useMemo(() => getInitialState(initialData), [initialData]);
+
+  // Inicializa os estados com os valores calculados (sem dependência circular)
+  const [localNumericInputs, setLocalNumericInputs] = useState<Record<string, string>>(initialLocalInputs);
+  const [formData, setFormData] = useState<NovoImovelData>(initialFormData);
 
   // Mapeia os tipos disponíveis com base na categoria principal selecionada
   const tiposDisponiveis = useMemo(() => {
@@ -129,32 +130,48 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     }
   }, [formData.categoriaPrincipal, tiposDisponiveis]); 
 
+  // --- CORREÇÃO DEFINITIVA DO FLUXO DE INPUT NUMÉRICO ---
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     const target = e.target;
 
     if (isNumericField(name)) {
-        // PASSO 1: Atualiza o estado local de string primeiro para que o input mantenha o valor e o foco.
+        // PASSO 1: SOMENTE atualiza o estado local de string.
+        // O estado numérico (formData) não é tocado, garantindo fluidez total na digitação.
         setLocalNumericInputs(prev => ({ ...prev, [name]: value }));
-
-        // PASSO 2: Converte e armazena o valor numérico no estado principal (formData).
-        const cleanedValue = value.replace(',', '.');
-        const numericValue = parseFloat(cleanedValue) || 0; 
-        
-        setFormData(prevData => ({
-            ...prevData,
-            [name]: numericValue,
-        }));
-        
-        return; // Sai da função, campos numéricos tratados.
+        return; 
     }
     
-    // Lógica para campos não numéricos (mantida)
+    // Lógica para campos não numéricos
     setFormData((prevData: NovoImovelData) => ({
       ...prevData,
       [name]: (type === 'checkbox') ? (target as HTMLInputElement).checked : value,
     }));
   }, []); 
+
+  // NOVO HANDLER: Atualiza o estado principal (formData) quando o campo perde o foco
+  const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
+    if (isNumericField(name)) {
+        const cleanedValue = value.replace(',', '.');
+        const numericValue = parseFloat(cleanedValue) || 0; 
+
+        // 1. Atualiza o estado principal (formData) com o valor numérico final.
+        setFormData(prevData => ({
+            ...prevData,
+            [name]: numericValue,
+        }));
+        
+        // 2. Garante que o estado local de string reflita o valor final (ou vazio, se 0)
+        setLocalNumericInputs(prev => ({
+            ...prev,
+            [name]: String(numericValue === 0 ? '' : numericValue)
+        }));
+    }
+  }, []);
+  // --- FIM CORREÇÃO DO FLUXO DE INPUT NUMÉRICO ---
+
 
   const handleFinalidadeChange = useCallback((finalidade: ImovelFinalidade) => {
     setFormData((prevData: NovoImovelData) => {
@@ -200,6 +217,35 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
       return;
     }
 
+    // --- CONSOLIDAÇÃO DE VALOR NA TRANSIÇÃO DE ETAPA ---
+    // Garante que o estado numérico (formData) está atualizado com o que foi digitado
+    const numericFieldsToConsolidate: string[] = [];
+    if (currentStep === 2) {
+         // Campos numéricos na Etapa 2
+         numericFieldsToConsolidate.push('quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil');
+         if (formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento')) {
+             numericFieldsToConsolidate.push('andar');
+         }
+    }
+    if (currentStep === 3) {
+         // Campos numéricos na Etapa 3
+         numericFieldsToConsolidate.push('valorAluguel', 'valorCondominio', 'valorIPTU');
+    }
+
+    // Executa a consolidação (simulando o blur)
+    numericFieldsToConsolidate.forEach(name => {
+         const value = localNumericInputs[name];
+         if (value !== undefined) {
+             const cleanedValue = value.replace(',', '.');
+             const numericValue = parseFloat(cleanedValue) || 0; 
+             
+             setFormData(prevData => ({ ...prevData, [name]: numericValue }));
+             setLocalNumericInputs(prev => ({ ...prev, [name]: String(numericValue === 0 ? '' : numericValue) }));
+         }
+    });
+    // --- FIM CONSOLIDAÇÃO DE VALOR ---
+
+
     if (currentStep < formSteps.length) {
       setCurrentStep(currentStep + 1);
       setError(null);
@@ -213,7 +259,22 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     setError(null);
     
     try {
-      if (formData.valorAluguel < 0 || isNaN(formData.valorAluguel)) {
+      
+      // CONSOLIDAÇÃO FINAL DE VALOR (focada na Etapa 3)
+      let finalFormData = { ...formData };
+      const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU'];
+      
+      finalNumericFields.forEach(name => {
+         const value = localNumericInputs[name];
+         if (value !== undefined) {
+             const cleanedValue = value.replace(',', '.');
+             const numericValue = parseFloat(cleanedValue) || 0; 
+             
+             (finalFormData as any)[name] = numericValue;
+         }
+      });
+
+      if (finalFormData.valorAluguel < 0 || isNaN(finalFormData.valorAluguel)) {
         setError('O valor do aluguel deve ser um número válido (maior ou igual a zero).');
         setLoading(false);
         return;
@@ -222,10 +283,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
       let result: Imovel;
       
       if (isEditing && initialData) {
-        result = await atualizarImovel(initialData.id, formData);
+        result = await atualizarImovel(initialData.id, finalFormData);
         console.log('Imóvel atualizado com sucesso:', result);
       } else {
-        result = await adicionarNovoImovel(formData);
+        result = await adicionarNovoImovel(finalFormData);
         console.log('Imóvel adicionado com sucesso:', result);
       }
       
@@ -241,6 +302,32 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
   // Componentes de Passo (Renderização Condicional)
   const renderStepContent = () => {
+    
+    // Função auxiliar para obter o valor de exibição
+    const getDisplayValue = (name: string, currentValue: number) => {
+        const localValue = localNumericInputs[name];
+        // Prioriza o valor string do estado local (digitado). Se não estiver sendo digitado, usa o valor numérico (convertido para string ou vazio se 0)
+        return localValue !== undefined ? localValue : (currentValue === 0 ? '' : String(currentValue));
+    };
+    
+    // Função auxiliar para renderizar Input Numérico (substitui o NumericInput component)
+    const renderNumericInput = (name: string, label: string, currentValue: number, placeholder?: string) => (
+        <div>
+            <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            <input
+                id={name}
+                name={name}
+                type="text" 
+                required
+                value={getDisplayValue(name, currentValue)}
+                onChange={handleChange}
+                onBlur={handleBlur} // Usa o handler de consolidação
+                placeholder={placeholder}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
+            />
+        </div>
+    );
+
     switch (currentStep) {
         case 1:
             return (
@@ -353,52 +440,37 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             return (
                 <div className="space-y-6">
                     <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Características</h3>
-                    {/* ... (Conteúdo da Etapa 2 permanece igual) ... */}
                     
-                    {/* Linha: Quartos, Banheiros, Vagas - Agora usam type="text" */}
+                    {/* Linha: Quartos, Banheiros, Vagas */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <NumericInput name="quartos" label="Quartos" currentValue={formData.quartos} localValue={localNumericInputs.quartos} onChange={handleChange} />
-                        <NumericInput name="banheiros" label="Banheiros" currentValue={formData.banheiros} localValue={localNumericInputs.banheiros} onChange={handleChange} />
-                        <NumericInput name="vagasGaragem" label="Vagas de Garagem" currentValue={formData.vagasGaragem} localValue={localNumericInputs.vagasGaragem} onChange={handleChange} />
+                        {renderNumericInput("quartos", "Quartos", formData.quartos)}
+                        {renderNumericInput("banheiros", "Banheiros", formData.banheiros)}
+                        {renderNumericInput("vagasGaragem", "Vagas de Garagem", formData.vagasGaragem)}
                     </div>
 
-                    {/* Linha: Áreas - Agora usam type="text" */}
+                    {/* Linha: Áreas */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <NumericInput name="areaTotal" label="Área Total (m²)" currentValue={formData.areaTotal} localValue={localNumericInputs.areaTotal} onChange={handleChange} />
-                        <NumericInput name="areaUtil" label="Área Útil (m²)" currentValue={formData.areaUtil} localValue={localNumericInputs.areaUtil} onChange={handleChange} />
+                        {renderNumericInput("areaTotal", "Área Total (m²)", formData.areaTotal)}
+                        {renderNumericInput("areaUtil", "Área Útil (m²)", formData.areaUtil)}
                     </div>
                     
-                    {/* Campo Andar (Condicional) - Agora usa type="text" */}
+                    {/* Campo Andar (Condicional) */}
                     {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') && (
-                        <NumericInput name="andar" label="Andar" currentValue={formData.andar || 0} localValue={localNumericInputs.andar} onChange={handleChange} placeholder="Ex: 5" />
+                        renderNumericInput("andar", "Andar", formData.andar || 0, "Ex: 5")
                     )}
 
                     {/* Comodidades (Checkboxes) - Layout Inteligente */}
                     <ComodidadesSelector selected={formData.caracteristicas} onSelect={handleCaracteristicaChange} />
                 </div>
             );
-        // ... (Cases 3 e 4 permanecem iguais) ...
         case 3:
             return (
                 <div className="space-y-6">
                     <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Disponibilidade</h3>
                     
-                    {/* Linha: Valor Aluguel e Status - Alterado para type="text" e adicionada correção de valor */}
+                    {/* Linha: Valor Aluguel e Status */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                            <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
-                            <input
-                                id="valorAluguel"
-                                name="valorAluguel"
-                                type="text" // <--- Permite digitação livre
-                                required
-                                placeholder="3500.00"
-                                // CORREÇÃO: Usa o estado local de string, ou o valor formatado do formData como fallback
-                                value={localNumericInputs.valorAluguel !== undefined ? localNumericInputs.valorAluguel : (formData.valorAluguel === 0 ? '' : String(formData.valorAluguel))}
-                                onChange={handleChange}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-                            />
-                        </div>
+                        {renderNumericInput("valorAluguel", "Valor do Aluguel (R$)", formData.valorAluguel, "3500.00")}
                         
                         <div>
                             <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status do Imóvel</label>
@@ -418,10 +490,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         </div>
                     </div>
 
-                    {/* Linha: Condomínio e IPTU - Agora usam type="text" */}
+                    {/* Linha: Condomínio e IPTU */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <NumericInput name="valorCondominio" label="Valor Condomínio (R$)" currentValue={formData.valorCondominio} localValue={localNumericInputs.valorCondominio} onChange={handleChange} placeholder="0.00" />
-                        <NumericInput name="valorIPTU" label="Valor IPTU (Mensal R$)" currentValue={formData.valorIPTU} localValue={localNumericInputs.valorIPTU} onChange={handleChange} placeholder="0.00" />
+                        {renderNumericInput("valorCondominio", "Valor Condomínio (R$)", formData.valorCondominio, "0.00")}
+                        {renderNumericInput("valorIPTU", "Valor IPTU (Mensal R$)", formData.valorIPTU, "0.00")}
                     </div>
                     
                     {/* Campo Data de Disponibilidade */}
@@ -506,7 +578,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     }
   };
   
-  // Progress Indicator (Smart UI) - NOVO COMPONENTE DE BARRA DE PROGESSO
+  // Progress Indicator (Smart UI)
   const ProgressIndicator = () => {
     // Calcula a porcentagem de conclusão (Ex: 1/4 = 25%, 4/4 = 100%)
     const percentage = Math.round((currentStep / formSteps.length) * 100);
@@ -542,39 +614,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
   // FIM Progress Indicator
 
   // --- Helper Components ---
-
-  // Componente Auxiliar para Entradas Numéricas (CORRIGIDO PARA FIXAR O FOCO)
-  const NumericInput: React.FC<{ 
-    label: string; 
-    name: string; 
-    currentValue: number; // Valor numérico armazenado no formData
-    localValue: string | undefined; // Valor string (digitado pelo usuário)
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
-    placeholder?: string; 
-  }> = ({ label, name, currentValue, localValue, onChange, placeholder }) => {
-    
-    // Calcula o valor a ser exibido no input
-    // 1. Prioriza o valor string do estado local (localValue) se estiver sendo digitado.
-    const displayValue = localValue !== undefined ? localValue : (currentValue === 0 ? '' : String(currentValue));
-
-    return (
-        <div>
-            <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-            <input
-                id={name}
-                name={name}
-                type="text" 
-                required
-                // CORREÇÃO: Utiliza o displayValue que prioriza a string digitada
-                value={displayValue} 
-                onChange={onChange}
-                placeholder={placeholder}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-rentou-primary focus:border-rentou-primary"
-            />
-        </div>
-    );
-  };
-
 
   const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
     <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
@@ -652,7 +691,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             
             <div className="flex-1"></div>
 
-            {/* Botão Próximo/Salvar - Agora deve funcionar, pois depende da correção no globals.css e está limpo localmente */}
+            {/* Botão Próximo/Salvar */}
             <button
                 type={currentStep === formSteps.length ? 'submit' : 'button'}
                 onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
