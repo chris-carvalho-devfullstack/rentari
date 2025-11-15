@@ -4,6 +4,13 @@ import { storage } from './FirebaseService';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
+ * Define o nome do bucket que está ativo e com CORS configurado.
+ * Puxa de forma segura a variável de ambiente ou usa o nome fixo.
+ */
+const ACTIVE_BUCKET_NAME = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'rentari-1dc75.firebasestorage.app';
+const BUCKET_BASE_PATH = `gs://${ACTIVE_BUCKET_NAME}`;
+
+/**
  * @fileoverview Serviço para gerenciar operações de arquivo no Firebase Storage.
  */
 
@@ -18,8 +25,13 @@ export async function uploadFotoPerfil(file: File, userId: string): Promise<stri
         throw new Error("ID do usuário é necessário para upload.");
     }
     
-    // Define o caminho no Storage: 'usuarios/UID/profile.jpg'
-    const storageRef = ref(storage, `usuarios/${userId}/profile.jpg`);
+    // Define o caminho ABSOLUTO no Storage, forçando o uso do bucket correto:
+    // 'gs://rentari-1dc75.firebasestorage.app/usuarios/UID/profile.jpg'
+    const storagePath = `${BUCKET_BASE_PATH}/usuarios/${userId}/profile.jpg`;
+    
+    // CORREÇÃO CRÍTICA: Cria a referência usando o caminho completo (gs://...)
+    // Isso força o SDK a construir o URL de upload corretamente, evitando o .appspot.com.
+    const storageRef = ref(storage, storagePath);
 
     console.log(`[StorageService] Iniciando upload para: ${storageRef.fullPath}`);
     
