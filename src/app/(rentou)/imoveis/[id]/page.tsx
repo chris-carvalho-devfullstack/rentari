@@ -46,7 +46,7 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Página de Visualização/Detalhes de um Imóvel (Hub de Gerenciamento).
- * Este arquivo foi renomeado para ser o ponto de acesso principal: /imoveis/[id]
+ * ATUALIZADA: Exibe o smartId (ID de Negócio) em vez do id (Firestore ID).
  */
 export default function ImovelDetalhePage() {
     const params = useParams();
@@ -71,9 +71,9 @@ export default function ImovelDetalhePage() {
             try {
                 const data = await fetchImovelPorId(id as string);
                 setImovel(data || null); // CORREÇÃO APLICADA AQUI
-            } catch (err) {
+            } catch (err: any) {
                 console.error('Erro ao buscar imóvel:', err);
-                setError(err instanceof Error ? err.message : 'Falha ao carregar os dados do imóvel.');
+                setError(err.message || 'Falha ao carregar os dados do imóvel.');
             } finally {
                 setLoading(false);
             }
@@ -133,8 +133,10 @@ export default function ImovelDetalhePage() {
             {/* Cabeçalho e Ações (Moderno e Centralizado) */}
             <div className="flex justify-between items-start border-b pb-4">
                 <div>
-                    {/* ID Inteligente exibido discretamente acima do título */}
-                    <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 -mb-1">{imovel.id}</p>
+                    {/* ID DE NEGÓCIO: Exibe o smartId de forma destacada */}
+                    <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 -mb-1">
+                        ID: {imovel.smartId}
+                    </p>
                     <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100">{imovel.titulo}</h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-1">{imovel.endereco}, {imovel.cidade}</p>
                     <div className="mt-2">
@@ -167,10 +169,10 @@ export default function ImovelDetalhePage() {
             {/* Seção 1: Identificação e Valores Financeiros */}
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Visão Financeira</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* ID Inteligente exibido como informação principal */}
+                {/* ID INTELIGENTE (SMART ID) exibido no card principal */}
                 <DataBlock 
                     label="ID do Imóvel" 
-                    value={<span className="text-rentou-primary dark:text-blue-400">{imovel.id}</span>} 
+                    value={<span className="text-rentou-primary dark:text-blue-400">{imovel.smartId}</span>} 
                 />
                 <DataBlock 
                     label="Aluguel Mensal" 

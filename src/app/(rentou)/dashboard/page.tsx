@@ -4,11 +4,8 @@
 import { Metadata } from 'next';
 import { useDashboard } from '@/hooks/useDashboard'; 
 import { DashboardMetrics } from '@/types/dashboard'; 
-import { useState } from 'react'; // Import useState
-import { Imovel, ImovelCategoria } from '@/types/imovel'; // Import types for filtering
-
-// A Metadata precisa ser exportada em um arquivo 'layout.tsx' se for usar 'use client' no 'page.tsx'
-// Para fins de demonstração, manteremos aqui (o Next.js usará a mais externa, se houver)
+import { useState } from 'react';
+import { Imovel, ImovelCategoria } from '@/types/imovel'; 
 
 // Componente utilitário para formatação de moeda
 const formatCurrency = (value: number) =>
@@ -29,10 +26,8 @@ interface MetricCardProps {
 const MetricCard: React.FC<MetricCardProps> = ({ title, value, unit, colorClass, description }) => (
     <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border-t-4 border-rentou-primary dark:border-blue-700">
         <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{title}</h2>
-        {/* CORREÇÃO: Reduzido de text-4xl para text-3xl para evitar overflow em layouts de 5 colunas */}
         <p className={`text-3xl font-bold mt-2 ${colorClass}`}> 
             {value}
-            {/* CORREÇÃO: Reduzido de text-2xl para text-xl para harmonia */}
             {unit && <span className="text-xl font-semibold ml-1">{unit}</span>} 
         </p>
         {description && (
@@ -64,9 +59,6 @@ const ChartPlaceholder: React.FC<{ title: string; data: DashboardMetrics['fluxoC
   );
 };
 
-
-// --- NOVO COMPONENTE: DEMONSTRAÇÃO DE FILTRO COM DADOS RICOS ---
-
 const STATUS_OPTIONS: (Imovel['status'] | 'TODOS')[] = ['TODOS', 'VAGO', 'ALUGADO', 'ANUNCIADO', 'MANUTENCAO'];
 const CATEGORY_OPTIONS: (ImovelCategoria | 'TODOS')[] = ['TODOS', 'Residencial', 'Comercial', 'Terrenos', 'Rural', 'Imóveis Especiais'];
 
@@ -80,8 +72,6 @@ const FilteredDataDemo: React.FC<{ metrics: DashboardMetrics }> = ({ metrics }) 
         let baseCount = metrics.imoveisAtivos;
         
         // Simulação de distribuição do total de imóveis por status/categoria.
-        // Em um app real, esta função usaria a lista completa de Imóveis, ou
-        // a API retornaria o dado já filtrado.
         
         if (selectedStatus === 'ALUGADO') {
             baseCount = Math.round(metrics.imoveisAtivos * (metrics.taxaOcupacao / 100));
@@ -161,7 +151,8 @@ const FilteredDataDemo: React.FC<{ metrics: DashboardMetrics }> = ({ metrics }) 
 export default function DashboardPage() {
   const { metrics, loading, error, refetch } = useDashboard();
   
-  if (loading) {
+  // CORREÇÃO DE SEGURANÇA E UI: Verifica se loading está ativo OU se metrics ainda é null
+  if (loading || !metrics) {
     return (
       <div>
         <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Dashboard Principal</h1>
@@ -200,32 +191,32 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mt-8">
         <MetricCard
             title="Imóveis Ativos"
-            value={metrics!.imoveisAtivos}
+            value={metrics.imoveisAtivos}
             colorClass="text-blue-600 dark:text-blue-400"
             description="Total de unidades sob gestão na plataforma Rentou."
         />
         <MetricCard
             title="Receita Mês (Atual)"
-            value={formatCurrency(metrics!.receitaMes)}
+            value={formatCurrency(metrics.receitaMes)}
             colorClass="text-green-600 dark:text-green-400"
             description="Soma dos aluguéis a receber no mês atual."
         />
         <MetricCard
             title="Pendências"
-            value={metrics!.pendencias}
+            value={metrics.pendencias}
             colorClass="text-red-600 dark:text-red-400"
             description="Aluguéis em atraso ou contratos a vencer (Ação Imediata)."
         />
         <MetricCard
             title="Taxa de Ocupação"
-            value={metrics!.taxaOcupacao}
+            value={metrics.taxaOcupacao}
             unit="%"
             colorClass="text-yellow-600 dark:text-yellow-400"
             description="Percentual de imóveis alugados vs. total de ativos."
         />
         <MetricCard
             title="Projeção Anual"
-            value={formatCurrency(metrics!.projecaoAnual)}
+            value={formatCurrency(metrics.projecaoAnual)}
             colorClass="text-indigo-600 dark:text-indigo-400"
             description="Receita estimada para os próximos 12 meses."
         />
@@ -235,11 +226,11 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mt-8">
         <ChartPlaceholder 
             title="Performance Financeira (Últimos 6 Meses)"
-            data={metrics!.fluxoCaixaMensal}
+            data={metrics.fluxoCaixaMensal}
         />
         
         {/* NOVO COMPONENTE DE DEMONSTRAÇÃO DE FILTRO/DADO RICO */}
-        <FilteredDataDemo metrics={metrics!} /> 
+        <FilteredDataDemo metrics={metrics} /> 
         
         {/* Outro Widget de Dashboard: Alertas Operacionais */}
         <div className="bg-white dark:bg-zinc-800 p-6 rounded-lg shadow-xl">

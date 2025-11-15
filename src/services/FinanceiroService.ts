@@ -1,6 +1,7 @@
 // src/services/FinanceiroService.ts
 import { FinanceiroData, Transacao } from '@/types/financeiro'; 
-import { fetchImoveisDoProprietario } from './ImovelService'; 
+// CORREÇÃO: A função de busca foi renomeada para fetchImoveisDoProprietarioOnce
+import { fetchImoveisDoProprietarioOnce } from './ImovelService'; 
 
 /**
  * @fileoverview Serviço mockado para simular chamadas à API do Módulo Financeiro.
@@ -23,7 +24,8 @@ export async function fetchFinanceiroData(): Promise<FinanceiroData> {
   console.log('[FinanceiroService] Simulação: Buscando dados financeiros detalhados (usando dados de Imóveis do Firestore para contexto)...');
   
   // Busca os imóveis reais do Firestore (usado para contexto/base de cálculo futuro)
-  const imoveis = await fetchImoveisDoProprietario(); 
+  // CORREÇÃO: Chama a função com o novo nome
+  const imoveis = await fetchImoveisDoProprietarioOnce(); 
   console.log(`[FinanceiroService] Contexto: ${imoveis.length} imóveis sob gestão.`);
 
   // Simula um atraso de rede (1.2 segundos para dados mais complexos)

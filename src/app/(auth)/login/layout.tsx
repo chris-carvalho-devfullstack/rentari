@@ -1,4 +1,4 @@
-// src/app/(auth)/layout.tsx
+// src/app/(auth)/login/layout.tsx
 import React from 'react';
 
 /**
@@ -12,7 +12,9 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4 sm:p-6">
+    // A classe do div pode ser ajustada para incluir a imagem de fundo se você tiver uma.
+    // Por exemplo: className="... bg-cover bg-bottom" style={{ backgroundImage: 'url(/cidade.svg)' }}
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-black p-4 sm:p-6">
       <div className="w-full max-w-md">
         {/* O conteúdo (LoginForm) será renderizado aqui, centralizado. */}
         {children}
