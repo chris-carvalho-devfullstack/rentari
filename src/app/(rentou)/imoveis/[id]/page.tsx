@@ -335,7 +335,13 @@ export default function ImovelDetalhePage() {
             try {
                 const data = await fetchImovelPorSmartId(id as string);
                 
-                if (data && data.fotos.length === 0) {
+                // === CORREÇÃO: Tratamento para 'data' possivelmente undefined ===
+                if (!data) {
+                    throw new Error('Imóvel não encontrado.');
+                }
+                // =========================================================
+
+                if (data.fotos.length === 0) {
                     data.fotos = mockPhotos;
                 }
                 
@@ -343,7 +349,7 @@ export default function ImovelDetalhePage() {
                 const enhancedData: EnhancedImovel = { 
                     ...data,
                     // Garante que os objetos de cômodos existam para evitar crashes
-                    cozinha: data.cozinha || {} as CozinhaData,
+                    cozinha: data.cozinha || {} as CozinhaData, 
                     sala: data.sala || {} as SalaData,
                     varanda: data.varanda || {} as VarandaData,
                     dispensa: data.dispensa || {} as DispensaData,
@@ -354,7 +360,8 @@ export default function ImovelDetalhePage() {
                 setImovel(enhancedData || null); 
             } catch (err: any) {
                 console.error('Erro ao buscar imóvel:', err);
-                setError(err.message || 'Falha ao carregar os dados do imóvel.');
+                // Captura o erro customizado ou o erro de falha ao carregar
+                setError(err.message || 'Falha ao carregar os dados do imóvel.'); 
             } finally {
                 setLoading(false);
             }
