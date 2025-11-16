@@ -18,14 +18,15 @@ const mockExtrato: Transacao[] = [
 
 /**
  * Simula a busca de todos os dados do Módulo Financeiro.
+ * @param proprietarioId O ID do usuário autenticado.
  * @returns Promise<FinanceiroData> Objeto com os dados financeiros detalhados.
  */
-export async function fetchFinanceiroData(): Promise<FinanceiroData> {
+export async function fetchFinanceiroData(proprietarioId: string): Promise<FinanceiroData> {
   console.log('[FinanceiroService] Simulação: Buscando dados financeiros detalhados (usando dados de Imóveis do Firestore para contexto)...');
   
   // Busca os imóveis reais do Firestore (usado para contexto/base de cálculo futuro)
-  // CORREÇÃO: Chama a função com o novo nome
-  const imoveis = await fetchImoveisDoProprietarioOnce(); 
+  // CORREÇÃO: Passa o ID do proprietário para o fetch
+  const imoveis = await fetchImoveisDoProprietarioOnce(proprietarioId); 
   console.log(`[FinanceiroService] Contexto: ${imoveis.length} imóveis sob gestão.`);
 
   // Simula um atraso de rede (1.2 segundos para dados mais complexos)
