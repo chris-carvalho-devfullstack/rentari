@@ -74,11 +74,14 @@ export async function uploadImovelPhotos(files: File[], imovelId: string): Promi
  */
 export async function deleteFotoImovel(fileUrl: string): Promise<void> {
     try {
-        // A URL de download do Firebase Storage é do formato:
-        // https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media...
-        // O caminho do arquivo (PATH) está após /o/ e antes de ?alt=media
-        
         const url = new URL(fileUrl);
+
+        // CORREÇÃO: Verifica se a URL é de um host conhecido do Firebase Storage
+        if (!url.host.includes('firebasestorage.googleapis.com') && !url.host.includes(ACTIVE_BUCKET_NAME)) {
+            console.log(`[StorageService] Ignorando exclusão: URL não é do Storage: ${fileUrl}`);
+            return; // Sai silenciosamente se não for uma URL do Firebase Storage (ex: mock URL)
+        }
+
         const path = url.pathname; 
         
         // Remove a parte inicial /v0/b/BUCKET/o/
@@ -95,6 +98,13 @@ export async function deleteFotoImovel(fileUrl: string): Promise<void> {
         await deleteObject(storageRef);
         console.log(`[StorageService] Foto excluída com sucesso: ${filePath}`);
     } catch (error) {
+        
+        // CORREÇÃO: Captura o TypeError de URLs inválidas (como os mocks)
+        if (error instanceof TypeError && error.message.includes('Invalid URL')) {
+             console.warn(`[StorageService] A URL fornecida (${fileUrl}) não é um formato de URL válido, ignorando exclusão no Storage.`);
+             return; 
+        }
+
         console.error(`Erro ao excluir foto do imóvel:`, error);
         throw new Error("Falha na exclusão do arquivo no Storage.");
     }

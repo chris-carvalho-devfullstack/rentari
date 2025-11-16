@@ -11,7 +11,7 @@ import {
     where, 
     doc, 
     getDoc, 
-    updateDoc, 
+    updateDoc, // Necessário para salvar o Smart ID final
     deleteDoc,
     QueryDocumentSnapshot,
     onSnapshot, 
@@ -21,8 +21,7 @@ import {
  * @fileoverview Serviço CRUD do Módulo de Imóveis, agora conectado ao Firebase Firestore.
  */
 
-// Variáveis para simular o contador sequencial (mantidas por ser parte do mock de smartId)
-let nextIdSequence = 4; 
+// REMOVIDO: O contador sequencial local 'nextIdSequence' foi removido para evitar colisões.
 
 /**
  * UTILITY: Remove todas as propriedades com valor 'undefined' de um objeto.
@@ -51,18 +50,20 @@ const mapDocToImovel = (docSnap: QueryDocumentSnapshot | { id: string, data: () 
 };
 
 /**
- * Gera um ID inteligente.
+ * Gera a parte de Smart ID base (prefixo, data/quartos) com um sufixo único aleatório.
+ * Esta base é única, mas será ainda mais única com a adição do Document ID.
  */
-const generateNewSmartId = (data: NovoImovelData): string => {
+const generateBaseSmartId = (data: NovoImovelData): string => {
   const date = new Date('2025-11-14T00:00:00'); 
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const year = date.getFullYear().toString().slice(-2);
   const prefix = getCategoryPrefix(data.categoriaPrincipal);
   const quartos = data.quartos.toString().padStart(2, '0');
-  const currentSequence = nextIdSequence;
-  nextIdSequence++; 
-  const ordem = currentSequence.toString().padStart(2, '0'); 
-  return `${prefix}${quartos}${month}${year}${ordem}`;
+  
+  // Sufixo alfanumérico de 4 caracteres para garantir unicidade do prefixo
+  const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase(); 
+  
+  return `${prefix}${quartos}${month}${year}${uniqueSuffix}`;
 };
 
 
@@ -179,24 +180,37 @@ export async function fetchImovelPorSmartId(smartId: string): Promise<Imovel | u
 
 
 /**
- * Adiciona um novo imóvel (Create).
+ * Adiciona um novo imóvel (Create) e garante que o Smart ID seja único e ligado ao Document ID.
  */
 export async function adicionarNovoImovel(data: NovoImovelData, proprietarioId: string): Promise<Imovel> {
   console.log(`[ImovelService] Adicionando novo imóvel para proprietário ${proprietarioId} ao Firestore...`);
   await new Promise(resolve => setTimeout(resolve, 800));
   
-  const smartId = generateNewSmartId(data);
+  const baseSmartId = generateBaseSmartId(data);
+  
+  // 1. Prepara o payload inicial (Smart ID temporário, Document ID será gerado)
   const payload = {
     ...data,
-    proprietarioId: proprietarioId, // Usa o ID dinâmico
-    smartId: smartId, 
+    proprietarioId: proprietarioId, 
+    smartId: baseSmartId, // Smart ID temporário (base)
   };
   const cleanData = cleanPayload(payload);
+  
+  // 2. Adiciona o documento para obter o Document ID ÚNICO
   const docRef = await addDoc(collection(db, 'imoveis'), cleanData);
+  
+  // 3. CRIA O SMART ID FINAL, LIGADO AO ID DO FIRESTORE (Intimately Linked)
+  // Utiliza uma parte do Document ID como o sufixo de unicidade final
+  const finalSmartId = `${baseSmartId}-${docRef.id.slice(0, 4).toUpperCase()}`; 
+  
+  // 4. Atualiza o documento com o Smart ID final
+  await updateDoc(docRef, { smartId: finalSmartId });
 
+  // Retorna o objeto final
   return {
     id: docRef.id, 
     ...payload,
+    smartId: finalSmartId,
   } as Imovel;
 }
 

@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { fetchImovelPorSmartId, removerImovel } from '@/services/ImovelService'; 
+import { fetchImovelPorId, removerImovel } from '@/services/ImovelService'; 
+import { deleteFotoImovel } from '@/services/StorageService'; // <-- NOVO: Importa função de exclusão de foto
 // Importando TODAS as interfaces necessárias do seu modelo atualizado
 import { 
     Imovel, 
@@ -137,14 +138,14 @@ const FinancialCard: React.FC<FinancialCardProps> = ({ label, value, icon, color
     </div>
 );
 
-// MOCK DE IMAGENS
+// MOCK DE IMAGENS (Corrigido para usar Picsum)
 const mockPhotos = [
     '/media/Rentou logomarcca.png', 
-    'https://via.placeholder.com/1600x900?text=Quarto+Principal+(16:9)',
-    'https://via.placeholder.com/1200x800?text=Cozinha+Moderna+(3:2)',
-    'https://via.placeholder.com/1920x1080?text=Sala+de+Estar+(16:9)',
-    'https://via.placeholder.com/800x1200?text=Vertical+Exemplo',
-    'https://via.placeholder.com/600x600?text=Quadrada',
+    'https://picsum.photos/seed/imovel1/1600/900', 
+    'https://picsum.photos/seed/imovel2/1200/800', 
+    'https://picsum.photos/seed/imovel3/1920/1080', 
+    'https://picsum.photos/seed/imovel4/800/1200', 
+    'https://picsum.photos/seed/imovel5/600/600', 
 ];
 
 // Interface para estruturar os Quick Facts
@@ -388,6 +389,7 @@ const ImageGallery: React.FC<{ photos: string[], titulo: string, currentPhotoInd
 export default function ImovelDetalhePage() {
     const params = useParams();
     const router = useRouter();
+    // O ID na URL é o Document ID do Firestore
     const id = Array.isArray(params.id) ? params.id[0] : params.id; 
     
     const [imovel, setImovel] = useState<EnhancedImovel | null>(null);
@@ -407,14 +409,16 @@ export default function ImovelDetalhePage() {
         const loadImovel = async () => {
             setLoading(true);
             try {
-                const data = await fetchImovelPorSmartId(id as string);
+                // CORREÇÃO: Busca pelo ID ÚNICO do Firestore
+                const data = await fetchImovelPorId(id as string);
                 
-                // === CORREÇÃO DO COMMIT ANTERIOR: Tratamento para 'data' possivelmente undefined ===
+                // === Tratamento para 'data' possivelmente undefined ===
                 if (!data) {
                     throw new Error('Imóvel não encontrado.');
                 }
                 // =========================================================
 
+                // MOCK: Adiciona fotos mockadas se não houver fotos reais
                 if (data.fotos.length === 0) {
                     data.fotos = mockPhotos;
                 }
@@ -467,7 +471,37 @@ export default function ImovelDetalhePage() {
     
     const totalMonthlyValue = calculateTotalMonthlyValue(imovel);
 
-    const handleDelete = async () => { /* Lógica de exclusão */ };
+    // FUNÇÃO DE EXCLUSÃO IMPLEMENTADA
+    const handleDelete = async () => {
+        if (!imovel || !imovel.id) return;
+        
+        if (!window.confirm(`Tem certeza que deseja excluir o imóvel "${imovel.titulo}" (Cód: ${imovel.smartId})? Esta ação é irreversível e removerá todas as fotos relacionadas.`)) {
+            return;
+        }
+
+        setIsDeleting(true);
+        setError(null);
+
+        try {
+            // 1. Excluir fotos do Storage (usa Promise.allSettled para garantir que o documento tente ser excluído)
+            console.log(`[ImovelDetalhePage] Iniciando exclusão de ${imovel.fotos.length} fotos do Storage.`);
+            const deletePhotoPromises = (imovel.fotos || []).map(url => deleteFotoImovel(url));
+            await Promise.allSettled(deletePhotoPromises); 
+
+            // 2. Excluir o documento do Firestore
+            await removerImovel(imovel.id);
+
+            // 3. Redirecionar
+            router.push('/imoveis');
+
+        } catch (err: any) {
+            console.error("Erro fatal ao excluir imóvel:", err);
+            setError(`Falha ao excluir o imóvel: ${err.message || 'Erro desconhecido.'}`);
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+    // --- FIM FUNÇÃO DE EXCLUSÃO ---
 
     // Lista de especificações estruturais (AGORA SÓ PARA ÁREAS E DETALHES)
     const structuralSpecs: StructuralSpecItem[] = [
@@ -533,14 +567,15 @@ export default function ImovelDetalhePage() {
                     <div className='flex flex-col items-end space-y-2'>
                          <div className='flex space-x-2'>
                             <Link
-                                href={`/imoveis/${id}/editar`}
+                                // Passa o ID único para a rota de edição
+                                href={`/imoveis/${id}/editar`} 
                                 className="px-4 py-2 text-sm font-medium rounded-lg transition-colors bg-rentou-primary text-white hover:bg-blue-700 flex items-center shadow-md"
                             >
                                 <Icon icon={faEdit} className="w-4 h-4 mr-2" />
                                 Editar
                             </Link>
                             <button
-                                onClick={handleDelete}
+                                onClick={handleDelete} // <-- FUNÇÃO IMPLEMENTADA
                                 disabled={isDeleting}
                                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center shadow-md ${
                                     isDeleting 
@@ -549,7 +584,7 @@ export default function ImovelDetalhePage() {
                                 }`}
                             >
                                 <Icon icon={faTrashAlt} className="w-4 h-4 mr-2" />
-                                Excluir
+                                {isDeleting ? 'Excluindo...' : 'Excluir'}
                             </button>
                          </div>
                     </div>

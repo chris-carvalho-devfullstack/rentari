@@ -4,20 +4,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchNearbyPois, PoiResult } from '@/services/GeocodingService';
 import { Icon } from '@/components/ui/Icon';
-import { faBus, faTrainSubway, faShoppingCart, faClinicMedical, faSchool, faPlus, faSpinner } from '@fortawesome/free-solid-svg-icons';
+// Adicionado faHospital, faShoppingBag, faMapPin
+import { faBus, faTrainSubway, faShoppingCart, faClinicMedical, faSchool, faPlus, faSpinner, faMapPin, faHospital, faShoppingBag } from '@fortawesome/free-solid-svg-icons';
 
 interface PoiListProps {
     latitude: number;
     longitude: number;
 }
 
-// Mapeamento de botões de filtro para ícones e tags da Overpass API
+// Mapeamento de botões de filtro para ícones e tags da Overpass API (ATUALIZADO)
 const poiFilters = [
-    { name: 'Estações', tag: 'railway_station', icon: faTrainSubway, color: 'text-indigo-600' },
-    { name: 'Ônibus', tag: 'bus_stop', icon: faBus, color: 'text-green-600' },
     { name: 'Escolas', tag: 'school', icon: faSchool, color: 'text-yellow-600' },
     { name: 'Supermercados', tag: 'supermarket', icon: faShoppingCart, color: 'text-blue-600' },
     { name: 'Farmácias', tag: 'pharmacy', icon: faClinicMedical, color: 'text-red-600' },
+    { name: 'Hospitais', tag: 'hospital', icon: faHospital, color: 'text-pink-600' }, // NOVO
+    { name: 'Shopping/Lojas', tag: 'shopping_mall', icon: faShoppingBag, color: 'text-purple-600' }, // NOVO
+    { name: 'Estações', tag: 'railway_station', icon: faTrainSubway, color: 'text-indigo-600' },
+    { name: 'Ônibus', tag: 'bus_stop', icon: faBus, color: 'text-green-600' },
+];
+
+// Opções de distância em metros
+const distanceOptions = [
+    { label: '500 m', value: 500 },
+    { label: '1 km', value: 1000 },
+    { label: '2 km (Padrão)', value: 2000 },
+    { label: '5 km', value: 5000 },
 ];
 
 /**
@@ -25,16 +36,18 @@ const poiFilters = [
  */
 export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude }) => {
     const [selectedTag, setSelectedTag] = useState<string>('school');
+    const [distance, setDistance] = useState<number>(2000); // NOVO: Distância em metros (padrão 2km)
     const [pois, setPois] = useState<PoiResult[]>([]);
     const [loadingPois, setLoadingPois] = useState(false);
 
     // Usa useCallback para otimizar a função de carregamento
-    const loadPois = useCallback(async (tag: string) => {
+    const loadPois = useCallback(async (tag: string, dist: number) => {
         if (!latitude || !longitude || !tag) return;
         
         setLoadingPois(true);
         try {
-            const results = await fetchNearbyPois(latitude, longitude, tag);
+            // Passa a distância para o serviço
+            const results = await fetchNearbyPois(latitude, longitude, tag, dist); 
             setPois(results);
         } catch (error) {
             console.error("Erro ao carregar POIs:", error);
@@ -42,12 +55,17 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude }) => {
         } finally {
             setLoadingPois(false);
         }
-    }, [latitude, longitude]); // Depende apenas de lat/lng
+    }, [latitude, longitude]); 
 
     useEffect(() => {
-        // Chama loadPois quando o componente monta ou selectedTag/coordenadas mudam
-        loadPois(selectedTag);
-    }, [selectedTag, loadPois]);
+        // Chama loadPois quando o componente monta ou selectedTag/coordenadas/distance mudam
+        loadPois(selectedTag, distance);
+    }, [selectedTag, distance, loadPois]); // NOVO: Adicionado distance à dependência
+    
+    // Handler para o botão de Rotas
+    const handleAddRoute = () => {
+        alert("Funcionalidade de Rotas: Este botão acionaria a abertura do Google Maps (ou similar) com o endereço do imóvel como origem/destino para que o usuário possa adicionar um ponto de interesse manualmente e calcular a rota.");
+    };
 
 
     return (
@@ -56,7 +74,30 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude }) => {
                 Pontos de Interesse Próximos
             </h3>
             
-            {/* Filtros de Categoria */}
+            {/* CONTROLES E RAIO (TOPO, ALINHADO À ESQUERDA) */}
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+                 
+                 {/* 1. SELETOR DE RAIO ESTILIZADO (Far Left - alinhado ao print) */}
+                 <div className="flex items-center space-x-2 flex-shrink-0">
+                     <label htmlFor="distance-select" className="text-xs font-medium text-gray-500 uppercase whitespace-nowrap">
+                        RAIO DE BUSCA:
+                     </label>
+                     <select
+                        id="distance-select"
+                        value={distance}
+                        onChange={(e) => setDistance(parseInt(e.target.value))}
+                        // Estilização moderna como um botão/pill
+                        className="px-3 py-1 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white rounded-lg shadow-sm text-sm font-semibold focus:ring-rentou-primary focus:border-rentou-primary"
+                    >
+                        {distanceOptions.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                    </select>
+                 </div>
+            </div>
+
+
+            {/* FILTROS DE CATEGORIA (Abaixo do Raio de Busca) */}
             <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-200 dark:border-zinc-700 pb-3">
                 {poiFilters.map(filter => (
                     <button
@@ -94,12 +135,15 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude }) => {
                         </div>
                     ))
                 ) : (
-                    <p className="text-center text-gray-500 p-4">Nenhum local encontrado em um raio de 1.5km.</p>
+                    <p className="text-center text-gray-500 p-4">Nenhum local de "{selectedTag.replace('_', ' ')}" encontrado em um raio de {distance / 1000}km.</p>
                 )}
             </div>
             
-            {/* Opção Adicionar Local (Igual ao Rightmove) */}
-            <button className="flex items-center mt-4 text-rentou-primary hover:underline text-sm font-medium">
+            {/* Opção Adicionar Local (FUNCIONAL/INTERATIVA) */}
+            <button 
+                onClick={handleAddRoute}
+                className="flex items-center mt-4 text-rentou-primary hover:underline text-sm font-medium"
+            >
                 <Icon icon={faPlus} className='w-4 h-4 mr-2' />
                 Adicionar um local importante (Para Rotas)
             </button>

@@ -111,23 +111,25 @@ export async function fetchCoordinatesByAddress(endereco: EnderecoImovel): Promi
 
 
 /**
- * NOVO: Busca POIs (Points of Interest) próximos usando a Overpass API (OSM).
- * A consulta é simplificada para buscar um tipo específico de POI em um raio de 1.5km.
+ * Busca POIs (Points of Interest) próximos usando a Overpass API (OSM).
+ * @param distance Distância em metros (padrão 2000m).
  */
 export async function fetchNearbyPois(
     lat: number, 
     lon: number, 
     poiTag: string, 
-    distance: number = 1500
+    distance: number = 2000
 ): Promise<PoiResult[]> {
     
-    // Mapeamento de tags OSM para POIs
+    // Mapeamento de tags OSM para POIs (ATUALIZADO)
     const POI_TAGS: { [key: string]: string } = {
         'supermarket': 'shop=supermarket',
         'pharmacy': 'amenity=pharmacy',
         'school': 'amenity=school',
         'bus_stop': 'highway=bus_stop',
         'railway_station': 'railway=station',
+        'hospital': 'amenity=hospital', // NOVO
+        'shopping_mall': 'shop=mall', // NOVO
     };
     
     const tag = POI_TAGS[poiTag];
@@ -159,13 +161,21 @@ export async function fetchNearbyPois(
             const elLat = el.lat || (el.center && el.center.lat);
             const elLon = el.lon || (el.center && el.center.lon);
             
-            // Calcula a distância simplificada (Haversine é complexo, usaremos uma aproximação)
-            const distance = Math.sqrt(Math.pow(elLat - lat, 2) + Math.pow(elLon - lon, 2)) * 111; // 1 grau Lat ~ 111 km
+            // Cálculo da distância Haversine
+            const R = 6371; // Raio da Terra em km
+            const dLat = (elLat - lat) * (Math.PI / 180);
+            const dLon = (elLon - lon) * (Math.PI / 180);
+            const a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat * (Math.PI / 180)) * Math.cos(elLat * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distanceKm = R * c; 
+
             
             return {
                 name: el.tags.name || el.tags.operator || `${poiTag.replace('_', ' ')} Desconhecido`,
                 type: el.tags.shop || el.tags.amenity || el.tags.railway || poiTag,
-                distanceKm: parseFloat(distance.toFixed(1)),
+                distanceKm: parseFloat(distanceKm.toFixed(1)),
                 latitude: elLat,
                 longitude: elLon,
             };

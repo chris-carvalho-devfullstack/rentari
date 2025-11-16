@@ -54,7 +54,7 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ proprietarioHandle, proprietari
         
         <button className="w-full flex items-center justify-center py-3 px-4 rounded-lg text-white font-semibold bg-green-600 hover:bg-green-700 transition-colors">
             <Icon icon={faPhone} className='w-4 h-4 mr-2' />
-            Ligar para o Agente
+            Ligar para o Proprietário
         </button>
         
         <button className="w-full flex items-center justify-center py-3 px-4 rounded-lg text-white font-semibold bg-rentou-primary hover:bg-blue-700 transition-colors">
@@ -71,6 +71,31 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ proprietarioHandle, proprietari
     </div>
 );
 
+// FUNÇÃO AUXILIAR PARA CONVERTER URL DO YOUTUBE PARA FORMATO EMBED
+const getEmbedUrl = (link: string | undefined): string | null => {
+    if (!link) return null;
+
+    // 1. Tenta extrair o ID de uma URL completa (watch?v=)
+    const watchMatch = link.match(/[?&]v=([^&]+)/);
+    if (watchMatch) {
+        // Retorna o formato embed limpo
+        return `https://www.youtube.com/embed/${watchMatch[1]}`;
+    }
+
+    // 2. Tenta extrair o ID de uma URL curta (youtu.be/)
+    const shortMatch = link.match(/youtu\.be\/([^?]+)/);
+    if (shortMatch) {
+        return `https://www.youtube.com/embed/${shortMatch[1]}`;
+    }
+    
+    // 3. Se já for um embed, retorna a URL original (mas remove query params desnecessários)
+    if (link.includes('youtube.com/embed/')) {
+        return link.split('?')[0];
+    }
+
+    return null;
+};
+// FIM FUNÇÃO AUXILIAR
 
 export default function AnuncioDetalhePublicoPage() {
     const params = useParams();
@@ -84,7 +109,8 @@ export default function AnuncioDetalhePublicoPage() {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     
     const MOCK_VIRTUAL_TOUR_URL = 'https://example.com/360-tour-mock'; 
-    const MOCK_YOUTUBE_VIDEO_URL = 'https://www.youtube.com/embed/1k4N1s1d4T0?si=Wp-e8M1b3jFqY-A-';
+    const SAFE_MOCK_VIDEO_ID = 'Gv459g2-K70'; // Video de demonstração seguro
+    const MOCK_EMBED_URL = `https://www.youtube.com/embed/${SAFE_MOCK_VIDEO_ID}`;
 
     const proprietarioHandle = imovel?.proprietarioId ? imovel.proprietarioId.slice(0, 8) : 'agente-rentou';
     const proprietarioNome = "Butters John Bee - Lettings"; 
@@ -184,6 +210,14 @@ export default function AnuncioDetalhePublicoPage() {
     const valorIPTU = imovel.custoIPTUIncluso ? imovel.valorIPTU : 0;
     const totalMonthlyValue = valorAluguelBase + valorCondominio + valorIPTU;
 
+    // Converte o link do imóvel para o formato embed. Se for inválido, cai no null.
+    const finalEmbedUrl = getEmbedUrl(imovel.linkVideoTour);
+    
+    const hasRealVideo = !!finalEmbedUrl; // Tem um link de vídeo válido
+    const hasVirtualTour = imovel.visitaVirtual360; // Tem visita virtual marcada
+    const hasAnyMedia = hasRealVideo || hasVirtualTour;
+
+
     // Função auxiliar para renderizar características
     const renderCharacteristic = (icon: any, label: string, value: string | number) => (
          <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
@@ -195,7 +229,7 @@ export default function AnuncioDetalhePublicoPage() {
         </div>
     );
 
-    const fullAddressString = `${imovel.endereco.logradouro}, ${imovel.endereco.numero}, ${imovel.endereco.cidade}, ${imovel.endereco.estado}`;
+    const fullAddressString = `${imovel.endereco.logradouro}, ${imovel.endereco.numero}${imovel.endereco.complemento ? ' - ' + imovel.endereco.complemento : ''}, ${imovel.endereco.bairro}, ${imovel.endereco.cidade} - ${imovel.endereco.estado} (${imovel.endereco.cep})`;
 
     return (
         <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 bg-gray-50 dark:bg-zinc-900">
@@ -225,20 +259,21 @@ export default function AnuncioDetalhePublicoPage() {
                         {/* 1. Título e Preço */}
                         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">{imovel.titulo}</h1>
                         
+                        {/* Localização e Código (abaixo do título, alinhado à esquerda) */}
+                        <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center mb-4">
+                            <Icon icon={faMapMarkerAlt} className='w-4 h-4 mr-1' />
+                            {imovel.endereco.cidade} - {imovel.endereco.estado} / Cód.: {imovel.smartId}
+                        </p>
+                        
                         <div className='flex flex-col sm:flex-row items-start sm:items-end justify-between border-b pb-4 border-gray-100 dark:border-zinc-700'>
                             <div>
-                                <p className="text-xl font-bold text-green-600 dark:text-green-400 flex items-center space-x-2">
-                                    <Icon icon={faDollarSign} className='w-5 h-5' />
+                                <p className="text-4xl font-extrabold text-green-600 dark:text-green-400"> {/* CORREÇÃO: Fonte aumentada para 4xl */}
                                     <span>{formatCurrency(totalMonthlyValue)}</span>
                                 </p>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                                     {isTotalPackage ? 'Valor mensal total (taxas inclusas)' : 'Valor do Aluguel Base'}
                                 </p>
                             </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center mt-2 sm:mt-0">
-                                <Icon icon={faMapMarkerAlt} className='w-4 h-4 mr-1' />
-                                {imovel.endereco.cidade} - {imovel.endereco.estado} / Cód.: {imovel.smartId}
-                            </p>
                         </div>
                         
                         {/* 2. Destaques Estruturais (Key Info) */}
@@ -277,55 +312,84 @@ export default function AnuncioDetalhePublicoPage() {
                             </div>
                         )}
                         
-                        {/* 4. Descrição Completa */}
+                        {/* 4. Descrição Completa (CORRIGIDO: Adiciona Endereço) */}
                         <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
                             <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Descrição do Imóvel</h2>
                             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                                 {imovel.descricaoLonga || 'Nenhuma descrição detalhada fornecida para este anúncio.'}
                             </p>
+                            
+                            {/* NOVO: ENDEREÇO COMPLETO NO FINAL DA DESCRIÇÃO */}
+                            <div className="pt-3 border-t border-gray-100 dark:border-zinc-700">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mt-2 flex items-center space-x-2">
+                                     <Icon icon={faMapMarkerAlt} className='w-4 h-4 text-red-500' />
+                                     <span>Localização Exata (Para Contrato)</span>
+                                </h3>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                    {imovel.endereco.logradouro}, {imovel.endereco.numero}
+                                    {imovel.endereco.complemento && `, ${imovel.endereco.complemento}`}
+                                    , {imovel.endereco.bairro}
+                                    , {imovel.endereco.cidade} - {imovel.endereco.estado} ({imovel.endereco.cep})
+                                </p>
+                            </div>
                         </div>
+                        {/* FIM: DESCRIÇÃO CORRIGIDA */}
                         
-                        {/* 5. Visita Virtual e Vídeo */}
+                        {/* 5. Visita Virtual e Vídeo (LÓGICA CONDICIONAL) */}
                         <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
                             <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Mídia Interativa</h2>
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                
-                                {/* Visita Virtual 360 */}
-                                <div className="space-y-2">
-                                    <h3 className='text-lg font-medium text-gray-800 dark:text-gray-200 flex items-center'>
-                                        <Icon icon={faVideo} className='w-5 h-5 mr-2 text-green-500' />
-                                        Visita Virtual 360°
-                                    </h3>
-                                    {/* Mock da Visita Virtual */}
-                                    <a href={MOCK_VIRTUAL_TOUR_URL} target="_blank" rel="noopener noreferrer" className="block w-full h-48 bg-gray-100 dark:bg-zinc-700 rounded-lg overflow-hidden flex items-center justify-center text-rentou-primary hover:bg-gray-200 dark:hover:bg-zinc-600 border-4 border-dashed border-rentou-primary/50">
-                                        <div className='text-center'>
-                                             <Icon icon={faGlobe} className='w-10 h-10 mb-2' />
-                                             <span className='font-semibold'>Clique para o Tour Virtual (Mock)</span>
+                            {hasAnyMedia ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    
+                                    {/* Visita Virtual 360 */}
+                                    {hasVirtualTour && (
+                                        <div className="space-y-2">
+                                            <h3 className='text-lg font-medium text-gray-800 dark:text-gray-200 flex items-center'>
+                                                <Icon icon={faVideo} className='w-5 h-5 mr-2 text-green-500' />
+                                                Visita Virtual 360°
+                                            </h3>
+                                            {/* Mock da Visita Virtual */}
+                                            <a href={MOCK_VIRTUAL_TOUR_URL} target="_blank" rel="noopener noreferrer" className="block w-full h-48 bg-gray-100 dark:bg-zinc-700 rounded-lg overflow-hidden flex items-center justify-center text-rentou-primary hover:bg-gray-200 dark:hover:bg-zinc-600 border-4 border-dashed border-rentou-primary/50">
+                                                <div className='text-center'>
+                                                     <Icon icon={faGlobe} className='w-10 h-10 mb-2' />
+                                                     <span className='font-semibold'>Clique para o Tour Virtual (Mock)</span>
+                                                </div>
+                                            </a>
                                         </div>
-                                    </a>
+                                    )}
+                                    
+                                    {/* Vídeo do Imóvel (YouTube) */}
+                                    {hasRealVideo && (
+                                        <div className="space-y-2">
+                                            <h3 className='text-lg font-medium text-gray-800 dark:text-gray-200 flex items-center'>
+                                                <Icon icon={faVideo} className='w-5 h-5 mr-2 text-red-600' />
+                                                Vídeo do Imóvel
+                                            </h3>
+                                            {/* Embed Responsivo */}
+                                            <div className="relative w-full h-0 pb-[56.25%] rounded-lg overflow-hidden shadow-lg">
+                                                <iframe
+                                                    className="absolute top-0 left-0 w-full h-full"
+                                                    src={finalEmbedUrl!}
+                                                    title="Vídeo do Imóvel"
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                    allowFullScreen
+                                                ></iframe>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                
-                                {/* Vídeo do Imóvel (YouTube) */}
-                                <div className="space-y-2">
-                                    <h3 className='text-lg font-medium text-gray-800 dark:text-gray-200 flex items-center'>
-                                        <Icon icon={faVideo} className='w-5 h-5 mr-2 text-red-600' />
-                                        Vídeo do Imóvel
-                                    </h3>
-                                    {/* Embed Responsivo */}
-                                    <div className="relative w-full h-0 pb-[56.25%] rounded-lg overflow-hidden shadow-lg">
-                                        <iframe
-                                            className="absolute top-0 left-0 w-full h-full"
-                                            src={MOCK_YOUTUBE_VIDEO_URL}
-                                            title="Vídeo do Imóvel"
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                            allowFullScreen
-                                        ></iframe>
-                                    </div>
+                            ) : (
+                                <div className="p-4 bg-gray-100 dark:bg-zinc-700 rounded-lg text-center">
+                                    <p className="text-gray-600 dark:text-gray-400 font-medium">
+                                        Este imóvel não possui link de vídeo ou visita virtual 360º cadastrado.
+                                    </p>
                                 </div>
-                                
-                            </div>
+                            )}
+
                         </div>
+                        {/* FIM: LÓGICA CONDICIONAL */}
+
 
                         {/* 6. Informações de Locação e Financeiras Detalhadas */}
                         <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
@@ -388,20 +452,20 @@ export default function AnuncioDetalhePublicoPage() {
                         </p>
                     </div>
                     
-                    {/* 8. Street View */}
-                    <StreetView
-                        latitude={imovel.latitude as number}
-                        longitude={imovel.longitude as number}
-                        address={fullAddressString}
-                    />
-
-                    {/* 9. PONTOS DE INTERESSE (POIs) - NOVO */}
+                    {/* 9. PONTOS DE INTERESSE (POIs) - MOVIDO PARA CÁ */}
                      <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700">
                         <PoiList
                             latitude={imovel.latitude as number}
                             longitude={imovel.longitude as number}
                         />
                     </div>
+
+                    {/* 8. Street View (MOVIDO PARA BAIXO, MAIS DISCRETO) */}
+                    <StreetView
+                        latitude={imovel.latitude as number}
+                        longitude={imovel.longitude as number}
+                        address={fullAddressString}
+                    />
 
                 </div>
                 

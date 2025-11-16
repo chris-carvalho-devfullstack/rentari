@@ -143,8 +143,8 @@ export default function ListaImoveis() {
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <Link 
-                    // 🎯 MUDANÇA CRÍTICA: Usa imovel.smartId para o link da URL
-                    href={`/imoveis/${imovel.smartId}`}
+                    // CORREÇÃO CRÍTICA: Usa o ID ÚNICO do Firestore para evitar colisões
+                    href={`/imoveis/${imovel.id}`}
                     className="text-rentou-primary hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                 >
                     Gerenciar
