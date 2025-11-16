@@ -653,9 +653,11 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         });
     }, []);
     
-    // --- Handlers de Foto (Mantidos) ---
+    // --- Handlers de Foto (CORRIGIDOS) ---
     const getAvailableSlots = useCallback(() => {
-        const currentValidPhotos = initialData?.fotos.filter(url => !fotosAExcluir.includes(url)).length || 0;
+        // CORREÇÃO DE TIPO: Garante que initialData.fotos seja um array antes de acessar .filter()
+        const existingPhotos = initialData?.fotos || []; 
+        const currentValidPhotos = existingPhotos.filter(url => !fotosAExcluir.includes(url)).length;
         const totalNewPhotos = novasFotos.length;
         return MAX_PHOTOS - currentValidPhotos - totalNewPhotos;
     }, [initialData?.fotos, fotosAExcluir, novasFotos.length]);
@@ -1465,10 +1467,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                 );
             case 4:
-                // ... (Renderização da Etapa 4 - Mídia e Fotos - permanece o mesmo)
-                 const currentValidPhotosCount = initialData?.fotos.filter(url => !fotosAExcluir.includes(url)).length || 0;
+                // --- INÍCIO DA CORREÇÃO DE ERRO DE TIPO ---
+                const existingPhotos = initialData?.fotos || []; // CORREÇÃO DE TIPO: Garante que é um array
+                 const currentValidPhotosCount = existingPhotos.filter(url => !fotosAExcluir.includes(url)).length;
                  const totalPhotosCount = currentValidPhotosCount + novasFotos.length;
                  const availableSlots = MAX_PHOTOS - totalPhotosCount;
+                // --- FIM DA CORREÇÃO DE ERRO DE TIPO ---
                 
                 return (
                     <div className="space-y-6">
@@ -1541,11 +1545,11 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             )}
 
                             {/* GALERIA DE FOTOS EXISTENTES */}
-                            {initialData?.fotos.length > 0 && (
+                            {existingPhotos.length > 0 && ( // CORREÇÃO AQUI: Usa a variável segura
                                 <div className='space-y-2 pt-2 border-t border-gray-200 dark:border-zinc-700'>
-                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Fotos Atuais ({initialData.fotos.length}):</p>
+                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Fotos Atuais ({existingPhotos.length}):</p>
                                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                                        {initialData.fotos.map((url, index) => {
+                                        {existingPhotos.map((url, index) => { // CORREÇÃO AQUI: Usa a variável segura
                                             const isMarkedForDeletion = fotosAExcluir.includes(url);
                                             return (
                                                 <div key={url} className="relative group w-full h-24 bg-gray-100 rounded-lg overflow-hidden border">
@@ -1604,6 +1608,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </p>
                 )}
                 
+                {/* <ProgressIndicator /> */}
                 {renderStepContent()}
                 
                 {/* --- Navigation Buttons --- */}
