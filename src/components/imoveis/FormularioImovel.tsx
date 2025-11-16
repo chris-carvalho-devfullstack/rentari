@@ -6,14 +6,14 @@ import { useRouter } from 'next/navigation';
 // ATUALIZADO: Importar funções de foto
 import { adicionarNovoImovel, atualizarImovel, updateImovelFotos } from '@/services/ImovelService'; 
 import { uploadImovelPhotos, deleteFotoImovel } from '@/services/StorageService'; 
-// ATUALIZADO: Importar novos tipos de endereço e condomínio
-import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData } from '@/types/imovel'; 
+// ATUALIZADO: Importar TODOS os novos tipos, incluindo Cômodos e Responsabilidade
+import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, CozinhaData, SalaData, VarandaData, DispensaData, ResponsavelPagamento } from '@/types/imovel'; 
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
 import { useAuthStore } from '@/hooks/useAuthStore';
 // Importação do serviço de CEP
 import { fetchAddressByCep, CepData } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash } from '@fortawesome/free-solid-svg-icons'; // Adicionado faHome, faTrash
+import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, faTag } from '@fortawesome/free-solid-svg-icons'; 
 
 interface FormularioImovelProps {
     initialData?: Imovel;
@@ -22,55 +22,83 @@ interface FormularioImovelProps {
 // Define os passos do formulário
 const formSteps = [
     { id: 1, name: 'Classificação' },
-    { id: 2, name: 'Estrutura' },
-    { id: 3, name: 'Valores' },
-    { id: 4, name: 'Mídia & Fotos' }, // NOME ATUALIZADO
+    { id: 2, name: 'Estrutura & Cômodos' }, // NOME ATUALIZADO
+    { id: 3, name: 'Valores & Responsabilidade' }, // NOME ATUALIZADO
+    { id: 4, name: 'Mídia & Fotos' }, 
 ];
 
-// NOVO: Estruturas default aninhadas
-const defaultEndereco: EnderecoImovel = {
-    cep: '',
-    logradouro: '',
-    numero: '',
-    complemento: '',
-    bairro: '',
-    cidade: '',
-    estado: '',
-    pais: 'Brasil', // Default País
+// --- NOVAS ESTRUTURAS DEFAULT (Corrigido) ---
+const defaultCozinha: CozinhaData = {
+    tipo: 'FECHADA',
+    possuiArmarios: false,
+    possuiDispensa: false,
 };
 
-const defaultCondominio: CondominioData = {
-    possuiCondominio: false,
-    nomeCondominio: '',
-    portaria24h: false,
-    areaLazer: false,
+const defaultSala: SalaData = {
+    tipo: 'ESTAR_JANTAR',
+    qtdSalas: 1,
+    possuiVaranda: false,
 };
 
+const defaultVaranda: VarandaData = {
+    possuiVaranda: false,
+    tipo: 'SIMPLES',
+    possuiChurrasqueira: false,
+};
+
+const defaultDispensa: DispensaData = {
+    possuiDispensa: false,
+    prateleirasEmbutidas: false,
+};
+// --- FIM NOVAS ESTRUTURAS ---
+
+
+// Estruturas default aninhadas (existentes)
+const defaultEndereco: EnderecoImovel = { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', pais: 'Brasil' };
+const defaultCondominio: CondominioData = { possuiCondominio: false, nomeCondominio: '', portaria24h: false, areaLazer: false };
+
+
+// --- DEFAULT DATA PRINCIPAL (ATUALIZADO COM OS NOVOS CAMPOS) ---
 const defaultFormData: NovoImovelData = {
     titulo: '',
     categoriaPrincipal: 'Residencial', 
     tipoDetalhado: 'Apartamento Padrão', 
     finalidades: ['Locação Residencial'], 
-    endereco: defaultEndereco, // Novo objeto
-    condominio: defaultCondominio, // Novo objeto
+    endereco: defaultEndereco, 
+    condominio: defaultCondominio, 
     quartos: 1,
     banheiros: 1,
     vagasGaragem: 0,
     areaTotal: 0, 
     areaUtil: 0, 
+    andar: 1,
+    
+    // NOVO: Estrutura de Cômodos
+    cozinha: defaultCozinha,
+    sala: defaultSala,
+    varanda: defaultVaranda,
+    dispensa: defaultDispensa,
+
     descricaoLonga: '',
     caracteristicas: [], 
     aceitaAnimais: false,
-    andar: 1,
     status: 'VAGO',
     valorAluguel: 0, 
     valorCondominio: 0, 
     valorIPTU: 0,
     dataDisponibilidade: new Date().toISOString().split('T')[0],
+    
+    // NOVO: Responsabilidades Financeiras
+    custoCondominioIncluso: false,
+    responsavelCondominio: 'LOCATARIO',
+    custoIPTUIncluso: false,
+    responsavelIPTU: 'LOCATARIO',
+
     fotos: [], 
     linkVideoTour: undefined,
     visitaVirtual360: false,
 };
+
 
 const isNumericField = (name: string): boolean => 
     ['quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 
@@ -78,36 +106,30 @@ const isNumericField = (name: string): boolean =>
 
 // ATUALIZADO: Inicia o estado com a nova estrutura aninhada
 const getInitialState = (initialData?: Imovel) => {
-    // Mescla o initialData com o defaultFormData para garantir a estrutura completa
-    const initialDataPayload: Partial<NovoImovelData> = initialData 
-        ? Object.keys(defaultFormData).reduce((acc, key) => {
-            const prop = key as keyof NovoImovelData;
-            if (initialData[prop] !== undefined) {
-                 (acc as any)[prop] = (initialData as any)[prop];
-            }
-            return acc;
-        }, {} as Partial<NovoImovelData>) 
-        : {};
+    const initialDataPayload = initialData || {} as Imovel;
 
-    const initialFormData = {
+    const initialFormData: NovoImovelData = {
         ...defaultFormData,
-        ...initialDataPayload,
-        // Garante que os objetos aninhados sejam mesclados corretamente, preenchendo defaults
-        endereco: { ...defaultEndereco, ...(initialData?.endereco || {}) },
-        condominio: { ...defaultCondominio, ...(initialData?.condominio || {}) },
-        categoriaPrincipal: initialData?.categoriaPrincipal || defaultFormData.categoriaPrincipal,
-        tipoDetalhado: initialData?.tipoDetalhado || defaultFormData.tipoDetalhado,
-        finalidades: initialData?.finalidades || defaultFormData.finalidades,
-        dataDisponibilidade: initialData?.dataDisponibilidade || defaultFormData.dataDisponibilidade,
-        andar: initialData?.andar || 0,
-        // NOVO: Fotos atuais
-        fotos: initialData?.fotos || [], 
+        ...(initialDataPayload as any), 
+        
+        // Garante que os objetos aninhados sejam mesclados corretamente
+        endereco: { ...defaultEndereco, ...(initialDataPayload.endereco || {}) },
+        condominio: { ...defaultCondominio, ...(initialDataPayload.condominio || {}) },
+        cozinha: { ...defaultCozinha, ...(initialDataPayload.cozinha || {}) },
+        sala: { ...defaultSala, ...(initialDataPayload.sala || {}) },
+        varanda: { ...defaultVaranda, ...(initialDataPayload.varanda || {}) },
+        dispensa: { ...defaultDispensa, ...(initialDataPayload.dispensa || {}) },
+
+        // Garantias de tipos
+        categoriaPrincipal: initialDataPayload.categoriaPrincipal || defaultFormData.categoriaPrincipal,
+        tipoDetalhado: initialDataPayload.tipoDetalhado || defaultFormData.tipoDetalhado,
+        finalidades: initialDataPayload.finalidades || defaultFormData.finalidades,
+        dataDisponibilidade: initialDataPayload.dataDisponibilidade || defaultFormData.dataDisponibilidade,
+        andar: initialDataPayload.andar || 0,
+        fotos: initialDataPayload.fotos || [], 
     } as NovoImovelData;
 
     const initialLocalInputs: Record<string, string> = {};
-    
-    // Adiciona o campo CEP para gerenciar o input formatado localmente
-    // Usa o valor limpo do endereco.cep para formatar se existir
     initialLocalInputs['endereco.cep'] = initialFormData.endereco.cep ? initialFormData.endereco.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''; 
     
     Object.keys(initialFormData).filter(isNumericField).forEach(keyString => {
@@ -116,6 +138,69 @@ const getInitialState = (initialData?: Imovel) => {
     });
     
     return { initialFormData, initialLocalInputs };
+};
+
+
+// --- COMPONENTES AUXILIARES DEFINIDOS ANTES DO EXPORT DEFAULT ---
+
+const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
+    <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
+        <input
+            id={name}
+            name={name}
+            type="checkbox"
+            checked={checked}
+            onChange={onChange}
+            className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary"
+        />
+        <div className="flex flex-col">
+            <label htmlFor={name} className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            {description && <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>}
+        </div>
+    </div>
+);
+
+// CORRIGIDO: Componente SelectResponsabilidade
+const SelectResponsabilidade: React.FC<{ label: string, name: string, value: ResponsavelPagamento, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void }> = ({ label, name, value, onChange }) => (
+    <div>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+        <select
+            id={name}
+            name={name}
+            value={value}
+            onChange={onChange}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+        >
+            <option value="LOCATARIO">Locatário (Inquilino)</option>
+            <option value="PROPRIETARIO">Proprietário</option>
+            <option value="NA_LOCACAO">Não Aplicável/Negociável</option>
+        </select>
+    </div>
+);
+
+const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => {
+    const availableFeatures = ['Piscina', 'Churrasqueira', 'Academia', 'Portaria 24h', 'Mobiliado', 'Aquecimento a Gás', 'Salão de Festas', 'Quintal/Jardim', 'Elevador', 'Acessibilidade'];
+    return (
+        <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
+            <div className="flex flex-wrap gap-2">
+                {availableFeatures.map((feature) => (
+                    <button
+                        key={feature}
+                        type="button" 
+                        onClick={() => onSelect(feature)}
+                        className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 border ${
+                            selected.includes(feature)
+                                ? 'bg-rentou-primary text-white border-rentou-primary shadow-md' // Selected: Fundo primário, Texto branco
+                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-300 dark:border-zinc-600 dark:hover:bg-zinc-700' // Unselected
+                        }`}
+                    >
+                        {feature}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
 };
 
 
@@ -136,11 +221,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     const [localNumericInputs, setLocalNumericInputs] = useState<Record<string, string>>(initialLocalInputs);
     const [formData, setFormData] = useState<NovoImovelData>(initialFormData);
     
-    // --- NOVO: ESTADO DE GERENCIAMENTO DE FOTOS ---
+    // --- ESTADO DE GERENCIAMENTO DE FOTOS ---
     const [novasFotos, setNovasFotos] = useState<File[]>([]);
     const [fotosAExcluir, setFotosAExcluir] = useState<string[]>([]);
     const MAX_PHOTOS = 25;
-    // --- FIM NOVO ---
 
 
     const tiposDisponiveis = useMemo(() => {
@@ -181,63 +265,69 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     }, [formData.categoriaPrincipal, tiposDisponiveis]); 
 
-    // --- Lógica de Manipulação de Inputs (Incluindo formatação de CEP e aninhamento) ---
+    // --- CORRIGIDO: Lógica de Alteração Centralizada ---
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         const target = e.target;
         const isCheckbox = type === 'checkbox';
         
-        // 1. Lida com campos aninhados (Ex: endereco.cep, condominio.possuiCondominio)
-        if (name.includes('.') || (isCheckbox && name.startsWith('condominio.'))) {
-            const [parent, child] = name.split('.');
-            const parentKey = parent as keyof NovoImovelData;
-            
-            // Tratamento especial para o CEP (formatação e armazenamento local)
+        // 1. Lida com campos aninhados (incluindo as novas estruturas de Cômodos)
+        if (name.includes('.') || 
+            name.includes('cozinha') || name.includes('sala') || 
+            name.includes('varanda') || name.includes('dispensa')
+        ) {
+            const parts = name.split('.');
+            const mainKey = parts[0] as keyof NovoImovelData; 
+            const subKey = parts.length > 1 ? parts[1] : undefined;
+
             if (name === 'endereco.cep') {
-                let cleanedValue = value.replace(/\D/g, '').slice(0, 8); // Limita a 8 dígitos (CEP)
-                let formattedValue = cleanedValue;
-                
-                if (cleanedValue.length > 5) {
-                    formattedValue = `${cleanedValue.slice(0, 5)}-${cleanedValue.slice(5)}`;
-                }
-
+                let cleanedValue = value.replace(/\D/g, '').slice(0, 8);
+                let formattedValue = cleanedValue.length > 5 ? `${cleanedValue.slice(0, 5)}-${cleanedValue.slice(5)}` : cleanedValue;
                 setLocalNumericInputs(prev => ({ ...prev, [name]: formattedValue }));
-                // O valor limpo será salvo no formData no blur ou submit
-                setFormData(prevData => ({
-                    ...prevData,
-                    endereco: { ...prevData.endereco, cep: cleanedValue },
-                }));
-                return;
-            }
-            
-            // Tratamento para Checkboxes aninhados (Ex: condominio.possuiCondominio)
-            if (isCheckbox && parentKey === 'condominio') {
-                setFormData(prevData => ({
-                    ...prevData,
-                    condominio: { ...prevData.condominio, [child || parent]: (target as HTMLInputElement).checked },
-                }));
+                setFormData(prevData => ({ ...prevData, endereco: { ...prevData.endereco, cep: cleanedValue } }));
                 return;
             }
 
-            // Tratamento para outros campos aninhados de texto/select
-            if (parentKey === 'endereco') {
-                setFormData(prevData => ({
+            // Tratamento para objetos aninhados (Condomínio, Cozinha, Sala, Varanda, Dispensa, Endereço)
+             if (subKey) {
+                 setFormData(prevData => ({
                     ...prevData,
-                    endereco: { ...prevData.endereco, [child]: value },
+                    [mainKey]: { 
+                        ...(prevData[mainKey] as any), 
+                        [subKey]: isCheckbox ? (target as HTMLInputElement).checked : value 
+                    },
                 }));
-            } else if (parentKey === 'condominio') {
-                // Para campos de texto/select dentro de CondominioData
-                setFormData(prevData => ({
-                    ...prevData,
-                    condominio: { ...prevData.condominio, [child]: value },
-                }));
+                return;
             }
-            return;
+            // Se for apenas 'endereco' no root
+             if (mainKey === 'endereco') {
+                 setFormData(prevData => ({
+                    ...prevData,
+                    endereco: { ...(prevData.endereco), [subKey || mainKey]: value },
+                }));
+                return;
+            }
         }
 
-        // 2. Lida com campos no primeiro nível (Ex: titulo, quartos, status)
+        // 2. Lida com campos no primeiro nível (incluindo as novas flags financeiras)
         if (isNumericField(name)) {
             setLocalNumericInputs(prev => ({ ...prev, [name]: value }));
+            return;
+        }
+        
+        // Trata responsabilidades e flags de inclusão (top-level)
+        if (name === 'custoCondominioIncluso' || name === 'custoIPTUIncluso') {
+            setFormData(prevData => ({
+                ...prevData,
+                [name]: (target as HTMLInputElement).checked,
+            }));
+            return;
+        }
+        if (name === 'responsavelCondominio' || name === 'responsavelIPTU') {
+             setFormData(prevData => ({
+                ...prevData,
+                [name]: value as ResponsavelPagamento,
+            }));
             return;
         }
         
@@ -246,6 +336,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             [name]: isCheckbox ? (target as HTMLInputElement).checked : value,
         }));
     }, []); 
+    // --- FIM Lógica de Alteração Centralizada ---
+
 
     // Lógica para consolidar campos numéricos ao perder o foco
     const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
@@ -352,7 +444,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         });
     }, []);
     
-    // --- NOVO: Handlers de Foto ---
+    // --- Handlers de Foto ---
     const getAvailableSlots = useCallback(() => {
         const currentValidPhotos = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
         const totalNewPhotos = novasFotos.length;
@@ -366,12 +458,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             
             if (filesArray.length > availableSlots) {
                 setError(`Você só pode adicionar mais ${availableSlots} fotos. Remova fotos existentes ou novas fotos para continuar.`);
-                e.target.value = ''; // Limpa o input
+                e.target.value = ''; 
                 return;
             }
 
             setNovasFotos(prev => [...prev, ...filesArray]);
-            e.target.value = ''; // Limpa o input para permitir o upload do mesmo arquivo novamente se necessário
+            e.target.value = ''; 
             setError(null);
         }
     };
@@ -383,13 +475,13 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     const handleToggleExistingPhoto = (url: string) => {
         setFotosAExcluir(prev => {
             if (prev.includes(url)) {
-                return prev.filter(u => u !== url); // Remove da lista de exclusão
+                return prev.filter(u => u !== url); 
             } else {
-                return [...prev, url]; // Adiciona à lista de exclusão
+                return [...prev, url]; 
             }
         });
     };
-    // --- FIM NOVO: Handlers de Foto ---
+    // --- FIM Handlers de Foto ---
 
 
     const handleNextStep = (e: React.FormEvent) => {
@@ -406,8 +498,15 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             }
             if (formData.finalidades.length === 0) {
                 setError("Selecione pelo menos uma finalidade para o imóvel.");
-                return;
+                 return;
             }
+        }
+        // Validação mínima da Etapa 2 (Novos campos)
+        if (currentStep === 2) {
+             if (formData.varanda.possuiVaranda && !formData.varanda.tipo) {
+                 setError("Selecione o tipo de varanda.");
+                 return;
+             }
         }
 
         // Consolidação de Valores Numéricos
@@ -465,8 +564,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             let result: Imovel;
             
             if (isEditing && initialData) {
-                // Remove as fotos existentes do payload de atualização para que possamos tratar o upload/delete separadamente
-                // Usamos as fotos originais para o objeto de retorno do service (para ter o SmartID)
                 const updateDataWithoutPhotos = { ...finalFormData, fotos: initialData.fotos };
                 result = await atualizarImovel(initialData.id, updateDataWithoutPhotos);
             } else {
@@ -493,7 +590,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             }
 
             // 3. Atualiza o documento Imóvel no Firestore com a lista FINAL de URLs
-            // Faz isso apenas se houver alguma alteração no array de fotos
             if (novasFotos.length > 0 || fotosAExcluir.length > 0) {
                  await updateImovelFotos(result.id, finalFotosUrls);
             }
@@ -581,6 +677,24 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             </div>
         );
     };
+
+    // Componente Select/Responsabilidade (CORRIGIDO)
+    const SelectResponsabilidade: React.FC<{ label: string, name: string, value: ResponsavelPagamento, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void }> = ({ label, name, value, onChange }) => (
+        <div>
+            <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+            <select
+                id={name}
+                name={name}
+                value={value}
+                onChange={onChange}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+            >
+                <option value="LOCATARIO">Locatário (Inquilino)</option>
+                <option value="PROPRIETARIO">Proprietário</option>
+                <option value="NA_LOCACAO">Não Aplicável/Negociável</option>
+            </select>
+        </div>
+    );
 
     const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
         <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
@@ -825,18 +939,18 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 </div>
                             </div>
                         </div>
-                        {/* --- OPÇÕES DE CONDOMÍNIO (ANINHADO) - FIX APPLIED HERE --- */}
+                        {/* --- FIM: SEÇÃO ENDEREÇO DETALHADO --- */}
+
+                        {/* --- OPÇÕES DE CONDOMÍNIO (Mantidas) --- */}
                          <div className='space-y-4 p-4 border border-blue-200 dark:border-blue-900/50 rounded-lg bg-blue-50 dark:bg-zinc-700/50'>
                              <h4 className="text-lg font-semibold text-rentou-primary dark:text-blue-400 mb-3">Informações de Condomínio</h4>
                              <CheckboxInput 
                                 label="O imóvel está localizado em Condomínio/Edifício?" 
                                 name="condominio.possuiCondominio" 
-                                // FIX: Adicionado optional chaining e fallback para o checked
                                 checked={formData.condominio?.possuiCondominio || false} 
                                 onChange={handleChange} 
                             />
                             
-                            {/* FIX: Adicionado optional chaining na renderização condicional */}
                             {formData.condominio?.possuiCondominio && (
                                 <div className="space-y-4 pt-2">
                                     <div>
@@ -856,14 +970,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                          <CheckboxInput 
                                             label="Possui Portaria 24h?" 
                                             name="condominio.portaria24h" 
-                                             // FIX: Adicionado optional chaining
                                             checked={formData.condominio?.portaria24h || false} 
                                             onChange={handleChange} 
                                         />
                                         <CheckboxInput 
                                             label="Possui Área de Lazer/Comum?" 
                                             name="condominio.areaLazer" 
-                                             // FIX: Adicionado optional chaining
                                             checked={formData.condominio?.areaLazer || false} 
                                             onChange={handleChange} 
                                         />
@@ -892,22 +1004,26 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             case 2:
                 return (
                     <div className="space-y-6">
-                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Características</h3>
+                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Cômodos</h3>
                         
-                        {/* Linha: Quartos, Banheiros, Vagas, Andar (Condicional) */}
+                        {/* Linha: Quartos, Banheiros, Vagas, Andar */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                             {/* Quartos */}
                              <div>
                                 <label htmlFor="quartos" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quartos</label>
                                 <input id="quartos" name="quartos" type="text" required value={localNumericInputs['quartos'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="1" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                             </div>
+                            {/* Banheiros */}
                             <div>
                                 <label htmlFor="banheiros" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Banheiros</label>
                                 <input id="banheiros" name="banheiros" type="text" required value={localNumericInputs['banheiros'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="1" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                             </div>
+                            {/* Vagas Garagem */}
                             <div>
                                 <label htmlFor="vagasGaragem" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vagas Garagem</label>
                                 <input id="vagasGaragem" name="vagasGaragem" type="text" required value={localNumericInputs['vagasGaragem'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                             </div>
+                            {/* Andar (Condicional) */}
                             {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') ? (
                                 <div>
                                     <label htmlFor="andar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Andar</label>
@@ -920,15 +1036,75 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
                         {/* Linha: Áreas */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                             {/* Área Total */}
                              <div>
                                 <label htmlFor="areaTotal" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área Total (m²)</label>
                                 <input id="areaTotal" name="areaTotal" type="text" required value={localNumericInputs['areaTotal'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 120.5" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                             </div>
+                             {/* Área Útil */}
                              <div>
                                 <label htmlFor="areaUtil" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área Útil (m²)</label>
                                 <input id="areaUtil" name="areaUtil" type="text" required value={localNumericInputs['areaUtil'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 80.0" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                             </div>
                         </div>
+                        
+                        {/* --- NOVO: DETALHES DE CÔMODOS --- */}
+                        <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Detalhes dos Principais Cômodos</h4>
+
+                            {/* Detalhes da Cozinha */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700">
+                                <div>
+                                    <label htmlFor="cozinha.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Cozinha</label>
+                                    <select id="cozinha.tipo" name="cozinha.tipo" value={formData.cozinha.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                                        <option value="FECHADA">Fechada</option>
+                                        <option value="AMERICANA">Americana</option>
+                                        <option value="GOURMET">Gourmet</option>
+                                        <option value="INTEGRADA">Integrada (Estilo Loft)</option>
+                                        <option value="INDUSTRIAL">Industrial</option>
+                                    </select>
+                                </div>
+                                <CheckboxInput label="Possui Armários Planejados?" name="cozinha.possuiArmarios" checked={formData.cozinha.possuiArmarios || false} onChange={handleChange} />
+                                <CheckboxInput label="Possui Dispensa Embutida?" name="dispensa.possuiDispensa" checked={formData.dispensa.possuiDispensa || false} onChange={handleChange} />
+                            </div>
+                            
+                            {/* Detalhes da Sala e Varanda */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700">
+                                <div>
+                                    <label htmlFor="sala.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Sala Principal</label>
+                                    <select id="sala.tipo" name="sala.tipo" value={formData.sala.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                                        <option value="ESTAR_JANTAR">Estar e Jantar Integradas</option>
+                                        <option value="ESTAR">Apenas Estar</option>
+                                        <option value="JANTAR">Apenas Jantar</option>
+                                        <option value="TV">Sala de TV</option>
+                                        <option value="ESCRITORIO">Escritório/Home Office</option>
+                                        <option value="OUTRA">Outra</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label htmlFor="sala.qtdSalas" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantidade de Salas</label>
+                                    <input id="sala.qtdSalas" name="sala.qtdSalas" type="number" required min={1} value={formData.sala.qtdSalas} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                                </div>
+                                <CheckboxInput label="Possui Varanda/Terraço?" name="varanda.possuiVaranda" checked={formData.varanda.possuiVaranda || false} onChange={handleChange} />
+                            </div>
+
+                            {/* Detalhes da Varanda (Condicional) */}
+                            {formData.varanda.possuiVaranda && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-blue-50 dark:bg-zinc-700/50">
+                                    <div>
+                                        <label htmlFor="varanda.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Varanda</label>
+                                        <select id="varanda.tipo" name="varanda.tipo" value={formData.varanda.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                                            <option value="SIMPLES">Simples (Aberto)</option>
+                                            <option value="GOURMET">Gourmet (Com Infra)</option>
+                                            <option value="FECHADA">Fechada (Vidro/Reiki)</option>
+                                        </select>
+                                    </div>
+                                    <CheckboxInput label="Varanda possui Churrasqueira?" name="varanda.possuiChurrasqueira" checked={formData.varanda.possuiChurrasqueira || false} onChange={handleChange} />
+                                </div>
+                            )}
+
+                        </div>
+                        {/* --- FIM: DETALHES DE CÔMODOS --- */}
                         
                         {/* Seletor de Comodidades */}
                         <div className='pt-4 border-t border-gray-100 dark:border-zinc-700'>
@@ -939,25 +1115,20 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             case 3:
                 return (
                     <div className="space-y-6">
-                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Contrato</h3>
+                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Responsabilidade</h3>
                         
                         {/* Linha: Valor Aluguel e Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Valor Aluguel */}
                              <div>
                                 <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
                                 <input id="valorAluguel" name="valorAluguel" type="text" required value={localNumericInputs['valorAluguel'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="3500.00" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                             </div>
                             
+                            {/* Status */}
                             <div>
                                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status do Imóvel</label>
-                                <select
-                                    id="status"
-                                    name="status"
-                                    required
-                                    value={formData.status}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-                                >
+                                <select id="status" name="status" required value={formData.status} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary">
                                     <option value="VAGO">VAGO (Pronto para anunciar)</option>
                                     <option value="ANUNCIADO">ANUNCIADO (Aguardando locação)</option>
                                     <option value="ALUGADO">ALUGADO (Já locado)</option>
@@ -978,27 +1149,59 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             </div>
                         </div>
                         
-                        {/* Campo Data de Disponibilidade */}
+                        {/* --- NOVO: DETALHES DE RESPONSABILIDADE FINANCEIRA --- */}
+                        <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Responsabilidade dos Custos Fixos</h4>
+                             
+                             {/* RESPONSABILIDADE CONDOMÍNIO */}
+                            <div className="p-4 border rounded-lg bg-blue-50 dark:bg-zinc-700/50">
+                                <h5 className="text-base font-semibold text-rentou-primary mb-3">Custo do Condomínio</h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CheckboxInput 
+                                        label="Condomínio incluído no valor do aluguel?" 
+                                        name="custoCondominioIncluso" 
+                                        checked={formData.custoCondominioIncluso} 
+                                        onChange={handleChange} 
+                                        description="Se marcado, o valor será somado ao Valor Total da Locação."
+                                    />
+                                    <SelectResponsabilidade 
+                                        label="Responsável pelo Pagamento" 
+                                        name="responsavelCondominio" 
+                                        value={formData.responsavelCondominio} 
+                                        onChange={handleChange} 
+                                    />
+                                </div>
+                            </div>
+
+                            {/* RESPONSABILIDADE IPTU */}
+                            <div className="p-4 border rounded-lg bg-blue-50 dark:bg-zinc-700/50">
+                                <h5 className="text-base font-semibold text-rentou-primary mb-3">Custo do IPTU</h5>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <CheckboxInput 
+                                        label="IPTU incluído no valor do aluguel?" 
+                                        name="custoIPTUIncluso" 
+                                        checked={formData.custoIPTUIncluso} 
+                                        onChange={handleChange} 
+                                        description="Se marcado, o valor mensal será somado ao Valor Total da Locação."
+                                    />
+                                    <SelectResponsabilidade 
+                                        label="Responsável pelo Pagamento" 
+                                        name="responsavelIPTU" 
+                                        value={formData.responsavelIPTU} 
+                                        onChange={handleChange} 
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        {/* --- FIM: DETALHES DE RESPONSABILIDADE FINANCEIRA --- */}
+                        
+                        {/* Campo Data de Disponibilidade, Aceita Animais (Mantidos) */}
                         <div>
                             <label htmlFor="dataDisponibilidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Disponível a partir de</label>
-                            <input
-                                id="dataDisponibilidade"
-                                name="dataDisponibilidade"
-                                type="date"
-                                required
-                                value={formData.dataDisponibilidade}
-                                onChange={handleChange}
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-                            />
+                            <input id="dataDisponibilidade" name="dataDisponibilidade" type="date" required value={formData.dataDisponibilidade} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                         </div>
                         
-                        <CheckboxInput 
-                            label="Aceita Animais?" 
-                            name="aceitaAnimais" 
-                            checked={formData.aceitaAnimais} 
-                            onChange={handleChange} 
-                            description="Marque se a locação permite animais de estimação."
-                        />
+                        <CheckboxInput label="Aceita Animais?" name="aceitaAnimais" checked={formData.aceitaAnimais} onChange={handleChange} description="Marque se a locação permite animais de estimação." />
                     </div>
                 );
             case 4:
@@ -1014,39 +1217,16 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         {/* CAMPO DESCRIÇÃO LONGA */}
                         <div>
                             <label htmlFor="descricaoLonga" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição Detalhada para Anúncio</label>
-                            <textarea
-                                id="descricaoLonga"
-                                name="descricaoLonga"
-                                rows={4}
-                                required
-                                value={formData.descricaoLonga}
-                                onChange={handleChange}
-                                placeholder="Descreva o imóvel em detalhes, destacando os pontos fortes e a vizinhança."
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-                            />
+                            <textarea id="descricaoLonga" name="descricaoLonga" rows={4} required value={formData.descricaoLonga} onChange={handleChange} placeholder="Descreva o imóvel em detalhes, destacando os pontos fortes e a vizinhança." className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
                         </div>
                         
                         {/* MÍDIA (LINKS E CHECKBOX) */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
                              <div>
                                 <label htmlFor="linkVideoTour" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link do Vídeo Tour (Opcional)</label>
-                                <input
-                                    id="linkVideoTour"
-                                    name="linkVideoTour"
-                                    type="url"
-                                    value={formData.linkVideoTour || ''}
-                                    onChange={handleChange}
-                                    placeholder="Ex: https://youtube.com/watch?v=tour"
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:focus:border-rentou-primary"
-                                />
+                                <input id="linkVideoTour" name="linkVideoTour" type="url" value={formData.linkVideoTour || ''} onChange={handleChange} placeholder="Ex: https://youtube.com/watch?v=tour" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:focus:border-rentou-primary" />
                             </div>
-                             <CheckboxInput 
-                                label="Visita Virtual 360º Disponível" 
-                                name="visitaVirtual360" 
-                                checked={formData.visitaVirtual360} 
-                                onChange={handleChange} 
-                                description="Marque se você possui um link para tour virtual 360º."
-                            />
+                             <CheckboxInput label="Visita Virtual 360º Disponível" name="visitaVirtual360" checked={formData.visitaVirtual360} onChange={handleChange} description="Marque se você possui um link para tour virtual 360º." />
                         </div>
 
                         {/* SEÇÃO DE UPLOAD E GERENCIAMENTO DE FOTOS */}
@@ -1184,7 +1364,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         type={currentStep === formSteps.length ? 'submit' : 'button'}
                         onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
                         disabled={loading}
-                        className={`flex justify-center py-2 px-6 border border-transparent rounded-md shadow-lg text-sm font-medium text-white transition-colors cursor-pointer ${
+                        className={`w-full flex justify-center py-2 px-6 border border-transparent rounded-md shadow-lg text-sm font-medium text-white transition-colors cursor-pointer ${
                             loading 
                                 ? 'opacity-50 cursor-not-allowed bg-gray-400' 
                                 : 'bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600'

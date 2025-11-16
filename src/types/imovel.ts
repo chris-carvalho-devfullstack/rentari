@@ -3,6 +3,7 @@
 // Tipos de categoria e finalidade para o novo modelo hierárquico
 export type ImovelCategoria = 'Residencial' | 'Comercial' | 'Terrenos' | 'Rural' | 'Imóveis Especiais' | 'Outro';
 export type ImovelFinalidade = 'Venda' | 'Locação Residencial' | 'Locação Comercial' | 'Locação Temporada' | 'Arrendamento Rural' | 'Locação Diária' | 'Locação Coworking' | 'Permuta';
+export type ResponsavelPagamento = 'PROPRIETARIO' | 'LOCATARIO' | 'NA_LOCACAO'; // NA_LOCACAO: Cobrado separadamente
 
 // NOVO: Estrutura completa de endereço do Imóvel
 export interface EnderecoImovel {
@@ -24,9 +25,33 @@ export interface CondominioData {
     areaLazer?: boolean;
 }
 
+// === NOVAS ESTRUTURAS INTERNAS (REQUISITO ESTRUTURAL) ===
+export interface CozinhaData {
+    tipo: 'AMERICANA' | 'FECHADA' | 'GOURMET' | 'INTEGRADA' | 'INDUSTRIAL';
+    possuiArmarios?: boolean;
+    possuiDispensa?: boolean; // Mapeado para o novo campo de dispensa
+}
+
+export interface SalaData {
+    tipo: 'ESTAR_JANTAR' | 'ESTAR' | 'JANTAR' | 'TV' | 'ESCRITORIO' | 'OUTRA';
+    qtdSalas: number;
+    possuiVaranda?: boolean; // Mapeado para o novo campo de varanda
+}
+
+export interface VarandaData {
+    possuiVaranda: boolean;
+    tipo?: 'SIMPLES' | 'GOURMET' | 'FECHADA';
+    possuiChurrasqueira?: boolean;
+}
+
+export interface DispensaData {
+    possuiDispensa: boolean;
+    prateleirasEmbutidas?: boolean;
+}
+
 /**
  * Define a estrutura de dados robusta para um Imóvel na plataforma Rentou.
- * ATUALIZADO: Usando EnderecoImovel e CondominioData aninhados.
+ * ATUALIZADO: Inclui EnderecoImovel, CondominioData, Dados de Cômodos e Responsabilidades Financeiras.
  */
 export interface Imovel {
   /** ID técnico (Firestore Document ID) */
@@ -56,6 +81,12 @@ export interface Imovel {
   areaUtil: number; 
   andar?: number; 
   
+  // NOVO: Detalhes de Cômodos
+  cozinha: CozinhaData;
+  sala: SalaData;
+  varanda: VarandaData;
+  dispensa: DispensaData;
+  
   // === 3. Descrição e Comodidades ===
   descricaoLonga: string;
   caracteristicas: string[]; 
@@ -68,6 +99,13 @@ export interface Imovel {
   valorIPTU: number; 
   dataDisponibilidade: string; 
   
+  // NOVO: Responsabilidades e Custos Inclusos (REQUISITO FINANCEIRO)
+  custoCondominioIncluso: boolean; // Se o valor já está somado em valorAluguel (Locação Total)
+  responsavelCondominio: ResponsavelPagamento; // Quem paga (Proprietário, Locatário, Não se aplica)
+  
+  custoIPTUIncluso: boolean; // Se o valor já está somado em valorAluguel (Locação Total)
+  responsavelIPTU: ResponsavelPagamento; // Quem paga (Proprietário, Locatário, Não se aplica)
+
   // === 5. Mídia e Publicação ===
   fotos: string[];
   linkVideoTour?: string;
