@@ -45,7 +45,6 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Componente de tabela para listar imóveis do proprietário.
- * Implementa o ID Inteligente e linka para a página de Detalhes/Gerenciamento.
  */
 export default function ListaImoveis() {
   const { imoveis, loading, error, refetch } = useImoveis();
@@ -126,7 +125,13 @@ export default function ListaImoveis() {
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{imovel.smartId}</div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                {imovel.endereco}, {imovel.cidade}
+                {/* FIX: Acessa as propriedades do objeto endereco */}
+                <div className="font-medium text-gray-700 dark:text-gray-300">
+                    {imovel.endereco?.logradouro || 'Endereço Pendente'}, {imovel.endereco?.numero}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {imovel.endereco?.cidade} - {imovel.endereco?.estado}
+                </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                 <span className="font-semibold text-green-600 dark:text-green-400">
@@ -138,7 +143,8 @@ export default function ListaImoveis() {
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <Link 
-                    href={`/imoveis/${imovel.id}`}
+                    // 🎯 MUDANÇA CRÍTICA: Usa imovel.smartId para o link da URL
+                    href={`/imoveis/${imovel.smartId}`}
                     className="text-rentou-primary hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                 >
                     Gerenciar

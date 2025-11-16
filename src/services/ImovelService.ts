@@ -19,12 +19,10 @@ import {
 
 /**
  * @fileoverview Serviço CRUD do Módulo de Imóveis, agora conectado ao Firebase Firestore.
- * CORRIGIDO: Usa o ID do proprietário dinâmico em vez do mock hardcoded.
  */
 
 // Variáveis para simular o contador sequencial (mantidas por ser parte do mock de smartId)
 let nextIdSequence = 4; 
-// PROPRIETARIO_ID_MOCK removido.
 
 /**
  * UTILITY: Remove todas as propriedades com valor 'undefined' de um objeto.
@@ -70,7 +68,6 @@ const generateNewSmartId = (data: NovoImovelData): string => {
 
 /**
  * Busca de imóveis do proprietário no Firestore (Read - All - ONE-TIME fetch).
- * CORRIGIDO: Recebe o ID do proprietário como argumento.
  */
 export async function fetchImoveisDoProprietarioOnce(proprietarioId: string): Promise<Imovel[]> {
   console.log(`[ImovelService] Fetching all Imoveis for user ${proprietarioId} from Firestore (One-Time)...`);
@@ -85,7 +82,6 @@ export async function fetchImoveisDoProprietarioOnce(proprietarioId: string): Pr
 
 /**
  * CHAVE REAL-TIME: Se inscreve para atualizações em tempo real (Read - All).
- * CORRIGIDO: Recebe o ID do proprietário como argumento.
  */
 export function subscribeToImoveis(proprietarioId: string, callback: (imoveis: Imovel[]) => void, onError: (error: Error) => void) {
   console.log(`[ImovelService] Subscribing to Imoveis for user ${proprietarioId} in Real-Time...`);
@@ -111,7 +107,8 @@ export function subscribeToImoveis(proprietarioId: string, callback: (imoveis: I
 }
 
 /**
- * Busca de um único imóvel por ID (Read - Single).
+ * Busca de um único imóvel por ID (Firestore Document ID).
+ * MANTIDO: Útil para funções internas de remoção e atualização.
  */
 export async function fetchImovelPorId(id: string): Promise<Imovel | undefined> {
   console.log(`[ImovelService] Fetching Imovel ID: ${id} from Firestore...`);
@@ -127,10 +124,32 @@ export async function fetchImovelPorId(id: string): Promise<Imovel | undefined> 
   }
 }
 
+/**
+ * NOVO: Busca um único imóvel pelo Smart ID.
+ * ESSENCIAL para a nova rota baseada no Smart ID.
+ */
+export async function fetchImovelPorSmartId(smartId: string): Promise<Imovel | undefined> {
+    console.log(`[ImovelService] Fetching Imovel by Smart ID: ${smartId} from Firestore...`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    const q = query(
+        collection(db, 'imoveis'), 
+        where('smartId', '==', smartId)
+    );
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+        // Assume que Smart ID é único e retorna o primeiro encontrado
+        return mapDocToImovel(querySnapshot.docs[0]);
+    } else {
+        console.log('[ImovelService] Imóvel não encontrado pelo Smart ID.');
+        return undefined;
+    }
+}
+
 
 /**
  * Adiciona um novo imóvel (Create).
- * CORRIGIDO: Recebe o ID do proprietário como argumento.
  */
 export async function adicionarNovoImovel(data: NovoImovelData, proprietarioId: string): Promise<Imovel> {
   console.log(`[ImovelService] Adicionando novo imóvel para proprietário ${proprietarioId} ao Firestore...`);

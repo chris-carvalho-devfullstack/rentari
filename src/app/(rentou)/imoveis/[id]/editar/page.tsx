@@ -4,16 +4,18 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+// 🎯 MUDANÇA: Usaremos fetchImovelPorSmartId
 import FormularioImovel from '@/components/imoveis/FormularioImovel';
-import { fetchImovelPorId } from '@/services/ImovelService';
+import { fetchImovelPorSmartId } from '@/services/ImovelService'; 
 import { Imovel } from '@/types/imovel';
 
 /**
  * @fileoverview Página para editar um imóvel existente.
- * Esta rota atende ao novo padrão: /imoveis/[id]/editar
+ * AGORA: Rota utiliza o Smart ID para busca.
  */
 export default function EditarImovelPage() {
     const params = useParams();
+    // 'id' agora carrega o Smart ID
     const id = Array.isArray(params.id) ? params.id[0] : params.id; 
     
     const [initialData, setInitialData] = useState<Imovel | undefined>(undefined);
@@ -31,8 +33,8 @@ export default function EditarImovelPage() {
         const loadImovel = async () => {
             setLoading(true);
             try {
-                // Força o ID para string para a função de serviço
-                const data = await fetchImovelPorId(id as string); 
+                // 🎯 MUDANÇA: Busca pelo Smart ID
+                const data = await fetchImovelPorSmartId(id as string); 
                 setInitialData(data);
             } catch (err) {
                 console.error('Erro ao buscar imóvel para edição:', err);
@@ -61,7 +63,7 @@ export default function EditarImovelPage() {
     
     return (
         <div className="space-y-6">
-            {/* Link para voltar ao Hub de Gerenciamento do Imóvel */}
+            {/* O link de voltar usa o ID da URL (que agora é o Smart ID) */}
             <Link href={`/imoveis/${id}`} className="text-rentou-primary hover:underline font-medium text-sm">
                 ← Voltar para Gerenciamento do Imóvel
             </Link>

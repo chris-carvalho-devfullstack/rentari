@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { fetchImovelPorId, removerImovel } from '@/services/ImovelService';
+// 🎯 MUDANÇA: Usaremos fetchImovelPorSmartId
+import { fetchImovelPorSmartId, removerImovel } from '@/services/ImovelService'; 
 import { Imovel } from '@/types/imovel'; 
 
 const formatCurrency = (value: number) =>
@@ -46,12 +47,13 @@ const StatusBadge: React.FC<{ status: Imovel['status'] }> = ({ status }) => {
 
 /**
  * @fileoverview Página de Visualização/Detalhes de um Imóvel (Hub de Gerenciamento).
- * ATUALIZADA: Exibe o smartId (ID de Negócio) em vez do id (Firestore ID).
+ * AGORA: Rota utiliza o Smart ID para busca.
  */
 export default function ImovelDetalhePage() {
     const params = useParams();
     const router = useRouter();
-    const id = Array.isArray(params.id) ? params.id[0] : params.id;
+    // 'id' agora carrega o Smart ID
+    const id = Array.isArray(params.id) ? params.id[0] : params.id; 
     
     const [imovel, setImovel] = useState<Imovel | null>(null);
     const [loading, setLoading] = useState(true);
@@ -69,8 +71,9 @@ export default function ImovelDetalhePage() {
         const loadImovel = async () => {
             setLoading(true);
             try {
-                const data = await fetchImovelPorId(id as string);
-                setImovel(data || null); // CORREÇÃO APLICADA AQUI
+                // 🎯 MUDANÇA: Busca pelo Smart ID
+                const data = await fetchImovelPorSmartId(id as string);
+                setImovel(data || null); 
             } catch (err: any) {
                 console.error('Erro ao buscar imóvel:', err);
                 setError(err.message || 'Falha ao carregar os dados do imóvel.');
@@ -89,7 +92,8 @@ export default function ImovelDetalhePage() {
         if (window.confirm(`Tem certeza que deseja remover permanentemente o imóvel "${imovel.titulo}"? Esta ação não pode ser desfeita.`)) {
             setIsDeleting(true);
             try {
-                await removerImovel(id as string);
+                // IMPORTANTE: removeImovel DEVE usar o ID do Firestore (imovel.id), não o Smart ID (id)
+                await removerImovel(imovel.id as string); 
                 alert('Imóvel removido com sucesso!');
                 router.push('/imoveis'); 
             } catch (err) {
@@ -123,6 +127,10 @@ export default function ImovelDetalhePage() {
             <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">{value}</p>
         </div>
     );
+    
+    // Variáveis defensivas para o novo endereço
+    const endereco = imovel.endereco || {};
+    const condominio = imovel.condominio || {};
 
     return (
         <div className="space-y-8">
@@ -138,7 +146,15 @@ export default function ImovelDetalhePage() {
                         ID: {imovel.smartId}
                     </p>
                     <h1 className="text-4xl font-extrabold text-gray-800 dark:text-gray-100">{imovel.titulo}</h1>
-                    <p className="text-gray-600 dark:text-gray-400 mt-1">{imovel.endereco}, {imovel.cidade}</p>
+                    
+                    {/* FIX: Acessa as propriedades do objeto endereco para a exibição no cabeçalho */}
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                        {endereco.logradouro}, {endereco.numero}{endereco.complemento && ` (${endereco.complemento})`} - {endereco.bairro}
+                    </p>
+                    <p className="text-gray-600 dark:text-gray-400">
+                        {endereco.cidade} - {endereco.estado}, {endereco.pais}
+                    </p>
+                    
                     <div className="mt-2">
                         <StatusBadge status={imovel.status} />
                     </div>
@@ -146,7 +162,7 @@ export default function ImovelDetalhePage() {
                 
                 <div className="flex space-x-3 mt-2 sm:mt-0">
                     <Link
-                        // ESTE LINK AGORA APONTA PARA A ROTA DE EDIÇÃO QUE SERÁ CRIADA NO PRÓXIMO PASSO
+                        // MANTIDO: Usa o ID da URL (que agora é o Smart ID)
                         href={`/imoveis/${id}/editar`}
                         className="px-4 py-2 text-sm font-medium rounded-md transition-colors bg-rentou-primary text-white hover:bg-blue-700"
                     >
@@ -188,6 +204,35 @@ export default function ImovelDetalhePage() {
                 />
             </div>
             
+            {/* NOVO: Detalhes de Endereço/Condomínio (Movido para uma seção separada) */}
+            <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 pt-4 border-t border-gray-200 dark:border-zinc-700">Localização e Condomínio</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <DataBlock label="CEP" value={endereco.cep?.replace(/^(\d{5})(\d{3})$/, '$1-$2') || 'N/A'} />
+                <DataBlock label="País" value={endereco.pais || 'N/A'} />
+                 <DataBlock 
+                    label="Em Condomínio?" 
+                    value={condominio.possuiCondominio ? 'Sim' : 'Não'} 
+                />
+                 {condominio.possuiCondominio && (
+                     <DataBlock 
+                        label="Nome Condomínio" 
+                        value={condominio.nomeCondominio || 'N/A'} 
+                    />
+                 )}
+                {condominio.possuiCondominio && (
+                    <DataBlock 
+                        label="Portaria 24h?" 
+                        value={condominio.portaria24h ? 'Sim' : 'Não'} 
+                    />
+                )}
+                {condominio.possuiCondominio && (
+                    <DataBlock 
+                        label="Área de Lazer?" 
+                        value={condominio.areaLazer ? 'Sim' : 'Não'} 
+                    />
+                )}
+            </div>
+
             {/* Seção 2: Estrutura e Detalhes */}
             <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 pt-4 border-t border-gray-200 dark:border-zinc-700">Detalhes do Imóvel</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

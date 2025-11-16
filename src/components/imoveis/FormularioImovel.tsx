@@ -4,17 +4,20 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService'; 
-import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData } from '@/types/imovel'; 
+// ATUALIZADO: Importar novos tipos de endereço e condomínio
+import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData } from '@/types/imovel'; 
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
 import { useAuthStore } from '@/hooks/useAuthStore';
+// Importação do serviço de CEP
+import { fetchAddressByCep, CepData } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage } from '@fortawesome/free-solid-svg-icons';
+import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome } from '@fortawesome/free-solid-svg-icons'; // Adicionado faHome
 
 interface FormularioImovelProps {
     initialData?: Imovel;
 }
 
-// Define os passos do formulário (agora com nomes mais limpos)
+// Define os passos do formulário
 const formSteps = [
     { id: 1, name: 'Classificação' },
     { id: 2, name: 'Estrutura' },
@@ -22,13 +25,32 @@ const formSteps = [
     { id: 4, name: 'Mídia & Detalhes' },
 ];
 
+// NOVO: Estruturas default aninhadas
+const defaultEndereco: EnderecoImovel = {
+    cep: '',
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
+    pais: 'Brasil', // Default País
+};
+
+const defaultCondominio: CondominioData = {
+    possuiCondominio: false,
+    nomeCondominio: '',
+    portaria24h: false,
+    areaLazer: false,
+};
+
 const defaultFormData: NovoImovelData = {
     titulo: '',
     categoriaPrincipal: 'Residencial', 
     tipoDetalhado: 'Apartamento Padrão', 
-    finalidades: ['Locação Residencial'], // Default para Locação
-    endereco: '',
-    cidade: '',
+    finalidades: ['Locação Residencial'], 
+    endereco: defaultEndereco, // Novo objeto
+    condominio: defaultCondominio, // Novo objeto
     quartos: 1,
     banheiros: 1,
     vagasGaragem: 0,
@@ -40,7 +62,7 @@ const defaultFormData: NovoImovelData = {
     andar: 1,
     status: 'VAGO',
     valorAluguel: 0, 
-    valorCondominio: 0,
+    valorCondominio: 0, 
     valorIPTU: 0,
     dataDisponibilidade: new Date().toISOString().split('T')[0],
     fotos: [], 
@@ -48,31 +70,42 @@ const defaultFormData: NovoImovelData = {
     visitaVirtual360: false,
 };
 
-// ... Funções Auxiliares (isNumericField, getInitialState) - MANTIDAS SEM ALTERAÇÃO ...
-
 const isNumericField = (name: string): boolean => 
     ['quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 
      'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar'].includes(name);
 
+// ATUALIZADO: Inicia o estado com a nova estrutura aninhada
 const getInitialState = (initialData?: Imovel) => {
-    const initialDataPayload = initialData ? Object.keys(defaultFormData).reduce((acc, key) => {
-        if (key in initialData) {
-            (acc as any)[key] = (initialData as any)[key];
-        }
-        return acc;
-    }, {}) : {};
+    // Mescla o initialData com o defaultFormData para garantir a estrutura completa
+    const initialDataPayload: Partial<NovoImovelData> = initialData 
+        ? Object.keys(defaultFormData).reduce((acc, key) => {
+            const prop = key as keyof NovoImovelData;
+            if (initialData[prop] !== undefined) {
+                 (acc as any)[prop] = (initialData as any)[prop];
+            }
+            return acc;
+        }, {} as Partial<NovoImovelData>) 
+        : {};
 
     const initialFormData = {
-        ...defaultFormData, 
-        ...initialDataPayload as Partial<NovoImovelData>,
+        ...defaultFormData,
+        ...initialDataPayload,
+        // Garante que os objetos aninhados sejam mesclados corretamente, preenchendo defaults
+        endereco: { ...defaultEndereco, ...(initialData?.endereco || {}) },
+        condominio: { ...defaultCondominio, ...(initialData?.condominio || {}) },
         categoriaPrincipal: initialData?.categoriaPrincipal || defaultFormData.categoriaPrincipal,
         tipoDetalhado: initialData?.tipoDetalhado || defaultFormData.tipoDetalhado,
         finalidades: initialData?.finalidades || defaultFormData.finalidades,
         dataDisponibilidade: initialData?.dataDisponibilidade || defaultFormData.dataDisponibilidade,
         andar: initialData?.andar || 0,
-    };
+    } as NovoImovelData;
 
     const initialLocalInputs: Record<string, string> = {};
+    
+    // Adiciona o campo CEP para gerenciar o input formatado localmente
+    // Usa o valor limpo do endereco.cep para formatar se existir
+    initialLocalInputs['endereco.cep'] = initialFormData.endereco.cep ? initialFormData.endereco.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''; 
+    
     Object.keys(initialFormData).filter(isNumericField).forEach(keyString => {
         const numericValue = (initialFormData as any)[keyString] as number;
         initialLocalInputs[keyString] = String(numericValue === 0 ? '' : numericValue);
@@ -88,7 +121,7 @@ const getInitialState = (initialData?: Imovel) => {
 export default function FormularioImovel({ initialData }: FormularioImovelProps) {
     const router = useRouter();
     const { user } = useAuthStore();
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false); 
     const [error, setError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState(1);
     const isEditing = !!initialData;
@@ -105,7 +138,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     
     const finalidadesDisponiveis = useMemo(() => {
         const tipo = tiposDisponiveis.find(t => formData.tipoDetalhado.startsWith(t.nome));
-        // O campo 'finalidade' na hierarquia já é ImovelFinalidade[], então o .filter() subsequente será mais fácil
         return tipo?.finalidade || []; 
     }, [formData.tipoDetalhado, tiposDisponiveis]);
 
@@ -116,20 +148,15 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             
             setFormData(prevData => {
                 
-                // 1. Filtra as finalidades, mantendo apenas as que são válidas na nova lista.
-                // O cast f as ImovelFinalidade é necessário para a função includes, mas o filter já mantém o tipo.
                 const keptFinalidades = prevData.finalidades.filter(
                     f => firstTipo.finalidade.includes(f as ImovelFinalidade)
                 );
 
-                // 2. Define o array final com tipagem estrita
                 let finalArray: ImovelFinalidade[];
                 
                 if (keptFinalidades.length > 0) {
-                    // Mantém as finalidades válidas (já estão tipadas corretamente)
                     finalArray = keptFinalidades as ImovelFinalidade[]; 
                 } else {
-                    // Usa o primeiro tipo disponível ou o default, garantindo o cast na string literal
                     const defaultFinalidade = firstTipo.finalidade[0] || 'Locação Residencial';
                     finalArray = [defaultFinalidade as ImovelFinalidade];
                 }
@@ -143,22 +170,73 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     }, [formData.categoriaPrincipal, tiposDisponiveis]); 
 
-    // --- Lógica de Manipulação de Inputs (Mantida a correção de Numéricos) ---
+    // --- Lógica de Manipulação de Inputs (Incluindo formatação de CEP e aninhamento) ---
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         const target = e.target;
+        const isCheckbox = type === 'checkbox';
+        
+        // 1. Lida com campos aninhados (Ex: endereco.cep, condominio.possuiCondominio)
+        if (name.includes('.') || (isCheckbox && name.startsWith('condominio.'))) {
+            const [parent, child] = name.split('.');
+            const parentKey = parent as keyof NovoImovelData;
+            
+            // Tratamento especial para o CEP (formatação e armazenamento local)
+            if (name === 'endereco.cep') {
+                let cleanedValue = value.replace(/\D/g, '').slice(0, 8); // Limita a 8 dígitos (CEP)
+                let formattedValue = cleanedValue;
+                
+                if (cleanedValue.length > 5) {
+                    formattedValue = `${cleanedValue.slice(0, 5)}-${cleanedValue.slice(5)}`;
+                }
 
+                setLocalNumericInputs(prev => ({ ...prev, [name]: formattedValue }));
+                // O valor limpo será salvo no formData no blur ou submit
+                setFormData(prevData => ({
+                    ...prevData,
+                    endereco: { ...prevData.endereco, cep: cleanedValue },
+                }));
+                return;
+            }
+            
+            // Tratamento para Checkboxes aninhados (Ex: condominio.possuiCondominio)
+            if (isCheckbox && parentKey === 'condominio') {
+                setFormData(prevData => ({
+                    ...prevData,
+                    condominio: { ...prevData.condominio, [child || parent]: (target as HTMLInputElement).checked },
+                }));
+                return;
+            }
+
+            // Tratamento para outros campos aninhados de texto/select
+            if (parentKey === 'endereco') {
+                setFormData(prevData => ({
+                    ...prevData,
+                    endereco: { ...prevData.endereco, [child]: value },
+                }));
+            } else if (parentKey === 'condominio') {
+                // Para campos de texto/select dentro de CondominioData
+                setFormData(prevData => ({
+                    ...prevData,
+                    condominio: { ...prevData.condominio, [child]: value },
+                }));
+            }
+            return;
+        }
+
+        // 2. Lida com campos no primeiro nível (Ex: titulo, quartos, status)
         if (isNumericField(name)) {
             setLocalNumericInputs(prev => ({ ...prev, [name]: value }));
-            return; 
+            return;
         }
         
         setFormData((prevData: NovoImovelData) => ({
             ...prevData,
-            [name]: (type === 'checkbox') ? (target as HTMLInputElement).checked : value,
+            [name]: isCheckbox ? (target as HTMLInputElement).checked : value,
         }));
     }, []); 
 
+    // Lógica para consolidar campos numéricos ao perder o foco
     const handleBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
 
@@ -176,7 +254,59 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 [name]: String(numericValue === 0 ? '' : numericValue)
             }));
         }
+        
     }, []);
+
+    // --- FUNÇÃO PARA BUSCAR ENDEREÇO POR CEP ---
+    const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+        const value = e.target.value;
+        const cleanCep = value.replace(/\D/g, '');
+        
+        // Salva o CEP limpo no formData
+        setFormData(prevData => ({
+            ...prevData,
+            endereco: { ...prevData.endereco, cep: cleanCep },
+        }));
+        
+        if (cleanCep.length === 8) {
+            setLoading(true);
+            setError(null);
+
+            try {
+                const addressData = await fetchAddressByCep(cleanCep); 
+
+                if (addressData) {
+                    // Preenche todos os campos de endereço
+                    setFormData(prevData => ({
+                        ...prevData,
+                        endereco: { 
+                            ...prevData.endereco, 
+                            logradouro: addressData.logradouro,
+                            bairro: addressData.bairro,
+                            cidade: addressData.localidade,
+                            estado: addressData.uf,
+                            // Mantém número/complemento/país
+                        },
+                    }));
+                    
+                    setError(`CEP ${localNumericInputs['endereco.cep']} encontrado! Logradouro, Bairro, Cidade/UF preenchidos automaticamente. Não se esqueça de adicionar o NÚMERO!`);
+                    
+                } else {
+                    setError('CEP não encontrado ou inválido. Digite o endereço manualmente.');
+                }
+            } catch (err) {
+                setError('Erro ao se comunicar com o serviço de CEP.');
+            } finally {
+                setLoading(false);
+            }
+        } else if (cleanCep.length > 0 && cleanCep.length < 8) {
+             setError('O CEP deve ter 8 dígitos.');
+        } else {
+             setError(null);
+        }
+    };
+    // --- FIM FUNÇÃO CEP ---
+
 
     const handleFinalidadeChange = useCallback((finalidade: ImovelFinalidade) => {
         setFormData((prevData: NovoImovelData) => {
@@ -189,7 +319,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 newFinalidades = [...prevData.finalidades, finalidade];
             }
             
-            // Requisito de Negócio: Não pode ter 0 finalidades
             if (newFinalidades.length === 0) {
                  setError("Selecione pelo menos uma finalidade para o imóvel.");
                  return prevData;
@@ -217,12 +346,20 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         setError(null);
         
         // Validação Mínima da Etapa 1
-        if (currentStep === 1 && formData.finalidades.length === 0) {
-            setError("Selecione pelo menos uma finalidade para o imóvel.");
-            return;
+        if (currentStep === 1) {
+            // Verifica campos de endereço obrigatórios
+            const { endereco } = formData;
+            if (!endereco.logradouro || !endereco.numero || endereco.cep.replace(/\D/g, '').length !== 8 || !endereco.bairro || !endereco.cidade || !endereco.estado || !endereco.pais) {
+                 setError("Preencha todos os campos obrigatórios do endereço (CEP, Logradouro, Número, Bairro, Cidade, Estado, País) antes de prosseguir.");
+                 return;
+            }
+            if (formData.finalidades.length === 0) {
+                setError("Selecione pelo menos uma finalidade para o imóvel.");
+                return;
+            }
         }
 
-        // Consolidação de Valores no Blur (se necessário)
+        // Consolidação de Valores Numéricos
         const numericFieldsToConsolidate: string[] = ['areaTotal', 'areaUtil', 'valorAluguel', 'valorCondominio', 'valorIPTU'];
         if (currentStep === 2) {
              numericFieldsToConsolidate.push('quartos', 'banheiros', 'vagasGaragem', 'andar');
@@ -291,18 +428,13 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     };
 
-    // --- Componente: ProgressIndicator (NOVO DESIGN, SEM PORCENTAGEM EXTERNA) ---
     const ProgressIndicator = () => {
-        // Calcula a porcentagem do progresso (0% na etapa 1, 100% na etapa 4)
         const percentage = formSteps.length > 1 ? Math.round(((currentStep - 1) / (formSteps.length - 1)) * 100) : 100;
 
         return (
             <div className="space-y-4 mb-8">
-                {/* 1. Indicadores Visuais de Etapa */}
                 <div className="flex justify-between items-center relative">
-                    {/* Linha de Conexão (Fundo) */}
                     <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 dark:bg-zinc-700 -z-10 transform -translate-y-1/2 mx-5">
-                         {/* Linha de Conexão (Progresso) */}
                          <div 
                             className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out" 
                             style={{ width: `${percentage}%` }}
@@ -335,9 +467,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     })}
                 </div>
                 
-                {/* 2. Barra de Progresso com Porcentagem (AGORA SÓ A BARRA VISUAL) */}
                 <div className="w-full h-2 bg-gray-200 dark:bg-zinc-700 rounded-full relative mt-4">
-                     {/* Barra de Progresso, que ainda mostra o visual de 0% a 100% */}
                      <div 
                         className="h-full bg-rentou-primary dark:bg-blue-600 rounded-full transition-all duration-500 ease-out" 
                         style={{ width: `${percentage}%` }}
@@ -347,9 +477,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             </div>
         );
     };
-    // FIM Progress Indicator
 
-    // --- Componentes Auxiliares (mantidos limpos e funcionais) ---
     const renderNumericInput = (name: string, label: string, currentValue: number, placeholder?: string) => {
         const getDisplayValue = (name: string, currentValue: number) => {
             const localValue = localNumericInputs[name];
@@ -416,7 +544,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         );
     };
 
-    // --- Renderização de Conteúdo por Etapa (Melhorias de Layout/Grid) ---
     const renderStepContent = () => {
         switch (currentStep) {
             case 1:
@@ -486,7 +613,187 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                              {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
                         </div>
 
-                        {/* Informações de Anúncio e Localização */}
+                        {/* --- NOVO: SEÇÃO ENDEREÇO DETALHADO --- */}
+                        <div className='space-y-4 p-4 border rounded-lg border-gray-200 dark:border-zinc-700'>
+                             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center mb-3">
+                                <Icon icon={faHome} className="w-4 h-4 mr-2" /> Endereço Completo
+                            </h4>
+                            
+                            {/* CEP (Primeira Opção e Busca) */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="md:col-span-1">
+                                    <label htmlFor="endereco.cep" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        CEP
+                                    </label>
+                                    <input
+                                        id="endereco.cep"
+                                        name="endereco.cep"
+                                        type="text"
+                                        value={localNumericInputs['endereco.cep'] || ''} // Valor formatado
+                                        onChange={handleChange}
+                                        onBlur={handleCepBlur}
+                                        required
+                                        placeholder="00000-000"
+                                        maxLength={9}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                        disabled={loading}
+                                    />
+                                </div>
+                                {/* Logradouro (Expande para o resto da linha) */}
+                                <div className="md:col-span-3">
+                                    <label htmlFor="endereco.logradouro" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Logradouro (Rua, Av.)</label>
+                                    <input
+                                        id="endereco.logradouro"
+                                        name="endereco.logradouro"
+                                        type="text"
+                                        required
+                                        value={formData.endereco.logradouro}
+                                        onChange={handleChange}
+                                        placeholder="Preenchido pelo CEP"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                {/* Número */}
+                                <div>
+                                    <label htmlFor="endereco.numero" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Número</label>
+                                    <input
+                                        id="endereco.numero"
+                                        name="endereco.numero"
+                                        type="text"
+                                        required
+                                        value={formData.endereco.numero}
+                                        onChange={handleChange}
+                                        placeholder="Ex: 123"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                                {/* Complemento */}
+                                <div>
+                                    <label htmlFor="endereco.complemento" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Complemento (Opcional)</label>
+                                    <input
+                                        id="endereco.complemento"
+                                        name="endereco.complemento"
+                                        type="text"
+                                        value={formData.endereco.complemento || ''}
+                                        onChange={handleChange}
+                                        placeholder="Ex: Apartamento 401"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                                {/* Bairro */}
+                                <div className="col-span-2">
+                                    <label htmlFor="endereco.bairro" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bairro</label>
+                                    <input
+                                        id="endereco.bairro"
+                                        name="endereco.bairro"
+                                        type="text"
+                                        required
+                                        value={formData.endereco.bairro}
+                                        onChange={handleChange}
+                                        placeholder="Preenchido pelo CEP"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                {/* Cidade */}
+                                <div>
+                                    <label htmlFor="endereco.cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</label>
+                                    <input
+                                        id="endereco.cidade"
+                                        name="endereco.cidade"
+                                        type="text"
+                                        required
+                                        value={formData.endereco.cidade}
+                                        onChange={handleChange}
+                                        placeholder="Preenchido pelo CEP"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                                {/* Estado (UF) */}
+                                <div>
+                                    <label htmlFor="endereco.estado" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estado (UF)</label>
+                                    <input
+                                        id="endereco.estado"
+                                        name="endereco.estado"
+                                        type="text"
+                                        required
+                                        value={formData.endereco.estado}
+                                        onChange={handleChange}
+                                        placeholder="Ex: SP"
+                                        maxLength={2}
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                                {/* País */}
+                                <div>
+                                    <label htmlFor="endereco.pais" className="block text-sm font-medium text-gray-700 dark:text-gray-300">País</label>
+                                    <input
+                                        id="endereco.pais"
+                                        name="endereco.pais"
+                                        type="text"
+                                        required
+                                        value={formData.endereco.pais}
+                                        onChange={handleChange}
+                                        placeholder="Ex: Brasil"
+                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        {/* --- OPÇÕES DE CONDOMÍNIO (ANINHADO) - FIX APPLIED HERE --- */}
+                         <div className='space-y-4 p-4 border border-blue-200 dark:border-blue-900/50 rounded-lg bg-blue-50 dark:bg-zinc-700/50'>
+                             <h4 className="text-lg font-semibold text-rentou-primary dark:text-blue-400 mb-3">Informações de Condomínio</h4>
+                             <CheckboxInput 
+                                label="O imóvel está localizado em Condomínio/Edifício?" 
+                                name="condominio.possuiCondominio" 
+                                // FIX: Adicionado optional chaining e fallback para o checked
+                                checked={formData.condominio?.possuiCondominio || false} 
+                                onChange={handleChange} 
+                            />
+                            
+                            {/* FIX: Adicionado optional chaining na renderização condicional */}
+                            {formData.condominio?.possuiCondominio && (
+                                <div className="space-y-4 pt-2">
+                                    <div>
+                                        <label htmlFor="condominio.nomeCondominio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Condomínio/Edifício</label>
+                                        <input
+                                            id="condominio.nomeCondominio"
+                                            name="condominio.nomeCondominio"
+                                            type="text"
+                                            value={formData.condominio.nomeCondominio || ''}
+                                            onChange={handleChange}
+                                            required
+                                            placeholder="Ex: Condomínio Residencial Alphaville"
+                                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                         <CheckboxInput 
+                                            label="Possui Portaria 24h?" 
+                                            name="condominio.portaria24h" 
+                                             // FIX: Adicionado optional chaining
+                                            checked={formData.condominio?.portaria24h || false} 
+                                            onChange={handleChange} 
+                                        />
+                                        <CheckboxInput 
+                                            label="Possui Área de Lazer/Comum?" 
+                                            name="condominio.areaLazer" 
+                                             // FIX: Adicionado optional chaining
+                                            checked={formData.condominio?.areaLazer || false} 
+                                            onChange={handleChange} 
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                         </div>
+                        {/* --- FIM: OPÇÕES DE CONDOMÍNIO --- */}
+                        
+                        {/* Informações de Anúncio (Título) */}
                         <div>
                             <label htmlFor="titulo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Título do Anúncio (Destaque)</label>
                             <input
@@ -500,34 +807,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                             />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label htmlFor="endereco" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Endereço Completo</label>
-                                <input
-                                    id="endereco"
-                                    name="endereco"
-                                    type="text"
-                                    required
-                                    placeholder="Rua, Número, Bairro, CEP"
-                                    value={formData.endereco}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-                                />
-                            </div>
-                            <div>
-                                <label htmlFor="cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade e UF</label>
-                                <input
-                                    id="cidade"
-                                    name="cidade"
-                                    type="text"
-                                    required
-                                    placeholder="Ex: São Paulo, SP"
-                                    value={formData.cidade}
-                                    onChange={handleChange}
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-                                />
-                            </div>
-                        </div>
                     </div>
                 );
             case 2:
@@ -537,20 +816,38 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         
                         {/* Linha: Quartos, Banheiros, Vagas, Andar (Condicional) */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            {renderNumericInput("quartos", "Quartos", formData.quartos)}
-                            {renderNumericInput("banheiros", "Banheiros", formData.banheiros)}
-                            {renderNumericInput("vagasGaragem", "Vagas Garagem", formData.vagasGaragem)}
+                             <div>
+                                <label htmlFor="quartos" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quartos</label>
+                                <input id="quartos" name="quartos" type="text" required value={localNumericInputs['quartos'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="1" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
+                            <div>
+                                <label htmlFor="banheiros" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Banheiros</label>
+                                <input id="banheiros" name="banheiros" type="text" required value={localNumericInputs['banheiros'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="1" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
+                            <div>
+                                <label htmlFor="vagasGaragem" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vagas Garagem</label>
+                                <input id="vagasGaragem" name="vagasGaragem" type="text" required value={localNumericInputs['vagasGaragem'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
                             {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') ? (
-                                renderNumericInput("andar", "Andar", formData.andar || 0, "Ex: 5")
+                                <div>
+                                    <label htmlFor="andar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Andar</label>
+                                    <input id="andar" name="andar" type="text" required value={localNumericInputs['andar'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 5" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                </div>
                             ) : (
-                                <div className='hidden md:block'></div> // Placeholder em grid para manter o alinhamento
+                                <div className='hidden md:block'></div>
                             )}
                         </div>
 
                         {/* Linha: Áreas */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                            {renderNumericInput("areaTotal", "Área Total (m²)", formData.areaTotal)}
-                            {renderNumericInput("areaUtil", "Área Útil (m²)", formData.areaUtil)}
+                             <div>
+                                <label htmlFor="areaTotal" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área Total (m²)</label>
+                                <input id="areaTotal" name="areaTotal" type="text" required value={localNumericInputs['areaTotal'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 120.5" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
+                             <div>
+                                <label htmlFor="areaUtil" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área Útil (m²)</label>
+                                <input id="areaUtil" name="areaUtil" type="text" required value={localNumericInputs['areaUtil'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 80.0" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
                         </div>
                         
                         {/* Seletor de Comodidades */}
@@ -566,7 +863,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         
                         {/* Linha: Valor Aluguel e Status */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {renderNumericInput("valorAluguel", "Valor do Aluguel (R$)", formData.valorAluguel, "3500.00")}
+                             <div>
+                                <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
+                                <input id="valorAluguel" name="valorAluguel" type="text" required value={localNumericInputs['valorAluguel'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="3500.00" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
                             
                             <div>
                                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status do Imóvel</label>
@@ -588,8 +888,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
                         {/* Linha: Condomínio e IPTU */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {renderNumericInput("valorCondominio", "Valor Condomínio (R$)", formData.valorCondominio, "0.00")}
-                            {renderNumericInput("valorIPTU", "Valor IPTU (Mensal R$)", formData.valorIPTU, "0.00")}
+                             <div>
+                                <label htmlFor="valorCondominio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor Condomínio (R$)</label>
+                                <input id="valorCondominio" name="valorCondominio" type="text" required value={localNumericInputs['valorCondominio'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="0.00" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
+                             <div>
+                                <label htmlFor="valorIPTU" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor IPTU (Mensal R$)</label>
+                                <input id="valorIPTU" name="valorIPTU" type="text" required value={localNumericInputs['valorIPTU'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="0.00" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                            </div>
                         </div>
                         
                         {/* Campo Data de Disponibilidade */}
@@ -646,7 +952,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     value={formData.linkVideoTour || ''}
                                     onChange={handleChange}
                                     placeholder="Ex: https://youtube.com/watch?v=tour"
-                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:focus:border-rentou-primary"
                                 />
                             </div>
                              <CheckboxInput 
@@ -677,8 +983,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 return null;
         }
     };
-    // --- FIM Renderização de Conteúdo por Etapa ---
-
 
     return (
         <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl">
@@ -686,7 +990,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 {formTitle}
             </h2>
             
-            {/* Indicador de Progresso (Novo Design) */}
             <ProgressIndicator />
 
             {error && (
