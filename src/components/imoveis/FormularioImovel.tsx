@@ -3,7 +3,9 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { adicionarNovoImovel, atualizarImovel } from '@/services/ImovelService'; 
+// ATUALIZADO: Importar funções de foto
+import { adicionarNovoImovel, atualizarImovel, updateImovelFotos } from '@/services/ImovelService'; 
+import { uploadImovelPhotos, deleteFotoImovel } from '@/services/StorageService'; 
 // ATUALIZADO: Importar novos tipos de endereço e condomínio
 import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData } from '@/types/imovel'; 
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
@@ -11,7 +13,7 @@ import { useAuthStore } from '@/hooks/useAuthStore';
 // Importação do serviço de CEP
 import { fetchAddressByCep, CepData } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome } from '@fortawesome/free-solid-svg-icons'; // Adicionado faHome
+import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash } from '@fortawesome/free-solid-svg-icons'; // Adicionado faHome, faTrash
 
 interface FormularioImovelProps {
     initialData?: Imovel;
@@ -22,7 +24,7 @@ const formSteps = [
     { id: 1, name: 'Classificação' },
     { id: 2, name: 'Estrutura' },
     { id: 3, name: 'Valores' },
-    { id: 4, name: 'Mídia & Detalhes' },
+    { id: 4, name: 'Mídia & Fotos' }, // NOME ATUALIZADO
 ];
 
 // NOVO: Estruturas default aninhadas
@@ -98,6 +100,8 @@ const getInitialState = (initialData?: Imovel) => {
         finalidades: initialData?.finalidades || defaultFormData.finalidades,
         dataDisponibilidade: initialData?.dataDisponibilidade || defaultFormData.dataDisponibilidade,
         andar: initialData?.andar || 0,
+        // NOVO: Fotos atuais
+        fotos: initialData?.fotos || [], 
     } as NovoImovelData;
 
     const initialLocalInputs: Record<string, string> = {};
@@ -131,6 +135,13 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
     const [localNumericInputs, setLocalNumericInputs] = useState<Record<string, string>>(initialLocalInputs);
     const [formData, setFormData] = useState<NovoImovelData>(initialFormData);
+    
+    // --- NOVO: ESTADO DE GERENCIAMENTO DE FOTOS ---
+    const [novasFotos, setNovasFotos] = useState<File[]>([]);
+    const [fotosAExcluir, setFotosAExcluir] = useState<string[]>([]);
+    const MAX_PHOTOS = 25;
+    // --- FIM NOVO ---
+
 
     const tiposDisponiveis = useMemo(() => {
         return IMÓVEIS_HIERARQUIA.find(c => c.categoria === formData.categoriaPrincipal)?.tipos || [];
@@ -340,6 +351,46 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             };
         });
     }, []);
+    
+    // --- NOVO: Handlers de Foto ---
+    const getAvailableSlots = useCallback(() => {
+        const currentValidPhotos = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
+        const totalNewPhotos = novasFotos.length;
+        return MAX_PHOTOS - currentValidPhotos - totalNewPhotos;
+    }, [formData.fotos, fotosAExcluir, novasFotos.length]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const filesArray = Array.from(e.target.files);
+            const availableSlots = getAvailableSlots();
+            
+            if (filesArray.length > availableSlots) {
+                setError(`Você só pode adicionar mais ${availableSlots} fotos. Remova fotos existentes ou novas fotos para continuar.`);
+                e.target.value = ''; // Limpa o input
+                return;
+            }
+
+            setNovasFotos(prev => [...prev, ...filesArray]);
+            e.target.value = ''; // Limpa o input para permitir o upload do mesmo arquivo novamente se necessário
+            setError(null);
+        }
+    };
+
+    const handleRemoveNewPhoto = (index: number) => {
+        setNovasFotos(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleToggleExistingPhoto = (url: string) => {
+        setFotosAExcluir(prev => {
+            if (prev.includes(url)) {
+                return prev.filter(u => u !== url); // Remove da lista de exclusão
+            } else {
+                return [...prev, url]; // Adiciona à lista de exclusão
+            }
+        });
+    };
+    // --- FIM NOVO: Handlers de Foto ---
+
 
     const handleNextStep = (e: React.FormEvent) => {
         e.preventDefault(); 
@@ -410,19 +461,48 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 throw new Error('O valor do aluguel deve ser um número válido.');
             }
 
+            // 1. Cria ou atualiza o Imóvel no Firestore (sem a lista final de fotos)
             let result: Imovel;
             
             if (isEditing && initialData) {
-                result = await atualizarImovel(initialData.id, finalFormData);
+                // Remove as fotos existentes do payload de atualização para que possamos tratar o upload/delete separadamente
+                // Usamos as fotos originais para o objeto de retorno do service (para ter o SmartID)
+                const updateDataWithoutPhotos = { ...finalFormData, fotos: initialData.fotos };
+                result = await atualizarImovel(initialData.id, updateDataWithoutPhotos);
             } else {
                 result = await adicionarNovoImovel(finalFormData, proprietarioId);
             }
             
-            router.push(`/imoveis/${result.id}`); 
+            // 2. Processa as fotos
+            let finalFotosUrls = result.fotos || [];
+
+            // A. Excluir fotos marcadas (se for edição)
+            if (fotosAExcluir.length > 0 && isEditing) {
+                const deletePromises = fotosAExcluir.map(url => deleteFotoImovel(url));
+                await Promise.all(deletePromises);
+                
+                // Remove as URLs excluídas do array final
+                finalFotosUrls = finalFotosUrls.filter(url => !fotosAExcluir.includes(url));
+            }
+            
+            // B. Upload de novas fotos
+            if (novasFotos.length > 0) {
+                 const uploadedUrls = await uploadImovelPhotos(novasFotos, result.smartId);
+                 // Concatena as fotos existentes com as novas, limitando ao MAX_PHOTOS
+                 finalFotosUrls = [...finalFotosUrls, ...uploadedUrls].slice(0, MAX_PHOTOS);
+            }
+
+            // 3. Atualiza o documento Imóvel no Firestore com a lista FINAL de URLs
+            // Faz isso apenas se houver alguma alteração no array de fotos
+            if (novasFotos.length > 0 || fotosAExcluir.length > 0) {
+                 await updateImovelFotos(result.id, finalFotosUrls);
+            }
+            
+            router.push(`/imoveis/${result.smartId}`); // Redireciona usando o Smart ID
 
         } catch (err: any) {
             console.error('Erro na operação de imóvel:', err);
-            setError(`Falha ao ${isEditing ? 'atualizar' : 'adicionar'} o imóvel. Detalhe: ${err.message || 'Erro desconhecido.'}`);
+            setError(`Falha ao ${isEditing ? 'atualizar' : 'adicionar'} o imóvel. Detalhe: ${err.message || 'Erro desconhecido.'}. Verifique o console para mais detalhes.`);
         } finally {
             setLoading(false);
         }
@@ -922,11 +1002,16 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                 );
             case 4:
+                // --- NOVO: Renderização da Etapa 4 (Mídia e Fotos) ---
+                const currentValidPhotosCount = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
+                const totalPhotosCount = currentValidPhotosCount + novasFotos.length;
+                const availableSlots = MAX_PHOTOS - totalPhotosCount;
+                
                 return (
                     <div className="space-y-6">
-                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">4. Mídia e Detalhes do Anúncio</h3>
+                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">4. Mídia e Fotos do Anúncio</h3>
                         
-                        {/* Campo Descrição Longa */}
+                        {/* CAMPO DESCRIÇÃO LONGA */}
                         <div>
                             <label htmlFor="descricaoLonga" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Descrição Detalhada para Anúncio</label>
                             <textarea
@@ -940,8 +1025,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                             />
                         </div>
-
-                        {/* Mídia (Links e Checkbox) */}
+                        
+                        {/* MÍDIA (LINKS E CHECKBOX) */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
                              <div>
                                 <label htmlFor="linkVideoTour" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link do Vídeo Tour (Opcional)</label>
@@ -963,19 +1048,94 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 description="Marque se você possui um link para tour virtual 360º."
                             />
                         </div>
-                        
-                        {/* Upload de Fotos (Mocked - Aprimorado) */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Galeria de Fotos (Mock)</label>
-                            <div className="mt-1 p-6 border-2 border-dashed border-gray-400 dark:border-zinc-600 rounded-xl text-center bg-gray-50 dark:bg-zinc-700/50">
-                                <p className="text-gray-500 dark:text-gray-400 font-medium">
-                                    <Icon icon={faImage} className="inline-block w-5 h-5 mr-2 text-rentou-primary/70" />
-                                    Funcionalidade de upload (Cloud Storage) será implementada na fase 2.
-                                </p>
-                                <p className="text-sm mt-2 text-rentou-primary">
-                                    Atualmente: {formData.fotos.length} fotos mockadas.
-                                </p>
-                            </div>
+
+                        {/* SEÇÃO DE UPLOAD E GERENCIAMENTO DE FOTOS */}
+                        <div className='space-y-4 p-4 border rounded-lg border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800'>
+                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center">
+                                <Icon icon={faImage} className="w-4 h-4 mr-2" /> Galeria de Fotos (Máx. {MAX_PHOTOS})
+                            </h4>
+                             <p className={`text-sm font-medium ${availableSlots === 0 ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                                Slots disponíveis: {availableSlots}. Fotos totais: {totalPhotosCount}
+                            </p>
+
+                            {/* UPLOAD DE NOVAS FOTOS */}
+                            {availableSlots > 0 && (
+                                <div className="mt-1">
+                                    {/* O INPUT FILE É CUSTUMIZADO POR UM LABEL */}
+                                    <label htmlFor="fotos-upload" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-rentou-primary hover:bg-blue-700 transition-colors cursor-pointer">
+                                        <Icon icon={faImage} className="w-4 h-4 mr-2" />
+                                        Selecionar Novas Fotos
+                                    </label>
+                                    <input
+                                        type="file"
+                                        id="fotos-upload"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleFileChange}
+                                        className="sr-only" // ESCONDE O INPUT
+                                        disabled={loading || availableSlots <= 0}
+                                    />
+                                </div>
+                            )}
+                            
+                            {/* GALERIA DE NOVAS FOTOS (PREVIEW) */}
+                            {novasFotos.length > 0 && (
+                                 <div className='space-y-2 pt-2'>
+                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Novas para Upload ({novasFotos.length}):</p>
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                        {novasFotos.map((file, index) => (
+                                            <div key={file.name + index} className="relative group w-full h-24 bg-blue-100 rounded-lg overflow-hidden border-2 border-dashed border-blue-400 flex items-center justify-center">
+                                                <p className="text-center text-xs text-blue-800 p-1 truncate max-w-full">{file.name}</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveNewPhoto(index)}
+                                                    className="absolute top-0 right-0 m-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Remover nova foto"
+                                                >
+                                                    <Icon icon={faTrash} className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* GALERIA DE FOTOS EXISTENTES */}
+                            {formData.fotos.length > 0 && (
+                                <div className='space-y-2 pt-2 border-t border-gray-200 dark:border-zinc-700'>
+                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Fotos Atuais ({formData.fotos.length}):</p>
+                                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                        {formData.fotos.map((url, index) => {
+                                            const isMarkedForDeletion = fotosAExcluir.includes(url);
+                                            return (
+                                                <div key={url} className="relative group w-full h-24 bg-gray-100 rounded-lg overflow-hidden border">
+                                                    <img 
+                                                        src={url} 
+                                                        alt={`Foto ${index + 1} do Imóvel`} 
+                                                        className={`w-full h-full object-cover transition-opacity ${isMarkedForDeletion ? 'opacity-30' : ''}`}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleExistingPhoto(url)}
+                                                        className={`absolute inset-0 flex items-center justify-center text-white text-xs font-bold transition-all duration-200 ${
+                                                            isMarkedForDeletion 
+                                                            ? 'bg-red-600/80 opacity-100' 
+                                                            : 'bg-black/40 opacity-0 group-hover:opacity-100'
+                                                        }`}
+                                                        title={isMarkedForDeletion ? 'Manter foto' : 'Marcar para Excluir'}
+                                                    >
+                                                        <Icon icon={faTrash} className="w-4 h-4 mr-1" />
+                                                        {isMarkedForDeletion ? 'REMOVER MARCAÇÃO' : 'EXCLUIR'}
+                                                    </button>
+                                                    {isMarkedForDeletion && (
+                                                         <span className="absolute top-0 left-0 bg-red-600 text-white text-xs px-2 py-0.5 rounded-br-lg">Excluir</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );

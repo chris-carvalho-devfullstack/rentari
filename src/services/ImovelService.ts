@@ -197,6 +197,26 @@ export async function atualizarImovel(id: string, data: NovoImovelData): Promise
 }
 
 /**
+ * NOVO: Atualiza apenas a lista de URLs de fotos de um imóvel no Firestore.
+ * @param imovelId O ID do documento do imóvel no Firestore.
+ * @param newFotos Array contendo a nova lista de URLs de fotos.
+ */
+export async function updateImovelFotos(imovelId: string, newFotos: string[]): Promise<void> {
+    if (!imovelId) {
+        throw new Error("ID do imóvel é obrigatório para atualização de fotos.");
+    }
+    
+    const imovelRef = doc(db, "imoveis", imovelId);
+    
+    // NOTA: O campo 'fotos' no Firestore é um array de strings.
+    await updateDoc(imovelRef, {
+        fotos: newFotos
+    });
+
+    console.log(`[ImovelService] Lista de fotos do Imóvel ${imovelId} atualizada.`);
+}
+
+/**
  * Remove um imóvel (Delete).
  */
 export async function removerImovel(id: string): Promise<void> {
