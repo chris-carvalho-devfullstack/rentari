@@ -105,7 +105,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     
     const finalidadesDisponiveis = useMemo(() => {
         const tipo = tiposDisponiveis.find(t => formData.tipoDetalhado.startsWith(t.nome));
-        return tipo?.finalidade || [];
+        // O campo 'finalidade' na hierarquia já é ImovelFinalidade[], então o .filter() subsequente será mais fácil
+        return tipo?.finalidade || []; 
     }, [formData.tipoDetalhado, tiposDisponiveis]);
 
     useEffect(() => {
@@ -113,13 +114,32 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         if (firstTipo) {
             const defaultTipoDetalhado = firstTipo.subtipos ? `${firstTipo.nome} - ${firstTipo.subtipos[0]}` : firstTipo.nome;
             
-            setFormData(prevData => ({
-                ...prevData,
-                tipoDetalhado: defaultTipoDetalhado,
-                finalidades: prevData.finalidades.filter(f => firstTipo.finalidade.includes(f)).length > 0
-                    ? prevData.finalidades.filter(f => firstTipo.finalidade.includes(f))
-                    : [firstTipo.finalidade[0] || 'Locação Residencial'], // Garante pelo menos uma finalidade
-            }));
+            setFormData(prevData => {
+                
+                // 1. Filtra as finalidades, mantendo apenas as que são válidas na nova lista.
+                // O cast f as ImovelFinalidade é necessário para a função includes, mas o filter já mantém o tipo.
+                const keptFinalidades = prevData.finalidades.filter(
+                    f => firstTipo.finalidade.includes(f as ImovelFinalidade)
+                );
+
+                // 2. Define o array final com tipagem estrita
+                let finalArray: ImovelFinalidade[];
+                
+                if (keptFinalidades.length > 0) {
+                    // Mantém as finalidades válidas (já estão tipadas corretamente)
+                    finalArray = keptFinalidades as ImovelFinalidade[]; 
+                } else {
+                    // Usa o primeiro tipo disponível ou o default, garantindo o cast na string literal
+                    const defaultFinalidade = firstTipo.finalidade[0] || 'Locação Residencial';
+                    finalArray = [defaultFinalidade as ImovelFinalidade];
+                }
+                
+                return {
+                    ...prevData,
+                    tipoDetalhado: defaultTipoDetalhado,
+                    finalidades: finalArray,
+                };
+            });
         }
     }, [formData.categoriaPrincipal, tiposDisponiveis]); 
 
@@ -322,9 +342,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         className="h-full bg-rentou-primary dark:bg-blue-600 rounded-full transition-all duration-500 ease-out" 
                         style={{ width: `${percentage}%` }}
                     >
-                         {/* Opcional: Adicionar a porcentagem dentro da barra se ela fosse mais alta (h-8) */}
-                         {/* Se a barra fosse maior, poderíamos usar: */}
-                         {/* <span className="absolute right-0 text-white text-xs font-bold mr-1"> {percentage}% </span> */}
                     </div>
                 </div>
             </div>
