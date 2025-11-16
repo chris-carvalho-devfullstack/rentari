@@ -59,7 +59,7 @@ export interface DispensaData {
 
 /**
  * Define a estrutura de dados robusta para um Imóvel na plataforma Rentou.
- * ATUALIZADO: Cômodos principais agora são ARRAYS.
+ * ATUALIZADO: Inclui Latitude e Longitude (essenciais para o mapa).
  */
 export interface Imovel {
   /** ID técnico (Firestore Document ID) */
@@ -80,6 +80,10 @@ export interface Imovel {
 
   endereco: EnderecoImovel; // <-- MUDANÇA: Objeto EnderecoImovel
   condominio: CondominioData; // <-- MUDANÇA: Objeto CondominioData
+  
+  // === NOVO: GEOLOCALIZAÇÃO ===
+  latitude?: number; // Adicionado
+  longitude?: number; // Adicionado
   
   // === 2. Detalhes Estruturais (ATUALIZADOS) ===
   quartos: number;
@@ -126,4 +130,4 @@ export interface Imovel {
 }
 
 // NOVO: Define a estrutura de dados para o formulário (exclui campos auto-gerados)
-export type NovoImovelData = Omit<Imovel, 'id' | 'smartId' | 'proprietarioId'>;
+export type NovoImovelData = Omit<Imovel, 'id' | 'smartId' | 'proprietarioId' | 'latitude' | 'longitude'>;

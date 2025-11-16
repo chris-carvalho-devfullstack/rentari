@@ -3,9 +3,12 @@
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-// ATUALIZADO: Importar funções de foto
+import Link from 'next/link'; 
+// CORRIGIDO: Adicionado faArrowLeft à lista de importações
 import { adicionarNovoImovel, atualizarImovel, updateImovelFotos } from '@/services/ImovelService'; 
 import { uploadImovelPhotos, deleteFotoImovel } from '@/services/StorageService'; 
+// NOVO: Importa o serviço de Geocoding
+import { fetchCoordinatesByAddress } from '@/services/GeocodingService';
 // ATUALIZADO: Importar TODOS os novos tipos, incluindo Cômodos e Responsabilidade
 import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, CozinhaData, SalaData, VarandaData, DispensaData, PiscinaPrivativaData, ResponsavelPagamento } from '@/types/imovel'; 
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
@@ -13,7 +16,7 @@ import { useAuthStore } from '@/hooks/useAuthStore';
 // Importação do serviço de CEP
 import { fetchAddressByCep, CepData } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, faTag, faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, faShower, faToilet, faWater, faBed } from '@fortawesome/free-solid-svg-icons'; 
+import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, faTag, faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, faShower, faToilet, faWater, faBed, faArrowLeft } from '@fortawesome/free-solid-svg-icons'; 
 
 interface FormularioImovelProps {
     initialData?: Imovel;
@@ -184,30 +187,27 @@ const SelectResponsabilidade: React.FC<{ label: string, name: string, value: Res
     </div>
 );
 
-const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => {
-    const availableFeatures = ['Piscina', 'Churrasqueira', 'Academia', 'Portaria 24h', 'Mobiliado', 'Aquecimento a Gás', 'Salão de Festas', 'Quintal/Jardim', 'Elevador', 'Acessibilidade'];
-    return (
-        <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
-            <div className="flex flex-wrap gap-2">
-                {availableFeatures.map((feature) => (
-                    <button
-                        key={feature}
-                        type="button" 
-                        onClick={() => onSelect(feature)}
-                        className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 border ${
-                            selected.includes(feature)
-                                ? 'bg-rentou-primary text-white border-rentou-primary shadow-md' // Selected: Fundo primário, Texto branco
-                                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-300 dark:border-zinc-600 dark:hover:bg-zinc-700' // Unselected
-                        }`}
-                    >
-                        {feature}
-                    </button>
-                ))}
-            </div>
+const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => (
+    <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
+        <div className="flex flex-wrap gap-2">
+            {['Piscina', 'Churrasqueira', 'Academia', 'Portaria 24h', 'Mobiliado', 'Aquecimento a Gás', 'Salão de Festas', 'Quintal/Jardim', 'Elevador', 'Acessibilidade'].map((feature) => (
+                <button
+                    key={feature}
+                    type="button" 
+                    onClick={() => onSelect(feature)}
+                    className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 border ${
+                        selected.includes(feature)
+                            ? 'bg-rentou-primary text-white border-rentou-primary shadow-md' // Selected: Fundo primário, Texto branco
+                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-300 dark:border-zinc-600 dark:hover:bg-zinc-700' // Unselected
+                    }`}
+                >
+                    {feature}
+                </button>
+            ))}
         </div>
-    );
-};
+    </div>
+);
 // --- FIM COMPONENTES AUXILIARES ---
 
 // --- COMPONENTES DE GRUPO DINÂMICO ---
@@ -655,10 +655,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     
     // --- Handlers de Foto (Mantidos) ---
     const getAvailableSlots = useCallback(() => {
-        const currentValidPhotos = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
+        const currentValidPhotos = initialData?.fotos.filter(url => !fotosAExcluir.includes(url)).length || 0;
         const totalNewPhotos = novasFotos.length;
         return MAX_PHOTOS - currentValidPhotos - totalNewPhotos;
-    }, [formData.fotos, fotosAExcluir, novasFotos.length]);
+    }, [initialData?.fotos, fotosAExcluir, novasFotos.length]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -724,12 +724,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
 
         // Consolidação de Valores Numéricos
-        const numericFieldsToConsolidate: string[] = ['areaTotal', 'areaUtil', 'valorAluguel', 'valorCondominio', 'valorIPTU'];
+        const numericFieldsToConsolidar: string[] = ['areaTotal', 'areaUtil', 'valorAluguel', 'valorCondominio', 'valorIPTU'];
         if (currentStep === 2) {
-             numericFieldsToConsolidate.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar'); // NOVO
+             numericFieldsToConsolidar.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar'); // NOVO
         }
         
-        numericFieldsToConsolidate.forEach(name => {
+        numericFieldsToConsolidar.forEach(name => {
             const value = localNumericInputs[name];
             if (value !== undefined) {
                 const cleanedValue = value.replace(',', '.');
@@ -758,9 +758,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         const proprietarioId = user.id;
         
         try {
-            let finalFormData: NovoImovelData = { ...formData };
+            // Cria um payload que pode incluir as novas coordenadas (latitude/longitude)
+            let finalFormData: NovoImovelData & Partial<Pick<Imovel, 'latitude' | 'longitude'>> = { ...formData };
             
-            // Consolidação final (Garantia para campos monetários/numéricos)
+            // 1. CONSOLIDAÇÃO FINAL DE VALORES NUMÉRICOS
             const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'andar'];
             finalNumericFields.forEach(name => {
                 const value = localNumericInputs[name];
@@ -778,19 +779,54 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             finalFormData.cozinhas = finalFormData.cozinhas.filter(c => c.tipo);
             finalFormData.salas = finalFormData.salas.filter(s => s.tipo);
             finalFormData.varandas = finalFormData.varandas.filter(v => v.tipo);
+            
+            
+            // 2. OBTENÇÃO DE COORDENADAS (GEOCODING) - SALVAMENTO PERSISTENTE
+            let { latitude, longitude } = initialData || {};
+
+            // Verifica se o endereço mudou (comparando campos chave)
+            const addressChanged = isEditing && (
+                initialData!.endereco.cep !== finalFormData.endereco.cep ||
+                initialData!.endereco.numero !== finalFormData.endereco.numero ||
+                initialData!.endereco.logradouro !== finalFormData.endereco.logradouro
+            );
+            
+            // Se for um novo imóvel OU se o endereço mudou, ou se as coordenadas estiverem faltando, tentamos o Geocoding
+            if (!isEditing || addressChanged || (!latitude || !longitude)) {
+                const coords = await fetchCoordinatesByAddress(finalFormData.endereco);
+                if (coords) {
+                    latitude = coords.latitude;
+                    longitude = coords.longitude;
+                } else {
+                    // Erro de Geocoding: Adiciona um aviso, mas continua com o save (sem coordenadas no DB)
+                    console.warn("Falha no Geocoding. O mapa pode não ser exibido corretamente.");
+                }
+            }
+
+            // Adiciona as coordenadas ao payload de submissão
+            if (latitude !== undefined && longitude !== undefined) {
+                finalFormData.latitude = latitude;
+                finalFormData.longitude = longitude;
+            }
 
 
-            // 1. Cria ou atualiza o Imóvel no Firestore (sem a lista final de fotos)
+            // 3. Cria ou atualiza o Imóvel no Firestore (sem a lista final de fotos)
             let result: Imovel;
             
             if (isEditing && initialData) {
-                const updateDataWithoutPhotos = { ...finalFormData, fotos: initialData.fotos };
-                result = await atualizarImovel(initialData.id, updateDataWithoutPhotos);
+                // Ao atualizar, o payload de update inclui as novas coordenadas (latitude/longitude)
+                const updatePayload = {
+                    ...finalFormData, 
+                    fotos: initialData.fotos, // Mantém as fotos antigas
+                } as Imovel; 
+                
+                result = await atualizarImovel(initialData.id, updatePayload);
             } else {
-                result = await adicionarNovoImovel(finalFormData, proprietarioId);
+                // Ao criar, o payload é NovoImovelData + as coordenadas
+                result = await adicionarNovoImovel(finalFormData as NovoImovelData, proprietarioId);
             }
             
-            // 2. Processa as fotos
+            // 4. Processa as fotos (excluir/upload)
             let finalFotosUrls = result.fotos || [];
 
             // A. Excluir fotos marcadas (se for edição)
@@ -798,18 +834,16 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 const deletePromises = fotosAExcluir.map(url => deleteFotoImovel(url));
                 await Promise.all(deletePromises);
                 
-                // Remove as URLs excluídas do array final
                 finalFotosUrls = finalFotosUrls.filter(url => !fotosAExcluir.includes(url));
             }
             
             // B. Upload de novas fotos
             if (novasFotos.length > 0) {
                  const uploadedUrls = await uploadImovelPhotos(novasFotos, result.smartId);
-                 // Concatena as fotos existentes com as novas, limitando ao MAX_PHOTOS
                  finalFotosUrls = [...finalFotosUrls, ...uploadedUrls].slice(0, MAX_PHOTOS);
             }
 
-            // 3. Atualiza o documento Imóvel no Firestore com a lista FINAL de URLs
+            // 5. Atualiza o documento Imóvel no Firestore com a lista FINAL de URLs
             if (novasFotos.length > 0 || fotosAExcluir.length > 0) {
                  await updateImovelFotos(result.id, finalFotosUrls);
             }
@@ -818,7 +852,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
         } catch (err: any) {
             console.error('Erro na operação de imóvel:', err);
-            setError(`Falha ao ${isEditing ? 'atualizar' : 'adicionar'} o imóvel. Detalhe: ${err.message || 'Erro desconhecido.'}. Verifique o console para mais detalhes.`);
+            setError(`Falha ao ${isEditing ? 'atualizar' : 'adicionar'} o imóvel. Detalhe: ${err.message || 'Erro desconhecido.'}. **Verifique o console e o Geocoding!**`);
         } finally {
             setLoading(false);
         }
@@ -826,6 +860,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     
     
     const ProgressIndicator = () => {
+        // ... (o componente ProgressIndicator completo, omitido por brevidade)
         const percentage = formSteps.length > 1 ? Math.round(((currentStep - 1) / (formSteps.length - 1)) * 100) : 100;
 
         return (
@@ -1430,10 +1465,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                 );
             case 4:
-                // --- Renderização da Etapa 4 (Mídia e Fotos) - Mantida ---
-                const currentValidPhotosCount = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
-                const totalPhotosCount = currentValidPhotosCount + novasFotos.length;
-                const availableSlots = MAX_PHOTOS - totalPhotosCount;
+                // ... (Renderização da Etapa 4 - Mídia e Fotos - permanece o mesmo)
+                 const currentValidPhotosCount = initialData?.fotos.filter(url => !fotosAExcluir.includes(url)).length || 0;
+                 const totalPhotosCount = currentValidPhotosCount + novasFotos.length;
+                 const availableSlots = MAX_PHOTOS - totalPhotosCount;
                 
                 return (
                     <div className="space-y-6">
@@ -1506,11 +1541,11 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             )}
 
                             {/* GALERIA DE FOTOS EXISTENTES */}
-                            {formData.fotos.length > 0 && (
+                            {initialData?.fotos.length > 0 && (
                                 <div className='space-y-2 pt-2 border-t border-gray-200 dark:border-zinc-700'>
-                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Fotos Atuais ({formData.fotos.length}):</p>
+                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Fotos Atuais ({initialData.fotos.length}):</p>
                                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                                        {formData.fotos.map((url, index) => {
+                                        {initialData.fotos.map((url, index) => {
                                             const isMarkedForDeletion = fotosAExcluir.includes(url);
                                             return (
                                                 <div key={url} className="relative group w-full h-24 bg-gray-100 rounded-lg overflow-hidden border">
@@ -1550,23 +1585,27 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     };
 
     return (
-        <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-6 border-b pb-4">
-                {formTitle}
-            </h2>
+        <div className="max-w-4xl mx-auto space-y-6">
+            {/* Link Voltar: Foi o ponto do erro. Agora usa faArrowLeft importado. */}
+            <Link href="/imoveis" className="text-rentou-primary hover:underline font-medium text-sm flex items-center">
+                <Icon icon={faArrowLeft} className="w-3 h-3 mr-2" />
+                Voltar para Lista de Imóveis
+            </Link>
             
-            <ProgressIndicator />
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 border-b pb-4">
+                {formTitle}
+            </h1>
 
-            {error && (
-                <p className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300 rounded-lg">
-                    {error}
-                </p>
-            )}
-
-            <form onSubmit={currentStep === formSteps.length ? handleSubmit : handleNextStep} className="space-y-8">
+            <form onSubmit={handleSubmit} className="p-8 bg-white dark:bg-zinc-800 shadow-2xl rounded-xl border border-gray-100 dark:border-zinc-700">
+                
+                {error && (
+                    <p className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300 rounded-lg">
+                        {error}
+                    </p>
+                )}
                 
                 {renderStepContent()}
-
+                
                 {/* --- Navigation Buttons --- */}
                 <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center">
                     
@@ -1611,8 +1650,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         Cancelar
                     </button>
                 </div>
-
             </form>
         </div>
     );
-}
+};

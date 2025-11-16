@@ -7,15 +7,17 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation'; 
 import { useAuthStore } from '@/hooks/useAuthStore'; 
 import { Icon } from '@/components/ui/Icon'; 
-// Ícone faUser Adicionado
-import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt, faUser } from '@fortawesome/free-solid-svg-icons'; 
+// Ícones atualizados: Adicionado faGlobe
+import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt, faUser, faGlobe } from '@fortawesome/free-solid-svg-icons'; 
 
 // Definição dos links de navegação com ícones
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: faTachometerAlt },
   { name: 'Imóveis', href: '/imoveis', icon: faBuilding },
+  // NOVO: Link para o Portal de Anúncios Público (Visão do Cliente)
+  { name: 'Ver Anúncios Públicos', href: '/anuncios', icon: faGlobe }, 
   { name: 'Financeiro', href: '/financeiro', icon: faWallet },
-  // NOVO: Perfil do Proprietário
+  // Perfil do Proprietário
   { name: 'Meu Perfil', href: '/perfil', icon: faUser }, 
 ];
 
@@ -59,6 +61,21 @@ export default function Sidebar() {
     router.push('/'); 
   };
 
+  // Funções de verificação de rota ativa (adaptadas para o novo link de anúncios)
+  const isLinkActive = (href: string) => {
+      // Regra especial para a raiz do Imóveis, que tem sub-rotas
+      if (href === '/imoveis' && pathname.startsWith('/imoveis')) {
+          return true;
+      }
+      // Se a rota for o link direto para o catálogo (/anuncios)
+      if (href === '/anuncios' && pathname.startsWith('/anuncios')) {
+          return true;
+      }
+      // Regra para Dashboard, Financeiro e Perfil
+       return pathname.startsWith(href) && href !== '/imoveis'; 
+  }
+
+
   return (
     // Sidebar: w-64, bg-white no modo claro (padrão)
     <div className="fixed top-0 left-0 h-screen w-64 bg-white dark:bg-zinc-800 shadow-xl z-20 flex flex-col border-r border-gray-200 dark:border-zinc-700">
@@ -85,8 +102,7 @@ export default function Sidebar() {
             href={item.href}
             name={item.name}
             icon={item.icon} // Passando o ícone
-            // Verifica se a rota atual começa com o href (para incluir sub-rotas)
-            isActive={pathname.startsWith(item.href) && (item.href !== '/' || pathname === '/')}
+            isActive={isLinkActive(item.href)}
           />
         ))}
       </nav>

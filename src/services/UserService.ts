@@ -18,6 +18,18 @@ import {
 } from 'firebase/firestore';
 
 /**
+ * UTILITY: Cria um slug simples a partir do nome para ser usado como handle.
+ */
+const slugify = (text: string): string => {
+    return text.toLowerCase()
+        .trim()
+        .replace(/[^\w\s-]/g, '') // Remove caracteres especiais
+        .replace(/[\s_-]+/g, '-')  // Substitui espaços e hifens por um único hífen
+        .replace(/^-+|-+$/g, '');  // Remove hifens no início ou fim
+};
+
+
+/**
  * Converte DocumentData do Firestore para o tipo Usuario, preenchendo padrões se necessário.
  */
 const mapDocToUsuario = (docData: DocumentData, id: string): Usuario => {
@@ -31,6 +43,7 @@ const mapDocToUsuario = (docData: DocumentData, id: string): Usuario => {
         documentoIdentificacao: docData.documentoIdentificacao || '',
         fotoUrl: docData.fotoUrl || '',
         cpf: docData.cpf, // Pode ser undefined no Firestore se não foi salvo
+        handlePublico: docData.handlePublico || slugify(docData.nome || 'usuario'), // Novo campo
         // O Firestore lida com objetos aninhados, mas garantimos o fallback
         qualificacao: docData.qualificacao, 
         dadosBancarios: docData.dadosBancarios || {
@@ -79,20 +92,44 @@ export async function fetchUserByEmail(email: string): Promise<Usuario | null> {
 }
 
 /**
+ * NOVO: Busca um usuário pelo handle público (para página pública de proprietário).
+ */
+export async function fetchUserByHandle(handle: string): Promise<Usuario | null> {
+    console.log(`[UserService] Buscando usuário pelo handle público: ${handle}...`);
+    const usersCollection = collection(db, 'usuarios');
+    // Consulta por handlePublico (requer índice no Firestore)
+    const q = query(usersCollection, where('handlePublico', '==', handle));
+    
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+        const docSnap = querySnapshot.docs[0];
+        console.log(`[UserService] Proprietário encontrado por handle. UID: ${docSnap.id}`);
+        return mapDocToUsuario(docSnap.data(), docSnap.id);
+    }
+    console.log('[UserService] Nenhum usuário encontrado com esse handle público.');
+    return null;
+}
+
+
+/**
  * Cria um novo documento de usuário no Firestore no primeiro login ou cadastro.
  */
 export async function createNewUserDocument(uid: string, email: string, name: string): Promise<Usuario> {
     console.log(`[UserService] Criando novo documento para UID: ${uid}...`);
     
+    const defaultName = name || 'Proprietário Rentou';
+    
     // 1. Objeto base de dados (contém 'undefined' nos campos opcionais)
     const baseInitialData = {
         email,
-        nome: name || 'Proprietário Rentou',
+        nome: defaultName,
         tipo: 'PROPRIETARIO',
         fotoUrl: '',
         telefone: '',
         documentoIdentificacao: '', 
         cpf: undefined, 
+        handlePublico: slugify(defaultName) + '-' + uid.slice(0, 4), // Geração do handle com sufixo
         qualificacao: undefined, 
         dadosBancarios: {
             banco: 'Pendente',

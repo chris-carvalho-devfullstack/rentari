@@ -81,6 +81,36 @@ export async function fetchImoveisDoProprietarioOnce(proprietarioId: string): Pr
 }
 
 /**
+ * NOVO: Busca todos os imóveis com status 'ANUNCIADO' (Para a página pública).
+ */
+export async function fetchAnunciosPublicos(): Promise<Imovel[]> {
+    console.log(`[ImovelService] Fetching all public listings (status: ANUNCIADO) from Firestore...`);
+    
+    const q = query(
+        collection(db, 'imoveis'), 
+        where('status', '==', 'ANUNCIADO')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(mapDocToImovel);
+}
+
+/**
+ * NOVO: Busca imóveis anunciados por um handle público do proprietário.
+ */
+export async function fetchAnunciosPorProprietarioHandle(proprietarioId: string): Promise<Imovel[]> {
+    console.log(`[ImovelService] Fetching public listings for Proprietario UID: ${proprietarioId}...`);
+    
+    const q = query(
+        collection(db, 'imoveis'), 
+        where('proprietarioId', '==', proprietarioId),
+        where('status', '==', 'ANUNCIADO')
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(mapDocToImovel);
+}
+
+
+/**
  * CHAVE REAL-TIME: Se inscreve para atualizações em tempo real (Read - All).
  */
 export function subscribeToImoveis(proprietarioId: string, callback: (imoveis: Imovel[]) => void, onError: (error: Error) => void) {

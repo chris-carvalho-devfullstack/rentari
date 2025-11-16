@@ -84,6 +84,9 @@ export interface Usuario {
   cpf?: string; // CPF/CNPJ de acesso rápido no formato limpo
   telefone: string;
 
+  // NOVO CAMPO: SLUG PÚBLICO PARA A PÁGINA DO PROPRIETÁRIO
+  handlePublico?: string;
+
   // NOVO CAMPO: QUALIFICAÇÃO LEGAL COMPLETA
   qualificacao?: QualificacaoPF | QualificacaoPJ;
 

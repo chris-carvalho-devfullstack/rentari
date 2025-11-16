@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Adiciona o CSS do Leaflet (obrigatório para renderização) */
+@import 'leaflet/dist/leaflet.css'; 
 
 /* === CORREÇÃO CRÍTICA: GARANTE VISIBILIDADE DO BOTÃO PRIMÁRIO NO MODO CLARO === */
 /* Força o fundo azul e o texto branco para a classe primária em todos os lugares. */
