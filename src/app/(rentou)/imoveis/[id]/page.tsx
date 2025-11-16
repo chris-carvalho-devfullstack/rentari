@@ -119,13 +119,24 @@ const FinancialCard: React.FC<FinancialCardProps> = ({ label, value, icon, color
     </div>
 );
 
-// MOCK DE IMAGENS PARA DEMONSTRAÇÃO DO CARROSSEL
+// MOCK DE IMAGENS PARA DEMONSTRAÇÃO DO CARROSSSEL
 const mockPhotos = [
     '/media/Rentou logomarcca.png', 
     'https://via.placeholder.com/1200x800?text=Quarto+Principal',
     'https://via.placeholder.com/1200x800?text=Cozinha+Moderna',
     'https://via.placeholder.com/1200x800?text=Sala+de+Estar',
 ];
+
+
+// --- NOVO: Interface para tipar structuralSpecs (FIX do Type Error) ---
+interface StructuralSpecItem {
+    icon: any;
+    label?: string;
+    value: string | number;
+    unit: string;
+    color: string;
+}
+// --- FIM NOVO ---
 
 
 /**
@@ -225,7 +236,7 @@ export default function ImovelDetalhePage() {
     const condominio = imovel.condominio || {};
     
     // Lista de especificações estruturais para o Hero Specs
-    const structuralSpecs = [
+    const structuralSpecs: StructuralSpecItem[] = [
         { icon: faBed, value: imovel.quartos, unit: 'Quartos', color: 'text-red-500' },
         { icon: faShower, value: imovel.banheiros, unit: 'Banheiros', color: 'text-blue-500' },
         { icon: faCar, value: imovel.vagasGaragem, unit: 'Vagas', color: 'text-gray-500' },
