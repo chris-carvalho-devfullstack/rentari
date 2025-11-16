@@ -25,23 +25,31 @@ export interface CondominioData {
     areaLazer?: boolean;
 }
 
-// === NOVAS ESTRUTURAS INTERNAS (REQUISITO ESTRUTURAL) ===
+// NOVO: Detalhes da Piscina (Privativa do Imóvel)
+export interface PiscinaPrivativaData {
+    possuiPiscina: boolean;
+    tipo?: 'VINIL' | 'AZULEJO' | 'FIBRA' | 'NATURAL';
+    aquecida?: boolean;
+}
+
+// === NOVAS ESTRUTURAS INTERNAS (AGORA OTIMIZADAS PARA ARRAYS) ===
 export interface CozinhaData {
-    tipo: 'AMERICANA' | 'FECHADA' | 'GOURMET' | 'INTEGRADA' | 'INDUSTRIAL';
+    tipo: 'AMERICANA' | 'FECHADA' | 'GOURMET' | 'ILHA' | 'INTEGRADA' | 'INDUSTRIAL' | 'DE_SERVICO' | 'COPA_COZINHA' | 'OUTRA';
+    nomeCustomizado?: string; // Ex: "Cozinha 1", "Cozinha Gourmet"
     possuiArmarios?: boolean;
-    possuiDispensa?: boolean; // Mapeado para o novo campo de dispensa
 }
 
 export interface SalaData {
-    tipo: 'ESTAR_JANTAR' | 'ESTAR' | 'JANTAR' | 'TV' | 'ESCRITORIO' | 'OUTRA';
-    qtdSalas: number;
-    possuiVaranda?: boolean; // Mapeado para o novo campo de varanda
+    tipo: 'ESTAR' | 'JANTAR' | 'TV' | 'ESCRITORIO' | 'HOME_OFFICE' | 'CINEMA' | 'JOGOS' | 'CONJUGADA' | 'OUTRA';
+    nomeCustomizado?: string; // Ex: "Sala de Estar", "Home Office"
+    qtdAssentos?: number; // Para salas de cinema/estar
 }
 
 export interface VarandaData {
-    possuiVaranda: boolean;
-    tipo?: 'SIMPLES' | 'GOURMET' | 'FECHADA';
+    tipo: 'SIMPLES' | 'GOURMET' | 'FECHADA' | 'TERRACO'; // Adicionado TERRACO
+    nomeCustomizado?: string; // Ex: "Varanda Principal", "Terraço"
     possuiChurrasqueira?: boolean;
+    temFechamentoVidro?: boolean;
 }
 
 export interface DispensaData {
@@ -51,7 +59,7 @@ export interface DispensaData {
 
 /**
  * Define a estrutura de dados robusta para um Imóvel na plataforma Rentou.
- * ATUALIZADO: Inclui EnderecoImovel, CondominioData, Dados de Cômodos e Responsabilidades Financeiras.
+ * ATUALIZADO: Cômodos principais agora são ARRAYS.
  */
 export interface Imovel {
   /** ID técnico (Firestore Document ID) */
@@ -73,19 +81,24 @@ export interface Imovel {
   endereco: EnderecoImovel; // <-- MUDANÇA: Objeto EnderecoImovel
   condominio: CondominioData; // <-- MUDANÇA: Objeto CondominioData
   
-  // === 2. Detalhes Estruturais ===
+  // === 2. Detalhes Estruturais (ATUALIZADOS) ===
   quartos: number;
-  banheiros: number;
+  suites: number; // NOVO: Contagem separada de suítes
+  banheiros: number; 
+  lavabos: number; // NOVO: Contagem de lavabos
+  banheirosServico: number; // NOVO: Contagem de banheiros de serviço
   vagasGaragem: number;
   areaTotal: number; 
   areaUtil: number; 
   andar?: number; 
   
-  // NOVO: Detalhes de Cômodos
-  cozinha: CozinhaData;
-  sala: SalaData;
-  varanda: VarandaData;
-  dispensa: DispensaData;
+  piscinaPrivativa: PiscinaPrivativaData; // NOVO: Piscina Privativa
+  
+  // NOVO: Detalhes de Cômodos - ARRAYS
+  cozinhas: CozinhaData[]; // <-- MUDANÇA CRÍTICA
+  salas: SalaData[];       // <-- MUDANÇA CRÍTICA
+  varandas: VarandaData[]; // <-- MUDANÇA CRÍTICA
+  dispensa: DispensaData; // Mantido como objeto único (estrutura simples)
   
   // === 3. Descrição e Comodidades ===
   descricaoLonga: string;

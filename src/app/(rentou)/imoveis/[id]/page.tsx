@@ -14,6 +14,7 @@ import {
     SalaData, 
     VarandaData, 
     DispensaData, 
+    PiscinaPrivativaData, // NOVO
     ResponsavelPagamento 
 } from '@/types/imovel'; 
 import { Icon } from '@/components/ui/Icon';
@@ -23,7 +24,8 @@ import {
     faMoneyBillWave, faTrashAlt, faEdit, faCheckCircle, faBan, 
     faClock, faShieldAlt, faTag, faDollarSign, faClipboardList,
     faChevronLeft, faChevronRight, faInfoCircle, faCalendarAlt, faWallet, faImage,
-    faKey, faHome, faGlobe, faUsers, faUtensils, faCouch, faWarehouse
+    faKey, faHome, faGlobe, faUsers, faUtensils, faCouch, faWarehouse,
+    faToilet, faWater
 } from '@fortawesome/free-solid-svg-icons';
 
 // Componente utilitário para formatação de moeda
@@ -154,17 +156,6 @@ interface StructuralSpecItem {
     color: string;
 }
 
-// --- Componente SpecPill (Apenas para as métricas numéricas) ---
-const SpecPill: React.FC<StructuralSpecItem> = ({ icon, value, unit, color }) => (
-    <div className="flex items-center space-x-2 p-3 bg-gray-100 dark:bg-zinc-700 rounded-full shadow-inner print:hidden">
-        <Icon icon={icon} className={`w-5 h-5 flex-shrink-0 ${color}`} />
-        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            {value}
-            {unit && <span className="text-xs font-medium ml-0.5 text-gray-500 dark:text-gray-400">{unit}</span>}
-        </p>
-    </div>
-);
-
 // --- Componente ClassificationPill (Para Tipo e Finalidade) ---
 const ClassificationPill: React.FC<{ icon: any; primary: string; secondary: string; color: string }> = ({ icon, primary, secondary, color }) => (
     <div className="flex items-center space-x-2 p-3 bg-gray-100 dark:bg-zinc-700 rounded-lg shadow-inner print:hidden border border-gray-200 dark:border-zinc-700">
@@ -176,86 +167,169 @@ const ClassificationPill: React.FC<{ icon: any; primary: string; secondary: stri
     </div>
 );
 
+// --- Componente para exibir Contagens em formato de ícone/pílula (Layout Principal) ---
+const CountPill: React.FC<{ icon: any; count: number | string; label: string; color: string }> = ({ icon, count, label, color }) => {
+    const displayValue = typeof count === 'number' ? count : count;
 
-// --- StructuralDetailsCard (CORRIGIDO PARA RECEBER E MOSTRAR DADOS NOVOS) ---
-const StructuralDetailsCard: React.FC<{ specs: StructuralSpecItem[], imovel: EnhancedImovel }> = ({ specs, imovel }) => (
-    <div className='p-5 bg-white dark:bg-zinc-800 rounded-xl shadow-md border border-gray-200 dark:border-zinc-700'>
-        <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2 flex items-center space-x-2">
-            <Icon icon={faRulerCombined} className='w-5 h-5 text-rentou-primary' />
-            <span>Especificações e Classificação</span>
-        </h3>
-        
-        {/* Bloco de Classificação */}
-        <div className="flex flex-wrap gap-3 mb-6">
-             <ClassificationPill
-                icon={faBuilding}
-                primary={imovel.tipoDetalhado} 
-                secondary={imovel.categoriaPrincipal} 
-                color="text-rentou-primary"
-            />
-            <ClassificationPill
-                icon={faUsers} 
-                primary={imovel.finalidades.join(' / ')}
-                secondary="Finalidade(s)" 
-                color="text-indigo-500"
-            />
-        </div>
-        
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {specs.map((spec, index) => (
-                <div key={index} className="flex flex-col items-center justify-center p-3 border border-gray-100 dark:border-zinc-700 rounded-lg">
-                    <Icon icon={spec.icon} className={`w-6 h-6 ${spec.color}`} />
-                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
-                        {spec.value}
-                    </p>
-                    <p className="text-xs font-medium text-gray-500 uppercase mt-0.5">{spec.unit}</p>
-                </div>
-            ))}
-        </div>
-        
-        {/* NOVO: DETALHES DE COMODOS INTEGRADOS */}
-        <div className="mt-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-             <h4 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center space-x-2">
-                <Icon icon={faHome} className='w-5 h-5 text-gray-500' />
-                <span>Detalhes Internos dos Cômodos</span>
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 {/* Cozinha */}
-                <ReportDetailItem 
-                    icon={faUtensils} 
-                    label="Cozinha" 
-                    // Garante que o objeto exista e use fallback
-                    value={`${imovel.cozinha?.tipo?.replace('_', ' ').toLowerCase() || 'Fechada'} ${imovel.cozinha?.possuiArmarios ? ' - C/ Armários' : ''}`}
-                    border={false}
-                />
-                 {/* Dispensa */}
-                <ReportDetailItem 
-                    icon={faWarehouse} 
-                    label="Dispensa" 
-                    value={imovel.dispensa?.possuiDispensa ? `Sim ${imovel.dispensa.prateleirasEmbutidas ? ' (C/ Prateleiras)' : ''}` : 'Não possui'}
-                    border={false}
-                />
-                {/* Sala */}
-                 <ReportDetailItem 
-                    icon={faCouch} 
-                    label="Sala(s)" 
-                    value={`${imovel.sala?.qtdSalas || 1} Sala(s) - Tipo: ${imovel.sala?.tipo?.replace('_', ' ').toLowerCase() || 'Estar/Jantar'}`}
-                    border={false}
-                />
-                {/* Varanda */}
-                 <ReportDetailItem 
-                    icon={faBuilding} 
-                    label="Varanda/Terraço" 
-                    value={imovel.varanda?.possuiVaranda ? `${imovel.varanda?.tipo || 'Simples'} ${imovel.varanda.possuiChurrasqueira ? ' (C/ Churrasqueira Gourmet)' : ''}` : 'Não possui'}
-                    border={false}
-                />
-            </div>
-        </div>
-        {/* FIM DETALHES COMODOS */}
+    // Se o valor for 0 (e não for Quartos, Área, Vagas ou Andar), é omitido
+    if (displayValue === 0 && !label.includes('Quartos') && !label.includes('Área') && !label.includes('Vagas') && !label.includes('Andar')) return null;
 
+    // Formata o valor se for área (exibindo apenas o número inteiro)
+    const formattedValue = label.includes('(m²)') && typeof displayValue === 'number' ? displayValue.toFixed(0) : displayValue;
+    const unitText = label.includes('(m²)') ? 'm²' : label.includes('Andar') ? '' : label.includes('Privativa') ? '' : '';
+    const displayLabel = label.replace(/\s*\(m²\)|\s*\([^)]*\)/g, '').toUpperCase(); // Remove (m²) ou outros detalhes para o label
+
+    return (
+        <div className="flex flex-col items-center justify-center p-3 border border-gray-100 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-700/50 shadow-sm">
+            <Icon icon={icon} className={`w-6 h-6 ${color}`} />
+            <p className="text-xl font-bold text-gray-900 dark:text-gray-100 mt-1">
+                {formattedValue}
+            </p>
+            <p className="text-xs font-medium text-gray-500 uppercase mt-0.5 text-center">{displayLabel} {unitText}</p>
+        </div>
+    );
+};
+// --- FIM Componente CountPill ---
+
+// --- NOVO Componente para Padronizar Detalhes Internos ---
+interface RoomDetailPillProps {
+    icon: any;
+    title: string;
+    description: string;
+    small?: boolean; // Adicionado para permitir grid mais denso
+}
+
+const RoomDetailPill: React.FC<RoomDetailPillProps> = ({ icon, title, description, small = false }) => (
+    <div className={`flex flex-col p-3 border border-gray-200 dark:border-zinc-700 rounded-lg ${small ? 'bg-white dark:bg-zinc-800' : 'bg-gray-50 dark:bg-zinc-700/50'}`}>
+        <div className="flex items-center space-x-3 mb-1">
+            <Icon icon={icon} className="w-5 h-5 flex-shrink-0 text-rentou-primary dark:text-blue-400" />
+            <span className={`font-bold ${small ? 'text-sm' : 'text-base'} text-gray-800 dark:text-gray-100`}>{title}</span>
+        </div>
+        <p className={`text-xs text-gray-600 dark:text-gray-400 ${small ? 'mt-0.5' : 'mt-1'} leading-relaxed`}>
+            {description}
+        </p>
     </div>
 );
-// --- FIM StructuralDetailsCard ---
+// --- FIM RoomDetailPill ---
+
+
+// --- StructuralDetailsCard (UNIFORMIZADO) ---
+const StructuralDetailsCard: React.FC<{ specs: StructuralSpecItem[], imovel: EnhancedImovel }> = ({ specs, imovel }) => {
+    
+    // Contagens fixas
+    const staticPills = [
+        { icon: faBed, count: imovel.quartos, label: 'Quartos', color: 'text-red-500' },
+        { icon: faBed, count: imovel.suites, label: 'Suítes', color: 'text-purple-500' },
+        { icon: faShower, count: imovel.banheiros, label: 'Banheiros Sociais', color: 'text-blue-500' },
+        { icon: faToilet, count: imovel.lavabos, label: 'Lavabos', color: 'text-gray-500' },
+        { icon: faShower, count: imovel.banheirosServico, label: 'Banh. Serviço', color: 'text-gray-500' },
+        { icon: faCar, count: imovel.vagasGaragem, label: 'Vagas Garagem', color: 'text-gray-500' },
+        
+        // Áreas
+        { icon: faRulerCombined, count: imovel.areaUtil, label: 'Área Útil (m²)', color: 'text-green-600' },
+        { icon: faRulerCombined, count: imovel.areaTotal, label: 'Área Total (m²)', color: 'text-yellow-600' },
+        
+        // Andar (Condicional)
+        ...(imovel.categoriaPrincipal === 'Residencial' && imovel.tipoDetalhado.includes('Apartamento') ? 
+            [{ icon: faBuilding, count: imovel.andar || 'Térreo', label: 'Andar', color: 'text-yellow-600' }] : []
+        ),
+
+        // Piscina Privativa (Condicional)
+        ...(imovel.piscinaPrivativa.possuiPiscina ? 
+            [{ 
+                icon: faWater, 
+                count: imovel.piscinaPrivativa.tipo || 'Piscina', 
+                label: imovel.piscinaPrivativa.aquecida ? 'Aquecida' : 'Privativa', 
+                color: 'text-teal-500'
+            }] : []
+        ),
+    ];
+    
+    // Mapeamento dos Detalhes Internos para o novo formato Padronizado
+    const internalDetails = [
+        // Cozinhas
+        ...imovel.cozinhas.map((c, index) => ({
+            icon: faUtensils,
+            title: c.nomeCustomizado || `Cozinha ${index + 1}`,
+            description: `${c.tipo.replace('_', ' ').toLowerCase()} ${c.possuiArmarios ? ' - C/ Armários' : ''}`,
+        })),
+        // Salas
+        ...imovel.salas.map((s, index) => ({
+            icon: faCouch,
+            title: s.nomeCustomizado || `Sala ${index + 1}`,
+            description: `${s.tipo?.replace('_', ' ').toLowerCase() || 'Estar'} (${s.qtdAssentos || 0} assentos)`,
+        })),
+        // Varandas
+        ...imovel.varandas.map((v, index) => ({
+            icon: faBuilding,
+            title: v.nomeCustomizado || `Varanda ${index + 1}`,
+            description: `${v.tipo?.replace('_', ' ') || 'Simples'} ${v.possuiChurrasqueira ? ' (Gourmet)' : ''} ${v.temFechamentoVidro ? ' (Fechada)' : ''}`,
+        })),
+        // Dispensa (Única)
+        ...(imovel.dispensa?.possuiDispensa ? 
+            [{
+                icon: faWarehouse,
+                title: 'Dispensa',
+                description: `Sim ${imovel.dispensa.prateleirasEmbutidas ? ' - C/ Prateleiras' : ''}`,
+            }] : []
+        ),
+    ];
+
+
+    return (
+        <div className='p-5 bg-white dark:bg-zinc-800 rounded-xl shadow-md border border-gray-200 dark:border-zinc-700'>
+            <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4 border-b pb-2 flex items-center space-x-2">
+                <Icon icon={faRulerCombined} className='w-5 h-5 text-rentou-primary' />
+                <span>Especificações Estruturais</span>
+            </h3>
+            
+            {/* Bloco de Classificação (Tipo e Finalidade) */}
+            <div className="flex flex-wrap gap-3 mb-6">
+                 <ClassificationPill
+                    icon={faBuilding}
+                    primary={imovel.tipoDetalhado} 
+                    secondary={imovel.categoriaPrincipal} 
+                    color="text-rentou-primary"
+                />
+                <ClassificationPill
+                    icon={faUsers} 
+                    primary={imovel.finalidades.join(' / ')}
+                    secondary="Finalidade(s)" 
+                    color="text-indigo-500"
+                />
+            </div>
+            
+            {/* Grid de Contagens Uniformizada (Quartos, Banheiros, Vagas, Áreas, Andar, Piscina) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 border-b pb-4 border-gray-100 dark:border-zinc-700 mb-4">
+                {staticPills.map((pill, index) => (
+                    <CountPill key={index} {...pill} />
+                ))}
+            </div>
+            
+            {/* NOVO: Detalhes Internos dos Cômodos (Layout Padronizado em Grid) */}
+            <div className="mt-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                 <h4 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-3 flex items-center space-x-2">
+                    <Icon icon={faHome} className='w-5 h-5 text-gray-500' />
+                    <span>Detalhes Internos dos Cômodos ({internalDetails.length})</span>
+                </h4>
+                
+                {/* Utiliza o RoomDetailPill para cada cômodo interno */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     {internalDetails.map((detail, index) => (
+                        <RoomDetailPill
+                            key={`room-detail-${index}`}
+                            icon={detail.icon}
+                            title={detail.title}
+                            description={detail.description}
+                        />
+                     ))}
+                </div>
+            </div>
+            {/* FIM DETALHES COMODOS */}
+
+        </div>
+    );
+};
 
 
 // --- Componente de Galeria de Imagens (Mantido) ---
@@ -335,7 +409,7 @@ export default function ImovelDetalhePage() {
             try {
                 const data = await fetchImovelPorSmartId(id as string);
                 
-                // === CORREÇÃO: Tratamento para 'data' possivelmente undefined ===
+                // === CORREÇÃO DO COMMIT ANTERIOR: Tratamento para 'data' possivelmente undefined ===
                 if (!data) {
                     throw new Error('Imóvel não encontrado.');
                 }
@@ -349,10 +423,11 @@ export default function ImovelDetalhePage() {
                 const enhancedData: EnhancedImovel = { 
                     ...data,
                     // Garante que os objetos de cômodos existam para evitar crashes
-                    cozinha: data.cozinha || {} as CozinhaData, 
-                    sala: data.sala || {} as SalaData,
-                    varanda: data.varanda || {} as VarandaData,
+                    cozinhas: data.cozinhas || [], // Agora arrays
+                    salas: data.salas || [],       // Agora arrays
+                    varandas: data.varandas || [], // Agora arrays
                     dispensa: data.dispensa || {} as DispensaData,
+                    piscinaPrivativa: data.piscinaPrivativa || {} as PiscinaPrivativaData, // NOVO
                     // Determina se o valor total deve ser calculado (Simulando flag)
                     isTotalPackage: data.custoCondominioIncluso || data.custoIPTUIncluso || (data.valorCondominio > 100), // Simulação
                 } as EnhancedImovel;
@@ -394,18 +469,28 @@ export default function ImovelDetalhePage() {
 
     const handleDelete = async () => { /* Lógica de exclusão */ };
 
-    // Lista de especificações estruturais (agora com Área Total e Andar)
+    // Lista de especificações estruturais (AGORA SÓ PARA ÁREAS E DETALHES)
     const structuralSpecs: StructuralSpecItem[] = [
-        { icon: faBed, value: imovel.quartos, unit: 'Quartos', color: 'text-red-500' },
-        { icon: faShower, value: imovel.banheiros, unit: 'Banheiros', color: 'text-blue-500' },
-        { icon: faCar, value: imovel.vagasGaragem, unit: 'Vagas', color: 'text-gray-500' },
+        // Áreas
         { icon: faRulerCombined, value: imovel.areaTotal, unit: 'm² Total', label: 'Área Total', color: 'text-yellow-600' },
         { icon: faRulerCombined, value: imovel.areaUtil, unit: 'm² Útil', label: 'Área Útil', color: 'text-green-600' },
     ];
     
+    // Adiciona Andar se for Apartamento
     if (imovel.categoriaPrincipal === 'Residencial' && imovel.tipoDetalhado.includes('Apartamento')) {
         structuralSpecs.push({ icon: faBuilding, value: imovel.andar || 'Térreo', unit: 'Andar', color: 'text-yellow-600', label: 'Andar' });
     }
+    
+    // Adiciona Piscina Privativa
+    if (imovel.piscinaPrivativa.possuiPiscina) {
+        structuralSpecs.push({ 
+            icon: faWater, 
+            value: imovel.piscinaPrivativa.tipo || 'Piscina', 
+            unit: imovel.piscinaPrivativa.aquecida ? '(Aquecida)' : '(Não Aquecida)', 
+            color: 'text-teal-500'
+        });
+    }
+
 
     return (
         <div className="space-y-8 max-w-7xl mx-auto p-4 sm:p-0">

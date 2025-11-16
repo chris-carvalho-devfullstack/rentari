@@ -7,13 +7,13 @@ import { useRouter } from 'next/navigation';
 import { adicionarNovoImovel, atualizarImovel, updateImovelFotos } from '@/services/ImovelService'; 
 import { uploadImovelPhotos, deleteFotoImovel } from '@/services/StorageService'; 
 // ATUALIZADO: Importar TODOS os novos tipos, incluindo Cômodos e Responsabilidade
-import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, CozinhaData, SalaData, VarandaData, DispensaData, ResponsavelPagamento } from '@/types/imovel'; 
+import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, CozinhaData, SalaData, VarandaData, DispensaData, PiscinaPrivativaData, ResponsavelPagamento } from '@/types/imovel'; 
 import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
 import { useAuthStore } from '@/hooks/useAuthStore';
 // Importação do serviço de CEP
 import { fetchAddressByCep, CepData } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, faTag } from '@fortawesome/free-solid-svg-icons'; 
+import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, faTag, faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, faShower, faToilet, faWater, faBed } from '@fortawesome/free-solid-svg-icons'; 
 
 interface FormularioImovelProps {
     initialData?: Imovel;
@@ -27,38 +27,37 @@ const formSteps = [
     { id: 4, name: 'Mídia & Fotos' }, 
 ];
 
-// --- NOVAS ESTRUTURAS DEFAULT (Corrigido) ---
-const defaultCozinha: CozinhaData = {
+// --- NOVAS ESTRUTURAS DEFAULT PARA ARRAYS ---
+
+// Item default para Cozinha (usado para inicializar ou adicionar novo)
+const defaultCozinhaItem: CozinhaData = {
     tipo: 'FECHADA',
+    nomeCustomizado: '', 
     possuiArmarios: false,
-    possuiDispensa: false,
 };
 
-const defaultSala: SalaData = {
-    tipo: 'ESTAR_JANTAR',
-    qtdSalas: 1,
-    possuiVaranda: false,
+// Item default para Sala (usado para inicializar ou adicionar novo)
+const defaultSalaItem: SalaData = {
+    tipo: 'ESTAR',
+    nomeCustomizado: '', 
+    qtdAssentos: 1,
 };
 
-const defaultVaranda: VarandaData = {
-    possuiVaranda: false,
+// Item default para Varanda (usado para inicializar ou adicionar novo)
+const defaultVarandaItem: VarandaData = {
     tipo: 'SIMPLES',
+    nomeCustomizado: '', 
     possuiChurrasqueira: false,
+    temFechamentoVidro: false,
 };
-
-const defaultDispensa: DispensaData = {
-    possuiDispensa: false,
-    prateleirasEmbutidas: false,
-};
-// --- FIM NOVAS ESTRUTURAS ---
-
 
 // Estruturas default aninhadas (existentes)
 const defaultEndereco: EnderecoImovel = { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', pais: 'Brasil' };
 const defaultCondominio: CondominioData = { possuiCondominio: false, nomeCondominio: '', portaria24h: false, areaLazer: false };
+const defaultDispensa: DispensaData = { possuiDispensa: false, prateleirasEmbutidas: false };
+const defaultPiscina: PiscinaPrivativaData = { possuiPiscina: false, tipo: 'AZULEJO', aquecida: false }; // NOVO
 
-
-// --- DEFAULT DATA PRINCIPAL (ATUALIZADO COM OS NOVOS CAMPOS) ---
+// --- DEFAULT DATA PRINCIPAL (ATUALIZADO COM OS NOVOS CAMPOS DE ARRAY) ---
 const defaultFormData: NovoImovelData = {
     titulo: '',
     categoriaPrincipal: 'Residencial', 
@@ -67,17 +66,22 @@ const defaultFormData: NovoImovelData = {
     endereco: defaultEndereco, 
     condominio: defaultCondominio, 
     quartos: 1,
-    banheiros: 1,
+    suites: 0, // NOVO
+    banheiros: 1, 
+    lavabos: 0, // NOVO
+    banheirosServico: 0, // NOVO
     vagasGaragem: 0,
     areaTotal: 0, 
     areaUtil: 0, 
     andar: 1,
     
-    // NOVO: Estrutura de Cômodos
-    cozinha: defaultCozinha,
-    sala: defaultSala,
-    varanda: defaultVaranda,
-    dispensa: defaultDispensa,
+    piscinaPrivativa: defaultPiscina, // NOVO
+    
+    // MUDANÇA CRÍTICA: Inicializa com arrays vazios. O usuário deve adicionar.
+    cozinhas: [], 
+    salas: [],       
+    varandas: [],                   
+    dispensa: defaultDispensa,      
 
     descricaoLonga: '',
     caracteristicas: [], 
@@ -88,7 +92,6 @@ const defaultFormData: NovoImovelData = {
     valorIPTU: 0,
     dataDisponibilidade: new Date().toISOString().split('T')[0],
     
-    // NOVO: Responsabilidades Financeiras
     custoCondominioIncluso: false,
     responsavelCondominio: 'LOCATARIO',
     custoIPTUIncluso: false,
@@ -101,10 +104,10 @@ const defaultFormData: NovoImovelData = {
 
 
 const isNumericField = (name: string): boolean => 
-    ['quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 
+    ['quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 
      'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar'].includes(name);
 
-// ATUALIZADO: Inicia o estado com a nova estrutura aninhada
+// ATUALIZADO: Inicia o estado com a nova estrutura de ARRAY
 const getInitialState = (initialData?: Imovel) => {
     const initialDataPayload = initialData || {} as Imovel;
 
@@ -115,10 +118,13 @@ const getInitialState = (initialData?: Imovel) => {
         // Garante que os objetos aninhados sejam mesclados corretamente
         endereco: { ...defaultEndereco, ...(initialDataPayload.endereco || {}) },
         condominio: { ...defaultCondominio, ...(initialDataPayload.condominio || {}) },
-        cozinha: { ...defaultCozinha, ...(initialDataPayload.cozinha || {}) },
-        sala: { ...defaultSala, ...(initialDataPayload.sala || {}) },
-        varanda: { ...defaultVaranda, ...(initialDataPayload.varanda || {}) },
         dispensa: { ...defaultDispensa, ...(initialDataPayload.dispensa || {}) },
+        piscinaPrivativa: { ...defaultPiscina, ...(initialDataPayload.piscinaPrivativa || {}) }, // NOVO
+        
+        // Prioriza os arrays do initialData. Se não existirem, usa arrays vazios.
+        cozinhas: (initialDataPayload.cozinhas?.length > 0) ? initialDataPayload.cozinhas : [],
+        salas: (initialDataPayload.salas?.length > 0) ? initialDataPayload.salas : [],
+        varandas: (initialDataPayload.varandas?.length > 0) ? initialDataPayload.varandas : [],
 
         // Garantias de tipos
         categoriaPrincipal: initialDataPayload.categoriaPrincipal || defaultFormData.categoriaPrincipal,
@@ -132,7 +138,9 @@ const getInitialState = (initialData?: Imovel) => {
     const initialLocalInputs: Record<string, string> = {};
     initialLocalInputs['endereco.cep'] = initialFormData.endereco.cep ? initialFormData.endereco.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''; 
     
-    Object.keys(initialFormData).filter(isNumericField).forEach(keyString => {
+    // Inclui novos campos de contagem na inicialização de inputs locais
+    const numericFields = Object.keys(defaultFormData).filter(isNumericField);
+    numericFields.forEach(keyString => {
         const numericValue = (initialFormData as any)[keyString] as number;
         initialLocalInputs[keyString] = String(numericValue === 0 ? '' : numericValue);
     });
@@ -142,7 +150,6 @@ const getInitialState = (initialData?: Imovel) => {
 
 
 // --- COMPONENTES AUXILIARES DEFINIDOS ANTES DO EXPORT DEFAULT ---
-
 const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
     <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
         <input
@@ -151,7 +158,7 @@ const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; o
             type="checkbox"
             checked={checked}
             onChange={onChange}
-            className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary"
+            className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary focus:border-rentou-primary"
         />
         <div className="flex flex-col">
             <label htmlFor={name} className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
@@ -160,7 +167,6 @@ const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; o
     </div>
 );
 
-// CORRIGIDO: Componente SelectResponsabilidade
 const SelectResponsabilidade: React.FC<{ label: string, name: string, value: ResponsavelPagamento, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void }> = ({ label, name, value, onChange }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
@@ -202,6 +208,173 @@ const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracterist
         </div>
     );
 };
+// --- FIM COMPONENTES AUXILIARES ---
+
+// --- COMPONENTES DE GRUPO DINÂMICO ---
+// Componente de controle para adição/remoção (sem quebrar a estilização)
+interface RoomGroupControlsProps {
+    onAdd: () => void;
+    onRemove: (index: number) => void;
+    index: number;
+    count: number;
+}
+
+const RoomGroupControls: React.FC<RoomGroupControlsProps> = ({ onAdd, onRemove, index, count }) => (
+    <div className="flex justify-end space-x-2 pt-2 border-t border-gray-200 dark:border-zinc-700 mt-4">
+        {count > 0 && (
+            <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="flex items-center text-red-500 hover:text-red-700 transition-colors text-sm font-medium"
+            >
+                <Icon icon={faMinusCircle} className="w-4 h-4 mr-1" /> Remover
+            </button>
+        )}
+        {index === count - 1 && ( // Apenas o último item tem o botão Adicionar
+            <button
+                type="button"
+                onClick={onAdd}
+                className="flex items-center text-green-600 hover:text-green-800 transition-colors text-sm font-medium"
+            >
+                <Icon icon={faPlusCircle} className="w-4 h-4 mr-1" /> Adicionar Outro
+            </button>
+        )}
+    </div>
+);
+
+// Sub-Formulário para Cozinhas (usado dentro do loop)
+const CozinhaGroup: React.FC<{ item: CozinhaData, index: number, onChange: (name: string, value: any) => void, onAdd: () => void, onRemove: (index: number) => void, count: number }> = ({ item, index, onChange, onAdd, onRemove, count }) => {
+    const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        onChange(name, type === 'checkbox' ? (e.target as HTMLInputElement).checked : value);
+    };
+
+    return (
+        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700">
+            <h4 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center">
+                 <Icon icon={faUtensils} className="w-4 h-4 mr-2" /> {item.nomeCustomizado || `Cozinha ${index + 1}`}
+            </h4>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor={`cozinha-${index}-tipo`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Cozinha</label>
+                    <select id={`cozinha-${index}-tipo`} name="tipo" value={item.tipo || ''} onChange={handleLocalChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                        <option value="" disabled>Selecione o Tipo...</option>
+                        <option value="FECHADA">Fechada (Padrão)</option>
+                        <option value="AMERICANA">Americana</option>
+                        <option value="GOURMET">Gourmet</option>
+                        <option value="ILHA">Com Ilha</option>
+                        <option value="INTEGRADA">Integrada (Loft)</option>
+                        <option value="INDUSTRIAL">Industrial</option>
+                        <option value="DE_SERVICO">De Serviço (Secundária)</option>
+                        <option value="COPA_COZINHA">Copa Cozinha</option>
+                        <option value="OUTRA">Outra / Não Listada</option>
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor={`cozinha-${index}-nome`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome (Ex: Gourmet)</label>
+                    <input id={`cozinha-${index}-nome`} name="nomeCustomizado" type="text" value={item.nomeCustomizado || ''} onChange={handleLocalChange} placeholder={`Cozinha ${index + 1}`} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                </div>
+            </div>
+            <div className="mt-4">
+                 <CheckboxInput 
+                    label="Possui Armários Planejados?" 
+                    name="possuiArmarios" 
+                    checked={item.possuiArmarios || false} 
+                    onChange={handleLocalChange} 
+                />
+            </div>
+            
+            <RoomGroupControls onAdd={onAdd} onRemove={onRemove} index={index} count={count} />
+        </div>
+    );
+};
+
+// Sub-Formulário para Salas
+const SalaGroup: React.FC<{ item: SalaData, index: number, onChange: (name: string, value: any) => void, onAdd: () => void, onRemove: (index: number) => void, count: number }> = ({ item, index, onChange, onAdd, onRemove, count }) => {
+    const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        onChange(name, type === 'number' ? parseInt(value) : value);
+    };
+
+    return (
+        <div className="p-4 border rounded-lg bg-blue-50 dark:bg-zinc-700/50">
+            <h4 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center">
+                 <Icon icon={faCouch} className="w-4 h-4 mr-2" /> {item.nomeCustomizado || `Sala ${index + 1}`}
+            </h4>
+            
+            <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label htmlFor={`sala-${index}-tipo`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Sala</label>
+                    <select id={`sala-${index}-tipo`} name="tipo" value={item.tipo || ''} onChange={handleLocalChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                        <option value="" disabled>Selecione o Tipo...</option>
+                        <option value="ESTAR">Estar</option>
+                        <option value="JANTAR">Jantar</option>
+                        <option value="TV">TV / Home Theater</option>
+                        <option value="ESCRITORIO">Escritório</option>
+                        <option value="HOME_OFFICE">Home Office (Dedicado)</option>
+                        <option value="CINEMA">Cinema (Dedicado)</option>
+                        <option value="JOGOS">Jogos</option>
+                        <option value="CONJUGADA">Conjugada (Estar/Jantar)</option>
+                        <option value="OUTRA">Outra / Não Listada</option>
+                    </select>
+                </div>
+                 <div>
+                    <label htmlFor={`sala-${index}-nome`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome (Ex: de Estar)</label>
+                    <input id={`sala-${index}-nome`} name="nomeCustomizado" type="text" value={item.nomeCustomizado || ''} onChange={handleLocalChange} placeholder={`Sala ${index + 1}`} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                </div>
+            </div>
+            
+            <div className="mt-4">
+                 <label htmlFor={`sala-${index}-assentos`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Capacidade (Assentos Estimação)</label>
+                 <input id={`sala-${index}-assentos`} name="qtdAssentos" type="text" value={item.qtdAssentos || 0} onChange={handleLocalChange} placeholder="4" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+            </div>
+
+            <RoomGroupControls onAdd={onAdd} onRemove={onRemove} index={index} count={count} />
+        </div>
+    );
+};
+
+// Sub-Formulário para Varandas
+const VarandaGroup: React.FC<{ item: VarandaData, index: number, onChange: (name: string, value: any) => void, onAdd: () => void, onRemove: (index: number) => void, count: number }> = ({ item, index, onChange, onAdd, onRemove, count }) => {
+     const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        onChange(name, type === 'checkbox' ? (e.target as HTMLInputElement).checked : value);
+    };
+    
+    return (
+        <div className="p-4 border rounded-lg bg-yellow-50 dark:bg-zinc-700/50">
+            <h4 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center">
+                 <Icon icon={faBuilding} className="w-4 h-4 mr-2" /> {item.nomeCustomizado || `Varanda ${index + 1}`}
+            </h4>
+            
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor={`varanda-${index}-tipo`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Varanda</label>
+                    <select id={`varanda-${index}-tipo`} name="tipo" value={item.tipo || ''} onChange={handleLocalChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                        <option value="" disabled>Selecione o Tipo...</option>
+                        <option value="SIMPLES">Simples (Aberto)</option>
+                        <option value="GOURMET">Gourmet (Com Infra)</option>
+                        <option value="FECHADA">Fechada (Vidro/Reiki)</option>
+                        <option value="TERRACO">Terraço</option>
+                    </select>
+                </div>
+                 <div>
+                    <label htmlFor={`varanda-${index}-nome`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome (Ex: Social)</label>
+                    <input id={`varanda-${index}-nome`} name="nomeCustomizado" type="text" value={item.nomeCustomizado || ''} onChange={handleLocalChange} placeholder={`Varanda ${index + 1}`} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 mt-4">
+                 <CheckboxInput label="Possui Churrasqueira?" name="possuiChurrasqueira" checked={item.possuiChurrasqueira || false} onChange={handleLocalChange} description="Infraestrutura ou churrasqueira embutida." />
+                 <CheckboxInput label="Fechamento de Vidro (Reiki)?" name="temFechamentoVidro" checked={item.temFechamentoVidro || false} onChange={handleLocalChange} description="Painéis deslizantes de vidro." />
+            </div>
+
+            <RoomGroupControls onAdd={onAdd} onRemove={onRemove} index={index} count={count} />
+        </div>
+    );
+};
+// --- FIM COMPONENTES DE GRUPO DINÂMICO ---
 
 
 /**
@@ -265,17 +438,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     }, [formData.categoriaPrincipal, tiposDisponiveis]); 
 
-    // --- CORRIGIDO: Lógica de Alteração Centralizada ---
+    // --- CORRIGIDO: Lógica de Alteração Centralizada (Objetos Simples) ---
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         const target = e.target;
         const isCheckbox = type === 'checkbox';
         
-        // 1. Lida com campos aninhados (incluindo as novas estruturas de Cômodos)
-        if (name.includes('.') || 
-            name.includes('cozinha') || name.includes('sala') || 
-            name.includes('varanda') || name.includes('dispensa')
-        ) {
+        // 1. Lida com campos aninhados (Objetos Simples: Endereço, Condomínio, Dispensa, PiscinaPrivativa)
+        if (name.includes('.')) {
             const parts = name.split('.');
             const mainKey = parts[0] as keyof NovoImovelData; 
             const subKey = parts.length > 1 ? parts[1] : undefined;
@@ -288,8 +458,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 return;
             }
 
-            // Tratamento para objetos aninhados (Condomínio, Cozinha, Sala, Varanda, Dispensa, Endereço)
-             if (subKey) {
+            // Tratamento para objetos aninhados (Condomínio, Dispensa, Endereço, PiscinaPrivativa)
+             if (subKey && (mainKey === 'endereco' || mainKey === 'condominio' || mainKey === 'dispensa' || mainKey === 'piscinaPrivativa')) {
                  setFormData(prevData => ({
                     ...prevData,
                     [mainKey]: { 
@@ -299,17 +469,9 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 }));
                 return;
             }
-            // Se for apenas 'endereco' no root
-             if (mainKey === 'endereco') {
-                 setFormData(prevData => ({
-                    ...prevData,
-                    endereco: { ...(prevData.endereco), [subKey || mainKey]: value },
-                }));
-                return;
-            }
         }
 
-        // 2. Lida com campos no primeiro nível (incluindo as novas flags financeiras)
+        // 2. Lida com campos no primeiro nível
         if (isNumericField(name)) {
             setLocalNumericInputs(prev => ({ ...prev, [name]: value }));
             return;
@@ -336,7 +498,54 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             [name]: isCheckbox ? (target as HTMLInputElement).checked : value,
         }));
     }, []); 
-    // --- FIM Lógica de Alteração Centralizada ---
+    // --- FIM Lógica de Alteração Centralizada (Objetos Simples) ---
+
+    // --- LÓGICA DE MANIPULAÇÃO DE ARRAYS (Cômodos Múltiplos) ---
+
+    // Handler genérico para adicionar item
+    const addRoom = useCallback((key: keyof NovoImovelData) => {
+        setFormData(prevData => {
+            let newItem: CozinhaData | SalaData | VarandaData;
+            if (key === 'cozinhas') newItem = { ...defaultCozinhaItem, nomeCustomizado: '' }; // Nome customizado vazio para forçar preenchimento
+            else if (key === 'salas') newItem = { ...defaultSalaItem, nomeCustomizado: '' }; 
+            else if (key === 'varandas') newItem = { ...defaultVarandaItem, nomeCustomizado: '' }; 
+            else return prevData;
+
+            return {
+                ...prevData,
+                [key]: [...(prevData[key] as any[]), newItem],
+            } as NovoImovelData;
+        });
+    }, []);
+    
+    // Handler genérico para remover item
+    const removeRoom = useCallback((key: keyof NovoImovelData, index: number) => {
+        setFormData(prevData => {
+            const list = (prevData[key] as any[]).filter((_, i) => i !== index);
+            return {
+                ...prevData,
+                [key]: list,
+            } as NovoImovelData;
+        });
+    }, []);
+
+    // Handler genérico para alterar item dentro do array
+    const handleRoomChange = useCallback((key: keyof NovoImovelData, index: number, field: string, value: any) => {
+         setFormData(prevData => {
+            const list = [...(prevData[key] as any[])];
+            const updatedItem = {
+                ...list[index],
+                [field]: value,
+            };
+            list[index] = updatedItem;
+            return {
+                ...prevData,
+                [key]: list,
+            } as NovoImovelData;
+        });
+    }, []);
+
+    // --- FIM LÓGICA DE MANIPULAÇÃO DE ARRAYS ---
 
 
     // Lógica para consolidar campos numéricos ao perder o foco
@@ -360,7 +569,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         
     }, []);
 
-    // --- FUNÇÃO PARA BUSCAR ENDEREÇO POR CEP ---
+    // --- FUNÇÃO PARA BUSCAR ENDEREÇO POR CEP (Mantida) ---
     const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
         const value = e.target.value;
         const cleanCep = value.replace(/\D/g, '');
@@ -444,7 +653,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         });
     }, []);
     
-    // --- Handlers de Foto ---
+    // --- Handlers de Foto (Mantidos) ---
     const getAvailableSlots = useCallback(() => {
         const currentValidPhotos = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
         const totalNewPhotos = novasFotos.length;
@@ -503,8 +712,13 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
         // Validação mínima da Etapa 2 (Novos campos)
         if (currentStep === 2) {
-             if (formData.varanda.possuiVaranda && !formData.varanda.tipo) {
-                 setError("Selecione o tipo de varanda.");
+            // Se houver cômodos dinâmicos, verifica se o tipo foi selecionado.
+            if (formData.cozinhas.some(c => !c.tipo) || formData.salas.some(s => !s.tipo) || formData.varandas.some(v => !v.tipo)) {
+                 setError("Certifique-se de que o campo 'Tipo' está selecionado para todos os Cômodos dinâmicos adicionados.");
+                 return;
+             }
+             if (formData.suites > formData.quartos) {
+                 setError("O número de suítes não pode ser maior que o número total de quartos.");
                  return;
              }
         }
@@ -512,7 +726,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         // Consolidação de Valores Numéricos
         const numericFieldsToConsolidate: string[] = ['areaTotal', 'areaUtil', 'valorAluguel', 'valorCondominio', 'valorIPTU'];
         if (currentStep === 2) {
-             numericFieldsToConsolidate.push('quartos', 'banheiros', 'vagasGaragem', 'andar');
+             numericFieldsToConsolidate.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar'); // NOVO
         }
         
         numericFieldsToConsolidate.forEach(name => {
@@ -547,7 +761,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             let finalFormData: NovoImovelData = { ...formData };
             
             // Consolidação final (Garantia para campos monetários/numéricos)
-            const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'banheiros', 'vagasGaragem', 'areaTotal', 'areaUtil', 'andar'];
+            const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'andar'];
             finalNumericFields.forEach(name => {
                 const value = localNumericInputs[name];
                 if (value !== undefined) {
@@ -559,6 +773,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             if (finalFormData.valorAluguel < 0 || isNaN(finalFormData.valorAluguel)) {
                 throw new Error('O valor do aluguel deve ser um número válido.');
             }
+            
+            // FILTRA PROPRIEDADES vazias e arrays vazios (para não salvar lixo)
+            finalFormData.cozinhas = finalFormData.cozinhas.filter(c => c.tipo);
+            finalFormData.salas = finalFormData.salas.filter(s => s.tipo);
+            finalFormData.varandas = finalFormData.varandas.filter(v => v.tipo);
+
 
             // 1. Cria ou atualiza o Imóvel no Firestore (sem a lista final de fotos)
             let result: Imovel;
@@ -603,7 +823,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             setLoading(false);
         }
     };
-
+    
+    
     const ProgressIndicator = () => {
         const percentage = formSteps.length > 1 ? Math.round(((currentStep - 1) / (formSteps.length - 1)) * 100) : 100;
 
@@ -678,72 +899,12 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         );
     };
 
-    // Componente Select/Responsabilidade (CORRIGIDO)
-    const SelectResponsabilidade: React.FC<{ label: string, name: string, value: ResponsavelPagamento, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void }> = ({ label, name, value, onChange }) => (
-        <div>
-            <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-            <select
-                id={name}
-                name={name}
-                value={value}
-                onChange={onChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-            >
-                <option value="LOCATARIO">Locatário (Inquilino)</option>
-                <option value="PROPRIETARIO">Proprietário</option>
-                <option value="NA_LOCACAO">Não Aplicável/Negociável</option>
-            </select>
-        </div>
-    );
-
-    const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
-        <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
-            <input
-                id={name}
-                name={name}
-                type="checkbox"
-                checked={checked}
-                onChange={onChange}
-                className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary"
-            />
-            <div className="flex flex-col">
-                <label htmlFor={name} className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-                {description && <p className="text-xs text-gray-500 dark:text-gray-400">{description}</p>}
-            </div>
-        </div>
-    );
-    
-    const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => {
-        const availableFeatures = ['Piscina', 'Churrasqueira', 'Academia', 'Portaria 24h', 'Mobiliado', 'Aquecimento a Gás', 'Salão de Festas', 'Quintal/Jardim', 'Elevador', 'Acessibilidade'];
-        return (
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {availableFeatures.map((feature) => (
-                        <button
-                            key={feature}
-                            type="button" 
-                            onClick={() => onSelect(feature)}
-                            className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 border ${
-                                selected.includes(feature)
-                                    ? 'bg-rentou-primary text-white border-rentou-primary shadow-md' // Selected: Fundo primário, Texto branco
-                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-300 dark:border-zinc-600 dark:hover:bg-zinc-700' // Unselected
-                            }`}
-                        >
-                            {feature}
-                        </button>
-                    ))}
-                </div>
-            </div>
-        );
-    };
-
     const renderStepContent = () => {
         switch (currentStep) {
             case 1:
                 return (
                     <div className="space-y-6">
-                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">1. Classificação e Localização</h3>
+                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">1. Classificação e Localização</h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Categoria Principal */}
@@ -807,23 +968,20 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                              {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
                         </div>
 
-                        {/* --- NOVO: SEÇÃO ENDEREÇO DETALHADO --- */}
+                        {/* --- SEÇÃO ENDEREÇO DETALHADO (Mantida) --- */}
                         <div className='space-y-4 p-4 border rounded-lg border-gray-200 dark:border-zinc-700'>
                              <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center mb-3">
                                 <Icon icon={faHome} className="w-4 h-4 mr-2" /> Endereço Completo
                             </h4>
                             
-                            {/* CEP (Primeira Opção e Busca) */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="md:col-span-1">
-                                    <label htmlFor="endereco.cep" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        CEP
-                                    </label>
+                                    <label htmlFor="endereco.cep" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CEP</label>
                                     <input
                                         id="endereco.cep"
                                         name="endereco.cep"
                                         type="text"
-                                        value={localNumericInputs['endereco.cep'] || ''} // Valor formatado
+                                        value={localNumericInputs['endereco.cep'] || ''}
                                         onChange={handleChange}
                                         onBlur={handleCepBlur}
                                         required
@@ -833,7 +991,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         disabled={loading}
                                     />
                                 </div>
-                                {/* Logradouro (Expande para o resto da linha) */}
                                 <div className="md:col-span-3">
                                     <label htmlFor="endereco.logradouro" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Logradouro (Rua, Av.)</label>
                                     <input
@@ -850,7 +1007,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             </div>
                             
                             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                                {/* Número */}
                                 <div>
                                     <label htmlFor="endereco.numero" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Número</label>
                                     <input
@@ -864,7 +1020,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                                     />
                                 </div>
-                                {/* Complemento */}
                                 <div>
                                     <label htmlFor="endereco.complemento" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Complemento (Opcional)</label>
                                     <input
@@ -877,7 +1032,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                                     />
                                 </div>
-                                {/* Bairro */}
                                 <div className="col-span-2">
                                     <label htmlFor="endereco.bairro" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bairro</label>
                                     <input
@@ -894,7 +1048,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             </div>
 
                             <div className="grid grid-cols-3 gap-4">
-                                {/* Cidade */}
                                 <div>
                                     <label htmlFor="endereco.cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</label>
                                     <input
@@ -908,7 +1061,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                                     />
                                 </div>
-                                {/* Estado (UF) */}
                                 <div>
                                     <label htmlFor="endereco.estado" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estado (UF)</label>
                                     <input
@@ -923,7 +1075,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                                     />
                                 </div>
-                                {/* País */}
                                 <div>
                                     <label htmlFor="endereco.pais" className="block text-sm font-medium text-gray-700 dark:text-gray-300">País</label>
                                     <input
@@ -1006,105 +1157,178 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     <div className="space-y-6">
                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Cômodos</h3>
                         
-                        {/* Linha: Quartos, Banheiros, Vagas, Andar */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        {/* Linha: Contagens de Quartos/Banheiros (ATUALIZADO) */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
                              {/* Quartos */}
                              <div>
-                                <label htmlFor="quartos" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quartos</label>
-                                <input id="quartos" name="quartos" type="text" required value={localNumericInputs['quartos'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="1" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                {renderNumericInput('quartos', 'Quartos (Total)', formData.quartos, '1')}
                             </div>
-                            {/* Banheiros */}
+                            {/* Suítes (NOVO) */}
                             <div>
-                                <label htmlFor="banheiros" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Banheiros</label>
-                                <input id="banheiros" name="banheiros" type="text" required value={localNumericInputs['banheiros'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="1" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                {renderNumericInput('suites', 'Suítes', formData.suites, '0')}
                             </div>
+                            {/* Banheiros (NOVO) */}
+                            <div>
+                                {renderNumericInput('banheiros', 'Banheiros (Social)', formData.banheiros, '1')}
+                            </div>
+                            {/* Lavabos (NOVO) */}
+                            <div>
+                                {renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0')}
+                            </div>
+                             {/* Banheiros de Serviço (NOVO) */}
+                            <div>
+                                {renderNumericInput('banheirosServico', 'Banheiro de Serviço', formData.banheirosServico, '0')}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
                             {/* Vagas Garagem */}
                             <div>
-                                <label htmlFor="vagasGaragem" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Vagas Garagem</label>
-                                <input id="vagasGaragem" name="vagasGaragem" type="text" required value={localNumericInputs['vagasGaragem'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="0" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0')}
                             </div>
                             {/* Andar (Condicional) */}
                             {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') ? (
                                 <div>
-                                    <label htmlFor="andar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Andar</label>
-                                    <input id="andar" name="andar" type="text" required value={localNumericInputs['andar'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 5" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                    {renderNumericInput('andar', 'Andar', formData.andar || 0, 'Ex: 5')}
                                 </div>
                             ) : (
                                 <div className='hidden md:block'></div>
                             )}
-                        </div>
-
-                        {/* Linha: Áreas */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                             {/* Área Total */}
+                            {/* Área Total */}
                              <div>
-                                <label htmlFor="areaTotal" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área Total (m²)</label>
-                                <input id="areaTotal" name="areaTotal" type="text" required value={localNumericInputs['areaTotal'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 120.5" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                {renderNumericInput('areaTotal', 'Área Total (m²)', formData.areaTotal, 'Ex: 120.5')}
                             </div>
                              {/* Área Útil */}
                              <div>
-                                <label htmlFor="areaUtil" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área Útil (m²)</label>
-                                <input id="areaUtil" name="areaUtil" type="text" required value={localNumericInputs['areaUtil'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="Ex: 80.0" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                {renderNumericInput('areaUtil', 'Área Útil (m²)', formData.areaUtil, 'Ex: 80.0')}
                             </div>
                         </div>
                         
-                        {/* --- NOVO: DETALHES DE CÔMODOS --- */}
-                        <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Detalhes dos Principais Cômodos</h4>
-
-                            {/* Detalhes da Cozinha */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700">
-                                <div>
-                                    <label htmlFor="cozinha.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Cozinha</label>
-                                    <select id="cozinha.tipo" name="cozinha.tipo" value={formData.cozinha.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
-                                        <option value="FECHADA">Fechada</option>
-                                        <option value="AMERICANA">Americana</option>
-                                        <option value="GOURMET">Gourmet</option>
-                                        <option value="INTEGRADA">Integrada (Estilo Loft)</option>
-                                        <option value="INDUSTRIAL">Industrial</option>
-                                    </select>
-                                </div>
-                                <CheckboxInput label="Possui Armários Planejados?" name="cozinha.possuiArmarios" checked={formData.cozinha.possuiArmarios || false} onChange={handleChange} />
-                                <CheckboxInput label="Possui Dispensa Embutida?" name="dispensa.possuiDispensa" checked={formData.dispensa.possuiDispensa || false} onChange={handleChange} />
-                            </div>
-                            
-                            {/* Detalhes da Sala e Varanda */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700">
-                                <div>
-                                    <label htmlFor="sala.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Sala Principal</label>
-                                    <select id="sala.tipo" name="sala.tipo" value={formData.sala.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
-                                        <option value="ESTAR_JANTAR">Estar e Jantar Integradas</option>
-                                        <option value="ESTAR">Apenas Estar</option>
-                                        <option value="JANTAR">Apenas Jantar</option>
-                                        <option value="TV">Sala de TV</option>
-                                        <option value="ESCRITORIO">Escritório/Home Office</option>
-                                        <option value="OUTRA">Outra</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="sala.qtdSalas" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Quantidade de Salas</label>
-                                    <input id="sala.qtdSalas" name="sala.qtdSalas" type="number" required min={1} value={formData.sala.qtdSalas} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
-                                </div>
-                                <CheckboxInput label="Possui Varanda/Terraço?" name="varanda.possuiVaranda" checked={formData.varanda.possuiVaranda || false} onChange={handleChange} />
-                            </div>
-
-                            {/* Detalhes da Varanda (Condicional) */}
-                            {formData.varanda.possuiVaranda && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-blue-50 dark:bg-zinc-700/50">
-                                    <div>
-                                        <label htmlFor="varanda.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Varanda</label>
-                                        <select id="varanda.tipo" name="varanda.tipo" value={formData.varanda.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
-                                            <option value="SIMPLES">Simples (Aberto)</option>
-                                            <option value="GOURMET">Gourmet (Com Infra)</option>
-                                            <option value="FECHADA">Fechada (Vidro/Reiki)</option>
+                        {/* --- Piscina Privativa (NOVO) --- */}
+                        <div className="space-y-4 p-4 border rounded-lg border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-zinc-700/50">
+                             <h4 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center">
+                                <Icon icon={faWater} className="w-4 h-4 mr-2" /> Piscina Privativa do Imóvel
+                            </h4>
+                             <CheckboxInput 
+                                label="O imóvel possui piscina privativa?" 
+                                name="piscinaPrivativa.possuiPiscina" 
+                                checked={formData.piscinaPrivativa?.possuiPiscina || false} 
+                                onChange={handleChange} 
+                            />
+                            {formData.piscinaPrivativa.possuiPiscina && (
+                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                     <div>
+                                        <label htmlFor="piscinaPrivativa.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Revestimento</label>
+                                        <select id="piscinaPrivativa.tipo" name="piscinaPrivativa.tipo" value={formData.piscinaPrivativa.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                                            <option value="AZULEJO">Azulejo</option>
+                                            <option value="VINIL">Vinil</option>
+                                            <option value="FIBRA">Fibra</option>
+                                            <option value="NATURAL">Natural / Biológica</option>
                                         </select>
                                     </div>
-                                    <CheckboxInput label="Varanda possui Churrasqueira?" name="varanda.possuiChurrasqueira" checked={formData.varanda.possuiChurrasqueira || false} onChange={handleChange} />
+                                    <CheckboxInput 
+                                        label="É Aquecida?" 
+                                        name="piscinaPrivativa.aquecida" 
+                                        checked={formData.piscinaPrivativa?.aquecida || false} 
+                                        onChange={handleChange} 
+                                    />
                                 </div>
                             )}
+                        </div>
+                        {/* --- FIM: Piscina Privativa --- */}
+
+                        
+                        {/* --- DETALHES DE CÔMODOS (ARRAYS DINÂMICOS) --- */}
+                        <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Detalhes de Cômodos Dinâmicos</h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Adicione instâncias para cada cozinha, sala e varanda para máxima compatibilidade com portais.</p>
+
+                            {/* Adicionar Cozinha (Botão forçado se o array estiver vazio) */}
+                            {formData.cozinhas.length === 0 && (
+                                <button type="button" onClick={addRoom.bind(null, 'cozinhas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-rentou-primary text-white hover:bg-blue-700 dark:hover:bg-blue-600 transition flex items-center justify-center">
+                                    <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Primeira Cozinha
+                                </button>
+                            )}
+                            
+                            {/* Detalhes da Cozinha (Loop) */}
+                            <div className="space-y-4">
+                                {formData.cozinhas.map((item, index) => (
+                                    <CozinhaGroup 
+                                        key={`coz-${index}`} 
+                                        item={item} 
+                                        index={index} 
+                                        onChange={handleRoomChange.bind(null, 'cozinhas', index)} 
+                                        onAdd={addRoom.bind(null, 'cozinhas')}
+                                        onRemove={removeRoom.bind(null, 'cozinhas', index)}
+                                        count={formData.cozinhas.length}
+                                    />
+                                ))}
+                            </div>
+                            
+                            {/* Detalhes da Sala (Loop) */}
+                            <div className="space-y-4">
+                                {formData.salas.length === 0 && formData.cozinhas.length > 0 && (
+                                     <button type="button" onClick={addRoom.bind(null, 'salas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
+                                        <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Primeira Sala
+                                    </button>
+                                )}
+                                {formData.salas.map((item, index) => (
+                                    <SalaGroup 
+                                        key={`sala-${index}`} 
+                                        item={item} 
+                                        index={index} 
+                                        onChange={handleRoomChange.bind(null, 'salas', index)} 
+                                        onAdd={addRoom.bind(null, 'salas')}
+                                        onRemove={removeRoom.bind(null, 'salas', index)}
+                                        count={formData.salas.length}
+                                    />
+                                ))}
+                            </div>
+                            
+                            {/* Detalhes da Varanda (Loop) */}
+                             <div className="space-y-4">
+                                {formData.varandas.length === 0 && formData.salas.length > 0 && (
+                                     <button type="button" onClick={addRoom.bind(null, 'varandas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
+                                        <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Varanda/Terraço
+                                    </button>
+                                )}
+                                {formData.varandas.map((item, index) => (
+                                    <VarandaGroup 
+                                        key={`varanda-${index}`} 
+                                        item={item} 
+                                        index={index} 
+                                        onChange={handleRoomChange.bind(null, 'varandas', index)} 
+                                        onAdd={addRoom.bind(null, 'varandas')}
+                                        onRemove={removeRoom.bind(null, 'varandas', index)}
+                                        count={formData.varandas.length}
+                                    />
+                                ))}
+                            </div>
+                            
+                            {/* Dispensa (Única - Mantida) */}
+                            <div className='p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700 mt-6'>
+                                <CheckboxInput 
+                                    label="Possui Dispensa Embutida?" 
+                                    name="dispensa.possuiDispensa" 
+                                    checked={formData.dispensa.possuiDispensa || false} 
+                                    onChange={handleChange} 
+                                    description="Espaço de armazenamento dedicado (dispensa/despensa)."
+                                />
+                                {formData.dispensa.possuiDispensa && (
+                                     <div className='mt-4'>
+                                        <CheckboxInput 
+                                            label="Possui prateleiras embutidas?" 
+                                            name="dispensa.prateleirasEmbutidas" 
+                                            checked={formData.dispensa.prateleirasEmbutidas || false} 
+                                            onChange={handleChange} 
+                                        />
+                                     </div>
+                                )}
+                            </div>
+
 
                         </div>
-                        {/* --- FIM: DETALHES DE CÔMODOS --- */}
+                        {/* --- FIM: DETALHES DE CÔMODOS (ARRAYS) --- */}
                         
                         {/* Seletor de Comodidades */}
                         <div className='pt-4 border-t border-gray-100 dark:border-zinc-700'>
@@ -1113,6 +1337,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                 );
             case 3:
+                 // ... (Conteúdo da Etapa 3 - Valores e Responsabilidade - permanece o mesmo)
                 return (
                     <div className="space-y-6">
                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Responsabilidade</h3>
@@ -1149,7 +1374,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             </div>
                         </div>
                         
-                        {/* --- NOVO: DETALHES DE RESPONSABILIDADE FINANCEIRA --- */}
+                        {/* --- DETALHES DE RESPONSABILIDADE FINANCEIRA (Mantida) --- */}
                         <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
                              <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Responsabilidade dos Custos Fixos</h4>
                              
@@ -1205,7 +1430,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                 );
             case 4:
-                // --- NOVO: Renderização da Etapa 4 (Mídia e Fotos) ---
+                // --- Renderização da Etapa 4 (Mídia e Fotos) - Mantida ---
                 const currentValidPhotosCount = formData.fotos.filter(url => !fotosAExcluir.includes(url)).length;
                 const totalPhotosCount = currentValidPhotosCount + novasFotos.length;
                 const availableSlots = MAX_PHOTOS - totalPhotosCount;
