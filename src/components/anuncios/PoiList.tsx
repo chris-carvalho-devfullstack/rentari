@@ -4,9 +4,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchNearbyPois, PoiResult } from '@/services/GeocodingService';
 import { Icon } from '@/components/ui/Icon';
+// ... (imports de ícones) ...
 import { 
     faBus, faTrainSubway, faShoppingCart, faClinicMedical, faSchool, faPlus, faSpinner, 
-    faMapPin, faHospital, faShoppingBag, faUniversity, faBusSimple, faPlaneArrival, IconDefinition 
+    faMapPin, faHospital, faShoppingBag, faUniversity, faBusSimple, faPlaneArrival,
+    faUtensils, faChurch, faBuildingShield, faMask, faFilm, faMusic, faBeer, 
+    faChevronDown, faChevronUp,
+    IconDefinition 
 } from '@fortawesome/free-solid-svg-icons'; 
 
 interface PoiListProps {
@@ -16,29 +20,28 @@ interface PoiListProps {
     onPoisFetched: (pois: PoiResult[]) => void; 
 }
 
-// Mapeamento de botões de filtro
-interface PoiFilter {
-    name: string;
-    tag: string;
-    icon: IconDefinition; 
-    color: string;
-}
-
+// ... (Mapeamento de filtros mantidos) ...
 const poiFilters: PoiFilter[] = [
     { name: 'Todos', tag: 'TODOS', icon: faMapPin, color: 'text-rentou-primary' }, 
-    { name: 'Escolas', tag: 'school', icon: faSchool, color: 'text-yellow-600' },
-    { name: 'Universidade', tag: 'university', icon: faUniversity, color: 'text-indigo-600' }, 
+    { name: 'Restaurantes', tag: 'restaurant', icon: faUtensils, color: 'text-orange-500' }, 
     { name: 'Supermercados', tag: 'supermarket', icon: faShoppingCart, color: 'text-blue-600' },
     { name: 'Farmácias', tag: 'pharmacy', icon: faClinicMedical, color: 'text-red-600' },
     { name: 'Hospitais', tag: 'hospital', icon: faHospital, color: 'text-pink-600' },
+    { name: 'Escolas', tag: 'school', icon: faSchool, color: 'text-yellow-600' },
+    { name: 'Universidade', tag: 'university', icon: faUniversity, color: 'text-indigo-600' }, 
     { name: 'Shopping/Lojas', tag: 'shopping_mall', icon: faShoppingBag, color: 'text-purple-600' },
+    { name: 'Cinema', tag: 'cinema', icon: faFilm, color: 'text-gray-700' }, 
+    { name: 'Teatro', tag: 'theatre', icon: faMask, color: 'text-red-800' },
+    { name: 'Pubs', tag: 'pub', icon: faBeer, color: 'text-amber-700' },
+    { name: 'Clubes', tag: 'nightclub', icon: faMusic, color: 'text-cyan-500' }, 
+    { name: 'Polícia', tag: 'police', icon: faBuildingShield, color: 'text-blue-800' }, 
+    { name: 'Igrejas', tag: 'church', icon: faChurch, color: 'text-yellow-700' }, 
     { name: 'Rodoviária', tag: 'bus_station', icon: faBusSimple, color: 'text-orange-600' }, 
     { name: 'Aeroporto', tag: 'airport', icon: faPlaneArrival, color: 'text-teal-600' }, 
     { name: 'Estações', tag: 'railway_station', icon: faTrainSubway, color: 'text-indigo-600' },
     { name: 'Ônibus', tag: 'bus_stop', icon: faBus, color: 'text-green-600' },
 ];
 
-// Opções de distância
 const distanceOptions = [
     { label: '500 m', value: 500 },
     { label: '1 km', value: 1000 },
@@ -46,7 +49,6 @@ const distanceOptions = [
     { label: '5 km', value: 5000 },
 ];
 
-// Função auxiliar para obter o ícone de uma tag
 const getIconForTag = (tag: string): IconDefinition => {
     return poiFilters.find(f => f.tag === tag)?.icon || faMapPin;
 }
@@ -58,49 +60,69 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
     const [distance, setDistance] = useState<number>(2000); 
     const [pois, setPois] = useState<PoiResult[]>([]);
     const [loadingPois, setLoadingPois] = useState(true); 
+    const [isExpanded, setIsExpanded] = useState(false); 
+    const [progress, setProgress] = useState(0); 
 
-    // ============ CORREÇÃO DO LOOP INFINITO ============
+    // Funcao auxiliar para simular o delay (copiado do GeocodingService)
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    // 1. A função 'loadPois' é memoizada.
-    // Ela SÓ depende de 'onPoisFetched', que é estável (memoizada no pai).
-    // Portanto, 'loadPois' é criada APENAS UMA VEZ.
     const loadPois = useCallback(async (lat: number, lon: number, tag: string, dist: number) => {
-        setLoadingPois(true); // Esta é a Linha 64 do erro
+        setLoadingPois(true);
+        setIsExpanded(false);
+        setProgress(0);
+        
+        // Simulação do progresso (Ajuste o timer conforme a velocidade da sua rede/backend)
+        let simulatedProgress = 0;
+        const progressInterval = setInterval(() => {
+            simulatedProgress = Math.min(simulatedProgress + 5, 90);
+            setProgress(simulatedProgress);
+        }, 150);
+
         try {
             const results = await fetchNearbyPois(lat, lon, tag, dist); 
+            
+            clearInterval(progressInterval);
+            setProgress(100); 
+            
+            await delay(200); // Dá tempo para o 100% aparecer
+            
             setPois(results);
             onPoisFetched(results); 
         } catch (error) {
+            clearInterval(progressInterval);
             console.error("Erro ao carregar POIs:", error);
+            setProgress(0);
             setPois([]);
             onPoisFetched([]);
         } finally {
             setLoadingPois(false);
         }
-    }, [onPoisFetched]); // 'onPoisFetched' é estável
+    }, [onPoisFetched]); 
 
-    // 2. O 'useEffect' principal.
-    // Ele agora depende APENAS dos dados que disparam uma nova busca.
-    // 'loadPois' é estável (do useCallback acima).
-    // 'onClickPoi' foi removido das dependências.
     useEffect(() => {
         if (latitude && longitude) {
             loadPois(latitude, longitude, selectedTag, distance);
-            // A chamada 'onClickPoi(null)' foi removida daqui,
-            // pois 'onPoisFetched' já faz 'setActivePoi(null)' no componente pai.
         }
     }, [selectedTag, distance, latitude, longitude, loadPois]); 
-    // ============ FIM DA CORREÇÃO ============
-
+    
     
     const handleAddRoute = () => {
         alert("Funcionalidade de Rotas: Este botão acionaria a abertura do Google Maps (ou similar) com o endereço do imóvel como origem/destino para que o usuário possa adicionar um ponto de interesse manualmente e calcular a rota.");
     };
 
-    // Esta função não precisa de useCallback pois é chamada diretamente pelo evento onClick
     const handlePoiClick = (poi: PoiResult) => {
         onClickPoi(poi);
     };
+
+    // Define quais itens da lista serão mostrados
+    const itemsToShow = isExpanded ? pois : pois.slice(0, 5);
+    
+    // Calcula o ângulo para o radial-gradient (simulando um círculo de progresso)
+    const angle = (progress / 100) * 360;
+    const progressStyle = {
+        background: `conic-gradient(#1D4ED8 ${angle}deg, #e5e7eb ${angle}deg)`,
+    };
+
 
     return (
         <div className="mt-8">
@@ -138,6 +160,7 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                                 ? `bg-rentou-primary text-white shadow-md`
                                 : 'bg-gray-100 text-gray-700 dark:bg-zinc-700 dark:text-gray-300 hover:bg-gray-200'
                         }`}
+                        disabled={loadingPois}
                     >
                         <Icon icon={filter.icon} className={`w-4 h-4 mr-2 ${selectedTag !== filter.tag ? filter.color : 'text-white'}`} />
                         {filter.name}
@@ -145,15 +168,22 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                 ))}
             </div>
 
-            {/* Resultados (AGORA CLICÁVEIS E COM ÍCONES) */}
+            {/* Resultados (COM FEEDBACK DE CARREGAMENTO) */}
             <div className="space-y-3 min-h-[150px]">
-                {loadingPois ? (
+                {loadingPois && progress < 100 ? (
                     <div className="flex items-center justify-center p-4">
-                        <Icon icon={faSpinner} spin className='w-5 h-5 text-rentou-primary mr-2' />
-                        Buscando locais próximos...
+                        <div 
+                            style={progressStyle} 
+                            className="w-12 h-12 rounded-full flex items-center justify-center"
+                        >
+                            <div className="w-10 h-10 bg-white dark:bg-zinc-800 rounded-full flex items-center justify-center text-rentou-primary text-xs font-bold">
+                                {progress}%
+                            </div>
+                        </div>
+                        <p className='ml-3 text-gray-600 dark:text-gray-300'>Buscando locais...</p>
                     </div>
                 ) : pois.length > 0 ? (
-                    pois.map((poi, index) => {
+                    itemsToShow.map((poi, index) => {
                         const icon = getIconForTag(poi.tag); 
                         return (
                             <button 
@@ -178,6 +208,25 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                     <p className="text-center text-gray-500 p-4">Nenhum local de "{poiFilters.find(f => f.tag === selectedTag)?.name || selectedTag}" encontrado em um raio de {distance / 1000}km.</p>
                 )}
             </div>
+            
+            {/* Botão de Expandir/Recolher */}
+            {pois.length > 5 && (
+                <button
+                    onClick={() => setIsExpanded(prev => !prev)}
+                    className="w-full mt-2 px-4 py-2 text-sm font-semibold text-rentou-primary bg-gray-100 dark:bg-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-600 rounded-lg transition-colors flex items-center justify-center"
+                >
+                    {isExpanded ? (
+                        <>
+                            Ver menos <Icon icon={faChevronUp} className="w-3 h-3 ml-2" />
+                        </>
+                    ) : (
+                        <>
+                            Ver mais {pois.length - 5} {pois.length - 5 === 1 ? 'local' : 'locais'} 
+                            <Icon icon={faChevronDown} className="w-3 h-3 ml-2" />
+                        </>
+                    )}
+                </button>
+            )}
             
             {/* Opção Adicionar Local */}
             <button 

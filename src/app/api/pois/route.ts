@@ -2,8 +2,9 @@
 
 import { NextResponse } from 'next/server';
 
-// 1. O MAPEAMENTO DOS POIS
+// 1. O MAPEAMENTO DOS POIS (ATUALIZADO com NOVAS CATEGORIAS)
 const POI_MAPPING: { [key: string]: { tag: string, ptBr: string } } = {
+    // Categorias Antigas
     'school': { tag: 'amenity=school', ptBr: 'Escola' },
     'university': { tag: 'amenity=university', ptBr: 'Universidade' },
     'supermarket': { tag: 'shop=supermarket', ptBr: 'Supermercado' },
@@ -14,10 +15,18 @@ const POI_MAPPING: { [key: string]: { tag: string, ptBr: string } } = {
     'airport': { tag: 'aeroway=aerodrome', ptBr: 'Aeroporto' },
     'railway_station': { tag: 'railway=station', ptBr: 'Estação Ferroviária' },
     'bus_stop': { tag: 'highway=bus_stop', ptBr: 'Ponto de Ônibus' },
+    
+    // NOVAS CATEGORIAS
+    'restaurant': { tag: 'amenity=restaurant', ptBr: 'Restaurante' },
+    'church': { tag: 'amenity=place_of_worship', ptBr: 'Igreja' },
+    'police': { tag: 'amenity=police', ptBr: 'Polícia' },
+    'theatre': { tag: 'amenity=theatre', ptBr: 'Teatro' },
+    'cinema': { tag: 'amenity=cinema', ptBr: 'Cinema' },
+    'nightclub': { tag: 'amenity=nightclub', ptBr: 'Clube' },
+    'pub': { tag: 'amenity=pub', ptBr: 'PUB' }, 
 };
 
 // 2. O CACHE DO LADO DO SERVIDOR
-// (Em um ambiente serverless, este cache é por instância "quente")
 const cache = new Map<string, any>();
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
@@ -141,7 +150,8 @@ export async function GET(request: Request) {
 
             // Ordena e limita o resultado final de 'TODOS'
             allResults.sort((a, b) => a.distanceKm - b.distanceKm);
-            // Remove duplicatas (raro, mas pode acontecer se um POI se encaixa em duas categorias)
+            
+            // Remove duplicatas
             const uniquePoisMap = new Map<string, any>();
             for (const poi of allResults) {
                 const key = `${poi.name}_${poi.latitude}_${poi.longitude}`;
@@ -154,6 +164,11 @@ export async function GET(request: Request) {
         } else {
             // === MODO CATEGORIA ÚNICA ===
             console.log(`[API POIS] Modo Categoria Única: ${tag}`);
+            
+            if (!POI_MAPPING[tag]) {
+                 return NextResponse.json({ error: 'Tag de POI inválida' }, { status: 400 });
+            }
+            
             const query = buildSingleTagQuery(latNum, lonNum, distNum, tag);
             
             const response = await fetch(OVERPASS_URL, {

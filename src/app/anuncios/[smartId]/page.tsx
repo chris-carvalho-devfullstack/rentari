@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { fetchImovelPorSmartId } from '@/services/ImovelService'; 
-import { fetchCoordinatesByAddress } from '@/services/GeocodingService'; 
+import { fetchCoordinatesByAddress, fetchBairroGeoJsonLimits } from '@/services/GeocodingService'; 
 import { Imovel } from '@/types/imovel'; 
 import { PoiResult } from '@/services/GeocodingService'; 
 import { Icon } from '@/components/ui/Icon';
@@ -103,6 +103,7 @@ export default function AnuncioDetalhePublicoPage() {
     
     const [activePoi, setActivePoi] = useState<PoiResult | null>(null);
     const [pois, setPois] = useState<PoiResult[]>([]);
+    const [bairroGeoJson, setBairroGeoJson] = useState<any>(null); // NOVO ESTADO
     
     const MOCK_VIRTUAL_TOUR_URL = 'https://example.com/360-tour-mock'; 
     const SAFE_MOCK_VIDEO_ID = 'Gv459g2-K70'; 
@@ -128,6 +129,18 @@ export default function AnuncioDetalhePublicoPage() {
             }
         });
     }, [imovel]);
+
+
+    // ============ NOVO: Função para buscar limites do bairro (Memoizada) ============
+    const fetchBairroGeoJson = useCallback(async (bairro: string, cidade: string, estado: string) => {
+        // Chama a nossa API de backend
+        const geoJson = await fetchBairroGeoJsonLimits(bairro, cidade, estado);
+        setBairroGeoJson(geoJson);
+        
+        if (!geoJson) {
+            console.warn(`[GeoJSON] Limites do bairro ${bairro} não foram encontrados.`);
+        }
+    }, []); 
 
 
     useEffect(() => {
@@ -164,7 +177,11 @@ export default function AnuncioDetalhePublicoPage() {
                 // --- FIM LÓGICA DE GEOCODING ---
 
                 setImovel({ ...data, latitude, longitude }); 
-                // A busca de POIs agora é iniciada pelo PoiList
+                
+                // CHAMA A BUSCA DO GEOJSON
+                if (data.endereco.bairro) {
+                    fetchBairroGeoJson(data.endereco.bairro, data.endereco.cidade, data.endereco.estado);
+                }
 
             } catch (err: any) {
                 console.error('Erro ao buscar anúncio:', err);
@@ -175,27 +192,24 @@ export default function AnuncioDetalhePublicoPage() {
         };
 
         loadImovel();
-    }, [smartId]);
+    }, [smartId, fetchBairroGeoJson]); 
     
-    // ============ CORREÇÃO DO LOOP INFINITO ============
+    // ============ POI Handler Functions (Memoized para quebrar o loop) ============
     
-    // 1. Memoiza a função de clique
     const handlePoiClick = useCallback((poi: PoiResult | null) => {
+        // Esta função de clique também é responsável por focar o mapa (via activePoi)
         if (activePoi && poi && activePoi.name === poi.name) {
              setActivePoi(null);
         } else {
             setActivePoi(poi);
         }
-    }, [activePoi]); // Depende APENAS de 'activePoi'
+    }, [activePoi]); 
 
-    // 2. Memoiza a função que recebe os POIs
-    // O array de dependências vazio [] é crucial e correto,
-    // pois setPois e setActivePoi são estáveis.
     const handlePoisFetched = useCallback((newPois: PoiResult[]) => {
         setPois(newPois);
-        setActivePoi(null); 
+        setActivePoi(null); // Limpa o destaque do mapa
     }, []);
-    // ============ FIM DA CORREÇÃO ============
+    // ============ FIM DOS HANDLERS ============
 
 
     if (loading) {
@@ -207,22 +221,11 @@ export default function AnuncioDetalhePublicoPage() {
         );
     }
     
-    if (error) {
+    if (error || !imovel || !imovel.latitude || !imovel.longitude) {
          return (
             <div className="text-center p-10 bg-red-100 text-red-700 rounded-lg m-8">
                 <strong className="font-bold">Erro:</strong>
-                <span className="block sm:inline"> {error}</span>
-                <Link href="/anuncios" className="ml-4 font-semibold hover:underline text-blue-700">Voltar para o Catálogo</Link>
-            </div>
-        );
-    }
-
-    // Se o imóvel não foi encontrado após o loading
-    if (!imovel || !imovel.latitude || !imovel.longitude) {
-         return (
-            <div className="text-center p-10 bg-yellow-100 text-yellow-700 rounded-lg m-8">
-                <strong className="font-bold">Aviso:</strong>
-                <span className="block sm:inline"> Imóvel não encontrado ou indisponível.</span>
+                <span className="block sm:inline"> {error || 'Imóvel não encontrado ou indisponível.'}</span>
                 <Link href="/anuncios" className="ml-4 font-semibold hover:underline text-blue-700">Voltar para o Catálogo</Link>
             </div>
         );
@@ -451,9 +454,14 @@ export default function AnuncioDetalhePublicoPage() {
                             quartos={totalDormitorios}
                             banheiros={totalBanheiros}
                             vagasGaragem={imovel.vagasGaragem}
+                            bairroGeoJson={bairroGeoJson} // NOVO: Passa o GeoJSON
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
-                            O círculo indica a área aproximada do bairro **{imovel.endereco.bairro}**.
+                            {bairroGeoJson ? (
+                                <>O polígono desenhado representa a área do bairro **{imovel.endereco.bairro}** (dados OpenStreetMap).</>
+                            ) : (
+                                 <>A localização exata do imóvel é exibida. Limites do bairro não estão disponíveis.</>
+                            )}
                         </p>
                     </div>
                     

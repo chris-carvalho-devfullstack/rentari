@@ -75,7 +75,7 @@ export async function fetchCoordinatesByAddress(endereco: EnderecoImovel): Promi
 
 
 /**
- * ATUALIZADO: Busca POIs (Points of Interest) da NOSSA PRÓPRIA API
+ * Busca POIs (Points of Interest) da NOSSA PRÓPRIA API (Mantido).
  */
 export async function fetchNearbyPois(
     lat: number, 
@@ -101,5 +101,34 @@ export async function fetchNearbyPois(
     } catch (error) {
         console.error("[GeocodingService] Falha na chamada à API de POIs:", error);
         return [];
+    }
+}
+
+/**
+ * NOVO: Função para buscar o GeoJSON (limites) da nossa nova API de backend.
+ */
+export async function fetchBairroGeoJsonLimits(bairro: string, cidade: string, estado: string): Promise<any | null> {
+    const apiUrl = `/api/bairro?bairro=${bairro}&cidade=${cidade}&estado=${estado}`;
+    
+    try {
+        const response = await fetch(apiUrl);
+
+        if (!response.ok) {
+            // Se não encontrar (404) ou der erro (500/502), retorna null
+            return null;
+        }
+        
+        const geoJsonData = await response.json();
+        
+        // Retorna o GeoJSON se for um objeto válido
+        if (geoJsonData && geoJsonData.type) {
+            return geoJsonData;
+        }
+
+        return null;
+        
+    } catch (error) {
+        console.error("[GeocodingService] Falha na chamada à API de limites:", error);
+        return null;
     }
 }
