@@ -6,8 +6,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON } from 'react-l
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Icon } from '@/components/ui/Icon';
-// Importação de Ícones (Corrigido para faMask e faBeer)
-import { faMapMarkerAlt, faSchool, faShoppingCart, faClinicMedical, faHospital, faShoppingBag, faTrainSubway, faBus, faHome, faBed, faShower, faCar, faDollarSign, faUniversity, faBusSimple, faPlaneArrival, faUtensils, faChurch, faBuildingShield, faMask, faFilm, faMusic, faBeer, IconDefinition } from '@fortawesome/free-solid-svg-icons'; 
+// Importação de Ícones (Removendo faExternalLinkAlt)
+import { faMapMarkerAlt, faSchool, faShoppingCart, faClinicMedical, faHospital, faShoppingBag, faTrainSubway, faBus, faHome, faBed, faShower, faCar, faDollarSign, faUniversity, faBusSimple, faPlaneArrival, faUtensils, faChurch, faBuildingShield, faMask, faFilm, faMusic, faBeer, IconDefinition, faStreetView } from '@fortawesome/free-solid-svg-icons'; 
 import { PoiResult } from '@/services/GeocodingService'; 
 
 // Componente auxiliar para forçar o mapa a centralizar e ajustar o zoom no marcador
@@ -46,11 +46,15 @@ interface MapDisplayProps {
     banheiros: number;
     vagasGaragem: number;
     bairroGeoJson: any | null; 
+    fullAddressString: string; 
+    onStreetViewClick: (url: string) => void; // <-- NOVO PROP
 }
 
 export const MapDisplay: React.FC<MapDisplayProps> = ({ 
     latitude, longitude, titulo, bairro, pois = [], activePoi,
-    valorAluguel, quartos, banheiros, vagasGaragem, bairroGeoJson 
+    valorAluguel, quartos, banheiros, vagasGaragem, bairroGeoJson,
+    fullAddressString,
+    onStreetViewClick // <-- NOVO PROP
 }) => {
     
     const [isClient, setIsClient] = useState(false);
@@ -118,8 +122,14 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
         fillColor: '#1D4ED8', fillOpacity: 0.15,     
     };
 
+    // URL para abrir o Street View (usando coordenadas para maior precisão)
+    const streetViewLink = useMemo(() => {
+        // Formato para embed Street View (cbp para orientação padrão)
+        return `http://maps.google.com/maps?layer=c&cbll=${latitude},${longitude}&cbp=12,20,0,0,0&hl=pt-BR&output=svembed`;
+    }, [latitude, longitude]);
+    
     return (
-        <div className='w-full h-96 rounded-xl shadow-lg'>
+        <div className='w-full h-96 rounded-xl shadow-lg relative'>
              <MapContainer 
                 // Zoom inicial é o initialZoom. O ChangeView fará o ajuste fino.
                 zoom={initialZoom} 
@@ -132,7 +142,7 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
                 <ChangeView center={centerPosition} zoom={currentZoom} />
                 
                 <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                    attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
@@ -196,6 +206,24 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
                 })}
                 
             </MapContainer>
+            
+            {/* BOTÃO DE AÇÃO (Posicionado Absolutamente) - AJUSTADO PARA bottom-6 */}
+            <div className="absolute bottom-6 right-4 z-[400]">
+                
+                 {/* Botão Street View com Tooltip (title) */}
+                <button
+                    type="button"
+                    onClick={() => onStreetViewClick(streetViewLink)}
+                    className="flex items-center px-3 py-2 bg-white dark:bg-zinc-800 rounded-lg shadow-xl hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors border border-gray-200 dark:border-zinc-700 font-semibold text-gray-700 dark:text-gray-300"
+                    title="Ver a Visão da Rua (Street View) em modo interativo" // <-- Tooltip adicionado
+                >
+                    <Icon icon={faStreetView} className="w-5 h-5 mr-2 text-red-600" />
+                    Street View
+                </button>
+                
+            </div>
+            {/* FIM: BOTÕES DE AÇÃO */}
+
         </div>
     );
 };

@@ -11,13 +11,12 @@ import { Imovel } from '@/types/imovel';
 import { PoiResult } from '@/services/GeocodingService'; 
 import { Icon } from '@/components/ui/Icon';
 import { ImageLightbox } from '@/components/anuncios/ImageLightbox'; 
-import { StreetView } from '@/components/ui/StreetView'; 
 import { PoiList } from '@/components/anuncios/PoiList'; 
 
 import { 
     faChevronLeft, faSpinner, faMapMarkerAlt, faDollarSign, faBed, faShower, faCar, faRulerCombined, 
     faCalendarAlt, faHome, faUserTie, faPhone, faEnvelope, faVideo, faGlobe, faSquare, faTag,
-    faBuilding, faMountain
+    faBuilding, faMountain, faStreetView, faTimes // <-- Adicionado faStreetView e faTimes para o modal
 } from '@fortawesome/free-solid-svg-icons';
 
 // Carregamento Dinâmico do Mapa (MapDisplay)
@@ -89,6 +88,50 @@ const getEmbedUrl = (link: string | undefined): string | null => {
     return null;
 };
 
+// --- Componente Modal Street View (CORRIGIDO: Garante z-index superior ao mapa e cursor) ---
+const StreetViewModal: React.FC<{ isOpen: boolean; onClose: () => void; url: string; }> = ({ isOpen, onClose, url }) => {
+    if (!isOpen || !url) return null;
+    
+    // Overlay de fundo (z-index 999 para garantir que fique acima do Leaflet map)
+    return (
+        <div
+            className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center p-4" // <-- Z-index alto corrigido
+            onClick={onClose}
+        >
+            {/* Botão de Fechar no canto do modal, com z-index ainda maior */}
+            <button
+                onClick={onClose}
+                className="absolute top-6 right-6 p-3 text-white bg-black/50 hover:bg-black/70 rounded-full z-[1000] transition-colors flex items-center cursor-pointer" // <-- Cursor Pointer e texto Sair do Street View
+                aria-label="Sair do Street View"
+                title="Sair do Street View"
+            >
+                <Icon icon={faTimes} className="w-6 h-6 mr-2" />
+                Sair do Street View
+            </button>
+            
+            <div 
+                className="relative w-full max-w-5xl h-full max-h-[90vh] bg-white dark:bg-zinc-800 rounded-xl overflow-hidden shadow-2xl"
+                onClick={(e) => e.stopPropagation()} // Impede que o clique no modal feche o modal
+            >
+                <div className='flex items-center justify-between bg-gray-900 dark:bg-zinc-900 p-3'>
+                    <h2 className='text-white text-lg font-semibold flex items-center'>
+                        <Icon icon={faStreetView} className="w-5 h-5 mr-2 text-red-600" />
+                        Google Street View Interativo
+                    </h2>
+                </div>
+                {/* IFRAME DO STREET VIEW: O iframe precisa de w-full h-full para preencher o container */}
+                <iframe
+                    src={url}
+                    title="Google Street View do Imóvel"
+                    className="w-full h-full"
+                    allowFullScreen={true}
+                ></iframe>
+            </div>
+        </div>
+    );
+};
+// --- Fim Componente Modal Street View ---
+
 
 export default function AnuncioDetalhePublicoPage() {
     const params = useParams();
@@ -103,7 +146,12 @@ export default function AnuncioDetalhePublicoPage() {
     
     const [activePoi, setActivePoi] = useState<PoiResult | null>(null);
     const [pois, setPois] = useState<PoiResult[]>([]);
-    const [bairroGeoJson, setBairroGeoJson] = useState<any>(null); // NOVO ESTADO
+    const [bairroGeoJson, setBairroGeoJson] = useState<any>(null); 
+    
+    // --- NOVO ESTADO PARA O MODAL STREET VIEW ---
+    const [isStreetViewModalOpen, setIsStreetViewModalOpen] = useState(false);
+    const [streetViewUrl, setStreetViewUrl] = useState('');
+    // ------------------------------------------
     
     const MOCK_VIRTUAL_TOUR_URL = 'https://example.com/360-tour-mock'; 
     const SAFE_MOCK_VIDEO_ID = 'Gv459g2-K70'; 
@@ -211,6 +259,17 @@ export default function AnuncioDetalhePublicoPage() {
     }, []);
     // ============ FIM DOS HANDLERS ============
 
+    // ============ STREET VIEW HANDLERS ============
+    const handleStreetViewOpen = useCallback((url: string) => {
+        setStreetViewUrl(url);
+        setIsStreetViewModalOpen(true);
+    }, []);
+    
+    const handleStreetViewClose = useCallback(() => {
+        setIsStreetViewModalOpen(false);
+        setStreetViewUrl('');
+    }, []);
+    // ============ FIM HANDLERS ============
 
     if (loading) {
         return (
@@ -221,7 +280,7 @@ export default function AnuncioDetalhePublicoPage() {
         );
     }
     
-    if (error || !imovel || !imovel.latitude || !imovel.longitude) {
+    if (!imovel || !imovel.latitude || !imovel.longitude) {
          return (
             <div className="text-center p-10 bg-red-100 text-red-700 rounded-lg m-8">
                 <strong className="font-bold">Erro:</strong>
@@ -275,6 +334,13 @@ export default function AnuncioDetalhePublicoPage() {
                 onNavigate={navigateLightbox}
             />
             
+            {/* MODAL STREET VIEW: Renderizado aqui para sobrepor tudo (Z-999) */}
+            <StreetViewModal 
+                isOpen={isStreetViewModalOpen}
+                onClose={handleStreetViewClose}
+                url={streetViewUrl}
+            />
+            
             {/* Layout Principal: 2 Colunas */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
@@ -325,7 +391,7 @@ export default function AnuncioDetalhePublicoPage() {
                                             <img
                                                 src={url}
                                                 alt={`Foto ${index + 1}`}
-                                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                             />
                                             {index === 6 && imovel.fotos.length > 7 && (
                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-xl font-bold">
@@ -347,7 +413,7 @@ export default function AnuncioDetalhePublicoPage() {
                             
                             <div className="pt-3 border-t border-gray-100 dark:border-zinc-700">
                                 <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mt-2 flex items-center space-x-2">
-                                     <Icon icon={faMapMarkerAlt} className='w-4 h-4 text-red-500' />
+                                     <Icon icon={faMapMarkerAlt} className='w-4 h-4 mr-2 text-red-500' />
                                      <span>Localização Exata (Para Contrato)</span>
                                 </h3>
                                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
@@ -454,7 +520,9 @@ export default function AnuncioDetalhePublicoPage() {
                             quartos={totalDormitorios}
                             banheiros={totalBanheiros}
                             vagasGaragem={imovel.vagasGaragem}
-                            bairroGeoJson={bairroGeoJson} // NOVO: Passa o GeoJSON
+                            bairroGeoJson={bairroGeoJson}
+                            fullAddressString={fullAddressString}
+                            onStreetViewClick={handleStreetViewOpen}
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                             {bairroGeoJson ? (
@@ -465,7 +533,7 @@ export default function AnuncioDetalhePublicoPage() {
                         </p>
                     </div>
                     
-                    {/* 9. PONTOS DE INTERESSE (POIs) */}
+                    {/* 8. PONTOS DE INTERESSE (POIs) */}
                      <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700">
                         <PoiList
                             latitude={imovel.latitude as number}
@@ -474,14 +542,6 @@ export default function AnuncioDetalhePublicoPage() {
                             onPoisFetched={handlePoisFetched} 
                         />
                     </div>
-
-                    {/* 8. Street View */}
-                    <StreetView
-                        latitude={imovel.latitude as number}
-                        longitude={imovel.longitude as number}
-                        address={fullAddressString}
-                    />
-
                 </div>
                 
                 {/* Coluna Direita (1/3): Contato e Agente */}
