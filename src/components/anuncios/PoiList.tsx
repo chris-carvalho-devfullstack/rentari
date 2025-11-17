@@ -4,13 +4,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchNearbyPois, PoiResult } from '@/services/GeocodingService';
 import { Icon } from '@/components/ui/Icon';
-// ... (imports de ícones) ...
 import { 
     faBus, faTrainSubway, faShoppingCart, faClinicMedical, faSchool, faPlus, faSpinner, 
     faMapPin, faHospital, faShoppingBag, faUniversity, faBusSimple, faPlaneArrival,
-    faUtensils, faChurch, faBuildingShield, faMask, faFilm, faMusic, faBeer, 
+    faUtensils, faChurch, faBuildingShield, 
+    faMask, // <-- CORRIGIDO
+    faFilm, faMusic, faBeer, 
     faChevronDown, faChevronUp,
-    IconDefinition 
+    IconDefinition // <-- Importado explicitamente
 } from '@fortawesome/free-solid-svg-icons'; 
 
 interface PoiListProps {
@@ -20,7 +21,15 @@ interface PoiListProps {
     onPoisFetched: (pois: PoiResult[]) => void; 
 }
 
-// ... (Mapeamento de filtros mantidos) ...
+// CORRIGIDO: Definição da interface PoiFilter
+interface PoiFilter {
+    name: string;
+    tag: string;
+    icon: IconDefinition; 
+    color: string;
+}
+
+// Mapeamento de botões de filtro (Mantido)
 const poiFilters: PoiFilter[] = [
     { name: 'Todos', tag: 'TODOS', icon: faMapPin, color: 'text-rentou-primary' }, 
     { name: 'Restaurantes', tag: 'restaurant', icon: faUtensils, color: 'text-orange-500' }, 
@@ -49,6 +58,7 @@ const distanceOptions = [
     { label: '5 km', value: 5000 },
 ];
 
+// Função auxiliar para obter o ícone de uma tag
 const getIconForTag = (tag: string): IconDefinition => {
     return poiFilters.find(f => f.tag === tag)?.icon || faMapPin;
 }
@@ -63,7 +73,6 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
     const [isExpanded, setIsExpanded] = useState(false); 
     const [progress, setProgress] = useState(0); 
 
-    // Funcao auxiliar para simular o delay (copiado do GeocodingService)
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     const loadPois = useCallback(async (lat: number, lon: number, tag: string, dist: number) => {
@@ -71,7 +80,6 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
         setIsExpanded(false);
         setProgress(0);
         
-        // Simulação do progresso (Ajuste o timer conforme a velocidade da sua rede/backend)
         let simulatedProgress = 0;
         const progressInterval = setInterval(() => {
             simulatedProgress = Math.min(simulatedProgress + 5, 90);
@@ -84,7 +92,7 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
             clearInterval(progressInterval);
             setProgress(100); 
             
-            await delay(200); // Dá tempo para o 100% aparecer
+            await delay(200); 
             
             setPois(results);
             onPoisFetched(results); 

@@ -2,19 +2,18 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'; 
-// Adicionado useMapEvents para garantir que a centralização funcione
-import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON, useMapEvents } from 'react-leaflet'; 
+import { MapContainer, TileLayer, Marker, Popup, useMap, GeoJSON } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Icon } from '@/components/ui/Icon';
-// ... (imports de ícones) ...
+// Importação de Ícones (Corrigido para faMask e faBeer)
 import { faMapMarkerAlt, faSchool, faShoppingCart, faClinicMedical, faHospital, faShoppingBag, faTrainSubway, faBus, faHome, faBed, faShower, faCar, faDollarSign, faUniversity, faBusSimple, faPlaneArrival, faUtensils, faChurch, faBuildingShield, faMask, faFilm, faMusic, faBeer, IconDefinition } from '@fortawesome/free-solid-svg-icons'; 
 import { PoiResult } from '@/services/GeocodingService'; 
 
 // Componente auxiliar para forçar o mapa a centralizar e ajustar o zoom no marcador
 const ChangeView: React.FC<{ center: L.LatLngExpression, zoom: number }> = ({ center, zoom }) => {
   const map = useMap();
-  // setView agora é usado para centralizar e dar o zoom correto
+  // setView é usado para centralizar e dar o zoom correto
   map.setView(center, zoom, { animate: true, duration: 0.5 }); 
   return null;
 }
@@ -64,15 +63,16 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
     const centerLat = activePoi ? activePoi.latitude : latitude;
     const centerLon = activePoi ? activePoi.longitude : longitude;
     const centerPosition: L.LatLngExpression = [centerLat, centerLon];
-    const currentZoom = activePoi ? 16 : 14; 
+    const initialZoom = 14; 
+    const currentZoom = activePoi ? 16 : initialZoom; 
 
     // Ícone customizado para o IMÓVEL (AZUL)
     const imovelMarkerIcon = useMemo(() => {
         if (!isClient) return null; 
         const markerHtmlStyles = `
-            background-color: #1D4ED8; /* rentou-primary */
-            width: 2.5rem; height: 2.5rem; display: flex; align-items: center; justify-content: center;
-            border-radius: 50%; border: 4px solid #FFFFFF; font-size: 1.5rem; box-shadow: 0 0 8px rgba(0,0,0,0.5);
+            background-color: #1D4ED8; width: 2.5rem; height: 2.5rem; display: flex; align-items: center; 
+            justify-content: center; border-radius: 50%; border: 4px solid #FFFFFF; font-size: 1.5rem; 
+            box-shadow: 0 0 8px rgba(0,0,0,0.5);
         `;
         const iconSvgPath = faHome.icon[4] as string; 
         return L.divIcon({
@@ -88,7 +88,7 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
         const poiIconDef = poiIconMapping[tag] || faMapMarkerAlt;
         const iconPath = poiIconDef.icon[4] as string;
 
-        const bgColor = isActive ? '#DC2626' : '#6B7280'; // Vermelho para ativo
+        const bgColor = isActive ? '#DC2626' : '#6B7280';
         const size = isActive ? '2rem' : '1.75rem';
         const borderWidth = isActive ? '3px' : '2px';
         const shadow = isActive ? '0 0 10px rgba(220, 38, 38, 0.7)' : '0 0 3px rgba(0,0,0,0.5)';
@@ -114,26 +114,19 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
 
     // Estilo para o polígono GeoJSON (o limite do bairro)
     const geoJsonStyle = {
-        color: '#1D4ED8',      
-        weight: 3,             
-        opacity: 0.8,          
-        fillColor: '#1D4ED8',  
-        fillOpacity: 0.15,     
+        color: '#1D4ED8', weight: 3, opacity: 0.8, 
+        fillColor: '#1D4ED8', fillOpacity: 0.15,     
     };
 
     return (
         <div className='w-full h-96 rounded-xl shadow-lg'>
              <MapContainer 
-                // A chave força a remontagem e o foco quando o centro muda (POI ativo)
-                key={`${centerLat}-${centerLon}-${activePoi?.name}`} 
-                center={centerPosition} 
-                zoom={currentZoom} 
+                // Zoom inicial é o initialZoom. O ChangeView fará o ajuste fino.
+                zoom={initialZoom} 
                 scrollWheelZoom={true} 
                 className="w-full h-full rounded-xl"
-                // Zoom inicial fixo para o GeoJSON não dar erro no primeiro load
-                // Se GeoJSON estiver presente, ele será ajustado logo abaixo.
-                // Se não, o ChangeView usa a posição inicial.
-                zoom={14} 
+                // Defina o centro inicial aqui (mesmo que o ChangeView o substitua)
+                center={[latitude, longitude]} 
             >
                 {/* Componente para forçar o foco no POI/Imóvel */}
                 <ChangeView center={centerPosition} zoom={currentZoom} />
@@ -143,20 +136,15 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
 
-                {/* NOVO: Desenho do GeoJSON do Bairro */}
+                {/* GeoJSON do Bairro - Garantindo que data seja um GeoJSON válido */}
                 {bairroGeoJson && (
                     <GeoJSON 
-                        // O GeoJSON precisa ser um objeto FeatureCollection ou Feature
-                        data={bairroGeoJson.type === 'Feature' ? bairroGeoJson : { type: 'Feature', geometry: bairroGeoJson }}
+                        data={bairroGeoJson} 
                         style={() => geoJsonStyle}
                         onEachFeature={(feature, layer) => {
                             layer.bindPopup(`**Bairro:** ${bairro}`);
-                            
-                            // Opcional: Ajustar o zoom do mapa aos limites do bairro
-                            // if (layer.getBounds) {
-                            //     const map = layer.get
-                            //     map.fitBounds(layer.getBounds());
-                            // }
+                            // Opcional: ajustar o mapa para a área do polígono,
+                            // mas vamos confiar no ChangeView para o foco primário.
                         }}
                     />
                 )}
