@@ -8,10 +8,11 @@ import dynamic from 'next/dynamic';
 import { fetchImovelPorSmartId } from '@/services/ImovelService'; 
 import { fetchCoordinatesByAddress } from '@/services/GeocodingService'; 
 import { Imovel } from '@/types/imovel'; 
+import { PoiResult } from '@/services/GeocodingService'; 
 import { Icon } from '@/components/ui/Icon';
 import { ImageLightbox } from '@/components/anuncios/ImageLightbox'; 
 import { StreetView } from '@/components/ui/StreetView'; 
-import { PoiList } from '@/components/anuncios/PoiList'; // Importa PoiList
+import { PoiList } from '@/components/anuncios/PoiList'; 
 
 import { 
     faChevronLeft, faSpinner, faMapMarkerAlt, faDollarSign, faBed, faShower, faCar, faRulerCombined, 
@@ -74,28 +75,20 @@ const AgentPanel: React.FC<AgentPanelProps> = ({ proprietarioHandle, proprietari
 // FUNÇÃO AUXILIAR PARA CONVERTER URL DO YOUTUBE PARA FORMATO EMBED
 const getEmbedUrl = (link: string | undefined): string | null => {
     if (!link) return null;
-
-    // 1. Tenta extrair o ID de uma URL completa (watch?v=)
     const watchMatch = link.match(/[?&]v=([^&]+)/);
     if (watchMatch) {
-        // Retorna o formato embed limpo
         return `https://www.youtube.com/embed/${watchMatch[1]}`;
     }
-
-    // 2. Tenta extrair o ID de uma URL curta (youtu.be/)
     const shortMatch = link.match(/youtu\.be\/([^?]+)/);
     if (shortMatch) {
         return `https://www.youtube.com/embed/${shortMatch[1]}`;
     }
-    
-    // 3. Se já for um embed, retorna a URL original (mas remove query params desnecessários)
     if (link.includes('youtube.com/embed/')) {
         return link.split('?')[0];
     }
-
     return null;
 };
-// FIM FUNÇÃO AUXILIAR
+
 
 export default function AnuncioDetalhePublicoPage() {
     const params = useParams();
@@ -108,10 +101,12 @@ export default function AnuncioDetalhePublicoPage() {
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     
+    const [activePoi, setActivePoi] = useState<PoiResult | null>(null);
+    const [pois, setPois] = useState<PoiResult[]>([]);
+    
     const MOCK_VIRTUAL_TOUR_URL = 'https://example.com/360-tour-mock'; 
-    const SAFE_MOCK_VIDEO_ID = 'Gv459g2-K70'; // Video de demonstração seguro
-    const MOCK_EMBED_URL = `https://www.youtube.com/embed/${SAFE_MOCK_VIDEO_ID}`;
-
+    const SAFE_MOCK_VIDEO_ID = 'Gv459g2-K70'; 
+    
     const proprietarioHandle = imovel?.proprietarioId ? imovel.proprietarioId.slice(0, 8) : 'agente-rentou';
     const proprietarioNome = "Butters John Bee - Lettings"; 
     
@@ -153,7 +148,7 @@ export default function AnuncioDetalhePublicoPage() {
                 
                 let { latitude, longitude } = data;
 
-                // --- LÓGICA DE GEOCODING: Chamado apenas se as coordenadas estiverem ausentes ---
+                // --- LÓGICA DE GEOCODING ---
                 const hasValidCoords = (latitude && longitude && (latitude !== 0 || longitude !== 0));
 
                 if (!hasValidCoords) {
@@ -162,7 +157,6 @@ export default function AnuncioDetalhePublicoPage() {
                         latitude = coords.latitude;
                         longitude = coords.longitude;
                     } else {
-                        // Fallback de Geocoding
                         latitude = -23.55052;
                         longitude = -46.633307;
                     }
@@ -170,6 +164,8 @@ export default function AnuncioDetalhePublicoPage() {
                 // --- FIM LÓGICA DE GEOCODING ---
 
                 setImovel({ ...data, latitude, longitude }); 
+                // A busca de POIs agora é iniciada pelo PoiList
+
             } catch (err: any) {
                 console.error('Erro ao buscar anúncio:', err);
                 setError(err.message || 'Falha ao carregar os dados do anúncio.'); 
@@ -181,6 +177,27 @@ export default function AnuncioDetalhePublicoPage() {
         loadImovel();
     }, [smartId]);
     
+    // ============ CORREÇÃO DO LOOP INFINITO ============
+    
+    // 1. Memoiza a função de clique
+    const handlePoiClick = useCallback((poi: PoiResult | null) => {
+        if (activePoi && poi && activePoi.name === poi.name) {
+             setActivePoi(null);
+        } else {
+            setActivePoi(poi);
+        }
+    }, [activePoi]); // Depende APENAS de 'activePoi'
+
+    // 2. Memoiza a função que recebe os POIs
+    // O array de dependências vazio [] é crucial e correto,
+    // pois setPois e setActivePoi são estáveis.
+    const handlePoisFetched = useCallback((newPois: PoiResult[]) => {
+        setPois(newPois);
+        setActivePoi(null); 
+    }, []);
+    // ============ FIM DA CORREÇÃO ============
+
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-48 bg-gray-50 dark:bg-zinc-900">
@@ -190,12 +207,22 @@ export default function AnuncioDetalhePublicoPage() {
         );
     }
     
-    // Verifica se os dados estão completos após o fetch (incluindo as coordenadas)
-    if (error || !imovel || !imovel.latitude || !imovel.longitude) {
+    if (error) {
          return (
             <div className="text-center p-10 bg-red-100 text-red-700 rounded-lg m-8">
                 <strong className="font-bold">Erro:</strong>
-                <span className="block sm:inline"> {error || 'O anúncio solicitado não pôde ser carregado ou as coordenadas do mapa estão ausentes.'}</span>
+                <span className="block sm:inline"> {error}</span>
+                <Link href="/anuncios" className="ml-4 font-semibold hover:underline text-blue-700">Voltar para o Catálogo</Link>
+            </div>
+        );
+    }
+
+    // Se o imóvel não foi encontrado após o loading
+    if (!imovel || !imovel.latitude || !imovel.longitude) {
+         return (
+            <div className="text-center p-10 bg-yellow-100 text-yellow-700 rounded-lg m-8">
+                <strong className="font-bold">Aviso:</strong>
+                <span className="block sm:inline"> Imóvel não encontrado ou indisponível.</span>
                 <Link href="/anuncios" className="ml-4 font-semibold hover:underline text-blue-700">Voltar para o Catálogo</Link>
             </div>
         );
@@ -210,15 +237,13 @@ export default function AnuncioDetalhePublicoPage() {
     const valorIPTU = imovel.custoIPTUIncluso ? imovel.valorIPTU : 0;
     const totalMonthlyValue = valorAluguelBase + valorCondominio + valorIPTU;
 
-    // Converte o link do imóvel para o formato embed. Se for inválido, cai no null.
     const finalEmbedUrl = getEmbedUrl(imovel.linkVideoTour);
     
-    const hasRealVideo = !!finalEmbedUrl; // Tem um link de vídeo válido
-    const hasVirtualTour = imovel.visitaVirtual360; // Tem visita virtual marcada
+    const hasRealVideo = !!finalEmbedUrl; 
+    const hasVirtualTour = imovel.visitaVirtual360; 
     const hasAnyMedia = hasRealVideo || hasVirtualTour;
 
 
-    // Função auxiliar para renderizar características
     const renderCharacteristic = (icon: any, label: string, value: string | number) => (
          <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
             <Icon icon={icon} className='w-5 h-5 text-rentou-primary flex-shrink-0' />
@@ -239,7 +264,6 @@ export default function AnuncioDetalhePublicoPage() {
                 <span>Voltar para o Catálogo</span>
             </Link>
             
-            {/* === Lightbox Modal === */}
             <ImageLightbox 
                 images={imovel.fotos}
                 currentIndex={currentImageIndex}
@@ -259,7 +283,6 @@ export default function AnuncioDetalhePublicoPage() {
                         {/* 1. Título e Preço */}
                         <h1 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">{imovel.titulo}</h1>
                         
-                        {/* Localização e Código (abaixo do título, alinhado à esquerda) */}
                         <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center mb-4">
                             <Icon icon={faMapMarkerAlt} className='w-4 h-4 mr-1' />
                             {imovel.endereco.cidade} - {imovel.endereco.estado} / Cód.: {imovel.smartId}
@@ -267,7 +290,7 @@ export default function AnuncioDetalhePublicoPage() {
                         
                         <div className='flex flex-col sm:flex-row items-start sm:items-end justify-between border-b pb-4 border-gray-100 dark:border-zinc-700'>
                             <div>
-                                <p className="text-4xl font-extrabold text-green-600 dark:text-green-400"> {/* CORREÇÃO: Fonte aumentada para 4xl */}
+                                <p className="text-4xl font-extrabold text-green-600 dark:text-green-400"> 
                                     <span>{formatCurrency(totalMonthlyValue)}</span>
                                 </p>
                                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -312,44 +335,36 @@ export default function AnuncioDetalhePublicoPage() {
                             </div>
                         )}
                         
-                        {/* 4. Descrição Completa (CORRIGIDO: Adiciona Endereço) */}
+                        {/* 4. Descrição Completa */}
                         <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
                             <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Descrição do Imóvel</h2>
                             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                                 {imovel.descricaoLonga || 'Nenhuma descrição detalhada fornecida para este anúncio.'}
                             </p>
                             
-                            {/* NOVO: ENDEREÇO COMPLETO NO FINAL DA DESCRIÇÃO */}
                             <div className="pt-3 border-t border-gray-100 dark:border-zinc-700">
                                 <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mt-2 flex items-center space-x-2">
                                      <Icon icon={faMapMarkerAlt} className='w-4 h-4 text-red-500' />
                                      <span>Localização Exata (Para Contrato)</span>
                                 </h3>
                                 <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                                    {imovel.endereco.logradouro}, {imovel.endereco.numero}
-                                    {imovel.endereco.complemento && `, ${imovel.endereco.complemento}`}
-                                    , {imovel.endereco.bairro}
-                                    , {imovel.endereco.cidade} - {imovel.endereco.estado} ({imovel.endereco.cep})
+                                    {fullAddressString}
                                 </p>
                             </div>
                         </div>
-                        {/* FIM: DESCRIÇÃO CORRIGIDA */}
                         
-                        {/* 5. Visita Virtual e Vídeo (LÓGICA CONDICIONAL) */}
+                        {/* 5. Visita Virtual e Vídeo */}
                         <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
                             <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Mídia Interativa</h2>
                             
-                            {hasAnyMedia ? (
+                            {(hasRealVideo || hasVirtualTour) ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    
-                                    {/* Visita Virtual 360 */}
                                     {hasVirtualTour && (
                                         <div className="space-y-2">
                                             <h3 className='text-lg font-medium text-gray-800 dark:text-gray-200 flex items-center'>
                                                 <Icon icon={faVideo} className='w-5 h-5 mr-2 text-green-500' />
                                                 Visita Virtual 360°
                                             </h3>
-                                            {/* Mock da Visita Virtual */}
                                             <a href={MOCK_VIRTUAL_TOUR_URL} target="_blank" rel="noopener noreferrer" className="block w-full h-48 bg-gray-100 dark:bg-zinc-700 rounded-lg overflow-hidden flex items-center justify-center text-rentou-primary hover:bg-gray-200 dark:hover:bg-zinc-600 border-4 border-dashed border-rentou-primary/50">
                                                 <div className='text-center'>
                                                      <Icon icon={faGlobe} className='w-10 h-10 mb-2' />
@@ -358,15 +373,12 @@ export default function AnuncioDetalhePublicoPage() {
                                             </a>
                                         </div>
                                     )}
-                                    
-                                    {/* Vídeo do Imóvel (YouTube) */}
                                     {hasRealVideo && (
                                         <div className="space-y-2">
                                             <h3 className='text-lg font-medium text-gray-800 dark:text-gray-200 flex items-center'>
                                                 <Icon icon={faVideo} className='w-5 h-5 mr-2 text-red-600' />
                                                 Vídeo do Imóvel
                                             </h3>
-                                            {/* Embed Responsivo */}
                                             <div className="relative w-full h-0 pb-[56.25%] rounded-lg overflow-hidden shadow-lg">
                                                 <iframe
                                                     className="absolute top-0 left-0 w-full h-full"
@@ -386,26 +398,18 @@ export default function AnuncioDetalhePublicoPage() {
                                     </p>
                                 </div>
                             )}
-
                         </div>
-                        {/* FIM: LÓGICA CONDICIONAL */}
-
 
                         {/* 6. Informações de Locação e Financeiras Detalhadas */}
-                        <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
+                         <div className="pt-4 border-t border-gray-100 dark:border-zinc-700 space-y-4">
                             <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Informações de Locação</h2>
-                            
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-y-3 gap-x-6 text-sm">
-                                
-                                {/* Coluna 1: Tipo e Status */}
                                 <div className='space-y-3'>
                                     <div className='font-bold text-gray-800 dark:text-gray-200 border-b border-gray-100 pb-1'>Detalhes Gerais</div>
                                     <p><Icon icon={faTag} className='w-4 h-4 mr-2 text-blue-500' /> Categoria Principal: <span className='font-medium'>{imovel.categoriaPrincipal}</span></p>
                                     <p><Icon icon={faHome} className='w-4 h-4 mr-2 text-blue-500' /> Tipo Detalhado: <span className='font-medium'>{imovel.tipoDetalhado}</span></p>
                                     <p><Icon icon={faCalendarAlt} className='w-4 h-4 mr-2 text-red-500' /> Disponível a partir de: <span className='font-medium'>{new Date(imovel.dataDisponibilidade).toLocaleDateString('pt-BR', { dateStyle: 'medium' })}</span></p>
                                 </div>
-
-                                {/* Coluna 2: Estrutura */}
                                 <div className='space-y-3'>
                                     <div className='font-bold text-gray-800 dark:text-gray-200 border-b border-gray-100 pb-1'>Estrutura Interna</div>
                                     <p><Icon icon={faBed} className='w-4 h-4 mr-2 text-red-500' /> Suítes: <span className='font-medium'>{imovel.suites}</span></p>
@@ -413,8 +417,6 @@ export default function AnuncioDetalhePublicoPage() {
                                     <p><Icon icon={faBuilding} className='w-4 h-4 mr-2 text-green-500' /> Andar: <span className='font-medium'>{imovel.andar ? imovel.andar : 'Térreo/Único'}</span></p>
                                     <p><Icon icon={faTag} className='w-4 h-4 mr-2 text-gray-500' /> Animais: <span className='font-medium'>{imovel.aceitaAnimais ? 'Permitido' : 'Não Permitido'}</span></p>
                                 </div>
-
-                                {/* Coluna 3: Responsabilidades */}
                                 <div className='space-y-3'>
                                     <div className='font-bold text-gray-800 dark:text-gray-200 border-b border-gray-100 pb-1'>Encargos</div>
                                     <p><Icon icon={faDollarSign} className='w-4 h-4 mr-2 text-yellow-500' /> Condomínio: <span className='font-medium'>{imovel.responsavelCondominio}</span></p>
@@ -422,8 +424,6 @@ export default function AnuncioDetalhePublicoPage() {
                                     <p><Icon icon={faRulerCombined} className='w-4 h-4 mr-2 text-gray-500' /> Finalidades: <span className='font-medium'>{imovel.finalidades.join(', ')}</span></p>
                                 </div>
                             </div>
-                            
-                            {/* Características Adicionais */}
                             {imovel.caracteristicas.length > 0 && (
                                 <div className='pt-4'>
                                     <h3 className='font-bold text-gray-800 dark:text-gray-200 mb-2'>Comodidades:</h3>
@@ -440,27 +440,34 @@ export default function AnuncioDetalhePublicoPage() {
                     {/* 7. Seção de Mapa (Real) */}
                     <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700">
                         <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Localização Exata</h2>
-                        {/* Renderiza o mapa com as coordenadas (obtidas por geocoding ou mock) */}
                         <DynamicMapDisplay 
                             latitude={imovel.latitude as number}
                             longitude={imovel.longitude as number}
                             titulo={imovel.titulo}
-                            bairro={imovel.endereco.bairro} 
+                            bairro={imovel.endereco.bairro}
+                            pois={pois} 
+                            activePoi={activePoi} 
+                            valorAluguel={totalMonthlyValue}
+                            quartos={totalDormitorios}
+                            banheiros={totalBanheiros}
+                            vagasGaragem={imovel.vagasGaragem}
                         />
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-3">
                             O círculo indica a área aproximada do bairro **{imovel.endereco.bairro}**.
                         </p>
                     </div>
                     
-                    {/* 9. PONTOS DE INTERESSE (POIs) - MOVIDO PARA CÁ */}
+                    {/* 9. PONTOS DE INTERESSE (POIs) */}
                      <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700">
                         <PoiList
                             latitude={imovel.latitude as number}
                             longitude={imovel.longitude as number}
+                            onClickPoi={handlePoiClick} 
+                            onPoisFetched={handlePoisFetched} 
                         />
                     </div>
 
-                    {/* 8. Street View (MOVIDO PARA BAIXO, MAIS DISCRETO) */}
+                    {/* 8. Street View */}
                     <StreetView
                         latitude={imovel.latitude as number}
                         longitude={imovel.longitude as number}

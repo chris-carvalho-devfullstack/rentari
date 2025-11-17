@@ -1,10 +1,10 @@
 // src/hooks/useImoveis.ts
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Imovel } from '@/types/imovel';
 import { subscribeToImoveis } from '@/services/ImovelService'; 
-import { useAuthStore } from './useAuthStore'; // <-- NOVO: Importa o hook de autenticação
+import { useAuthStore } from './useAuthStore'; // Importa o hook de autenticação
 
 interface UseImoveisResult {
   imoveis: Imovel[];
@@ -15,27 +15,34 @@ interface UseImoveisResult {
 
 /**
  * @fileoverview Custom Hook para buscar e gerenciar o estado da lista de imóveis.
- * CORRIGIDO: Agora filtra pelo ID do usuário autenticado.
+ * CORRIGIDO: Removido useCallback para evitar stale closures e loop infinito.
  */
 export const useImoveis = (): UseImoveisResult => {
-  const { user, isAuthenticated } = useAuthStore(); // <-- NOVO: Obtém o usuário
+  const { user, isAuthenticated } = useAuthStore();
+  const userId = user?.id; // Obtém o ID do usuário de forma segura
+  
   const [imoveis, setImoveis] = useState<Imovel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Função para configurar a subscrição (usada no useEffect)
-  const startSubscription = useCallback((proprietarioId: string) => {
-    setError(null);
-    
-    if (!proprietarioId) {
-        setLoading(false);
-        setError('Proprietário não autenticado.');
-        return () => {}; // Retorna função vazia de limpeza
+
+  useEffect(() => {
+    // 1. Verifica se o usuário está autenticado e se o ID está disponível.
+    if (!isAuthenticated || !userId) {
+      setLoading(false);
+      setImoveis([]);
+      // Não definimos um erro, apenas não buscamos dados
+      // setError('Usuário não autenticado. Imóveis não podem ser carregados.');
+      return; // Interrompe o efeito aqui
     }
-    
-    // Inicia a escuta em tempo real no Firestore, passando o ID do proprietário
+
+    setLoading(true);
+    setError(null);
+
+    // 2. A lógica de inscrição (anteriormente em 'startSubscription')
+    // é movida DIRETAMENTE para dentro do useEffect.
+    // Isso garante que setImoveis, setLoading e setError NUNCA estejam "stale" (velhos).
     const unsubscribe = subscribeToImoveis(
-        proprietarioId, // <-- NOVO: Passa o ID
+        userId,
         (data) => {
             setImoveis(data);
             setLoading(false);
@@ -43,38 +50,27 @@ export const useImoveis = (): UseImoveisResult => {
         },
         (e) => {
             console.error('Erro na subscription de imóveis:', e);
-            const errorMessage = e.message || 'Não foi possível carregar a lista de imóveis em tempo real. Verifique sua conexão ou tente novamente.';
+            const errorMessage = e.message || 'Não foi possível carregar a lista de imóveis em tempo real.';
             setError(errorMessage);
             setImoveis([]);
             setLoading(false);
         }
     );
     
-    // A função de limpeza do useEffect (retorno)
-    return unsubscribe;
-  }, []); 
-
-  useEffect(() => {
-    if (!isAuthenticated || !user?.id) {
-        setLoading(false);
-        setImoveis([]);
-        setError('Usuário não autenticado. Imóveis não podem ser carregados.');
-        return;
-    }
-    
-    // Inicia a escuta, passando o ID do usuário
-    const unsubscribe = startSubscription(user.id);
-    
-    // Cleanup: Para a escuta do Firestore quando o componente for desmontado
+    // 3. A função de limpeza retornada pelo useEffect
     return () => {
-        console.log('[useImoveis] Unsubscribing from Firestore.');
-        unsubscribe();
+      console.log('[useImoveis] Unsubscribing from Firestore.');
+      unsubscribe();
     };
-  }, [isAuthenticated, user?.id, startSubscription]); // Dependências do usuário e autenticação
 
-  // A função refetch agora é um no-op
+  // 4. O array de dependências agora contém APENAS os valores
+  // estáveis que devem acionar a re-inscrição: o status de 
+  // autenticação e o ID do usuário.
+  }, [isAuthenticated, userId]); 
+
+  // A função refetch (se você não usa, pode remover)
   const refetch = () => {
-    console.log('[useImoveis] Refetch chamado. Atualização em tempo real é contínua.');
+    console.log('[useImoveis] Refetch chamado. A atualização já é em tempo real.');
   };
 
   return { imoveis, loading, error, refetch };
