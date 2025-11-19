@@ -27,12 +27,10 @@ const nextConfig: NextConfig = {
     ];
   },
   
-  // 2. REWRITES (Removidas todas as regras de app.rentou.com.br para evitar o conflito /rentou)
+  // 2. REWRITES (Garantindo array vazio para não conflitar com o Middleware)
   async rewrites() {
     return [
-      // As regras de rewrite para 'app.rentou.com.br' foram removidas.
-      // O Middleware (src/proxy.ts) agora fará o redirecionamento da raiz (/)
-      // para /dashboard ou /login, conforme a autenticação.
+      // Regras de rewrite removidas para que o Middleware (src/proxy.ts) gerencie o roteamento interno.
     ];
   },
 };

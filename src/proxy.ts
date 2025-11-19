@@ -51,20 +51,19 @@ export default function proxy(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
     
-    // NOVO CASO D (FIX): Re-escreve rotas protegidas (como /dashboard) para o caminho do arquivo no disco
-    // O Next.js permite usar a convenção de pastas (grupo)/path em rewrites internos.
-    if (pathname.startsWith('/')) { 
-      if (isProtectedPath) {
-          // Ex: /dashboard -> /rentou/dashboard (mapeando para a pasta física /src/app/(rentou))
-          return NextResponse.rewrite(new URL(`/rentou${pathname}`, url.origin));
-      }
-      if (isAuthRoute) {
-           // Ex: /login -> /auth/login (mapeando para a pasta física /src/app/(auth))
-          return NextResponse.rewrite(new URL(`/auth${pathname}`, url.origin));
-      }
+    // NOVO CASO D (FIX): Re-escreve rotas para o caminho do arquivo no disco APÓS AS REGRAS DE REDIRECIONAMENTO.
+    // Isso é necessário porque o Next.js falhou em mapear as rotas de grupo automaticamente.
+    if (isProtectedPath) {
+        // Rotas protegidas: Ex: /dashboard -> /rentou/dashboard
+        return NextResponse.rewrite(new URL(`/rentou${pathname}`, url.origin));
     }
     
-    // Se for uma rota que já está no domínio (ex: /anuncios) ou não é protegida, deixa passar.
+    if (isAuthRoute) {
+         // Rotas de autenticação: Ex: /login -> /auth/login
+        return NextResponse.rewrite(new URL(`/auth${pathname}`, url.origin));
+    }
+    
+    // Se não for nenhum dos casos acima, o Next.js cuida do roteamento (ex: /anuncios, /)
   }
 
   return NextResponse.next();
@@ -72,6 +71,6 @@ export default function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // ... (código mantido)
+    '/((?!api|_next/static|_next/image|favicon.ico|assets|logo.svg|media|.*\\..*).*)',
   ],
 };
