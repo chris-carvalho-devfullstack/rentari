@@ -11,7 +11,7 @@ export default function proxy(request: NextRequest) {
   const authToken = request.cookies.get('rentou-auth-token')?.value;
   const url = request.nextUrl;
   const hostname = url.hostname;
-  const pathname = url.pathname;
+  let pathname = url.pathname; // Usamos 'let' para permitir modificação no Caso A
 
   const isAppDomain = hostname === APP_DOMAIN;
   
@@ -26,50 +26,47 @@ export default function proxy(request: NextRequest) {
 
   if (isAppDomain) {
     
-    // CASO A: Acesso à RAIZ (/)
-    if (pathname === '/') {
-      if (authToken) {
-        // Logado acessando raiz -> Dashboard
-        return NextResponse.redirect(new URL(DASHBOARD_PATH, url.origin));
-      } else {
-        // Deslogado acessando raiz -> Login
-        return NextResponse.redirect(new URL(LOGIN_PATH, url.origin));
-      }
+    // CASO A (CORREÇÃO FINAL): Acesso à RAIZ (/) OU a ROTA PROBLEMÁTICA "/rentou"
+    // Nesses casos, definimos o pathname interno desejado (Dashboard ou Login) e 
+    // permitimos que o código siga para o rewrite no final, sem redirecionar.
+    if (pathname === '/' || pathname === '/rentou') {
+      pathname = authToken ? DASHBOARD_PATH : LOGIN_PATH;
+      url.pathname = pathname; // Atualiza a URL para ser usada no rewrite final
     }
     
     // CASO B: Usuário AUTENTICADO acessando uma ROTA DE AUTENTICAÇÃO (/login, /signup)
     if (authToken && isAuthRoute) {
-      // Redireciona logado para o Dashboard
+      // Redireciona logado para o Dashboard (Redirecionamento externo, pois a URL deve mudar)
       return NextResponse.redirect(new URL(DASHBOARD_PATH, url.origin));
     }
     
     // CASO C: Usuário NÃO AUTENTICADO acessando uma ROTA PROTEGIDA
     if (!authToken && isProtectedPath) {
-      // Redireciona deslogado para o Login
+      // Redireciona deslogado para o Login (Redirecionamento externo, pois a URL deve mudar)
       const redirectUrl = new URL(LOGIN_PATH, url.origin);
       redirectUrl.searchParams.set('from', pathname); 
       return NextResponse.redirect(redirectUrl);
     }
     
-    // NOVO CASO D (FIX): Re-escreve rotas para o caminho do arquivo no disco APÓS AS REGRAS DE REDIRECIONAMENTO.
-    // Isso é necessário porque o Next.js falhou em mapear as rotas de grupo automaticamente.
+    // CASO D (Mapeamento Interno): Re-escreve rotas para o caminho do arquivo no disco.
+    // Esta regra garante que /dashboard -> /rentou/dashboard e /login -> /auth/login internamente.
+    // Ela também captura o resultado do CASO A.
     if (isProtectedPath) {
-        // Rotas protegidas: Ex: /dashboard -> /rentou/dashboard
+        // Rotas protegidas: Ex: /dashboard -> /rentou/dashboard (caminho físico)
         return NextResponse.rewrite(new URL(`/rentou${pathname}`, url.origin));
     }
     
     if (isAuthRoute) {
-         // Rotas de autenticação: Ex: /login -> /auth/login
+         // Rotas de autenticação: Ex: /login -> /auth/login (caminho físico)
         return NextResponse.rewrite(new URL(`/auth${pathname}`, url.origin));
     }
-    
-    // Se não for nenhum dos casos acima, o Next.js cuida do roteamento (ex: /anuncios, /)
   }
 
   return NextResponse.next();
 }
 
 export const config = {
+  // Mantemos o matcher abrangente para que o Middleware intercepte o tráfego do app.rentou.com.br
   matcher: [
     '/((?!api|_next/static|_next/image|favicon.ico|assets|logo.svg|media|.*\\..*).*)',
   ],
