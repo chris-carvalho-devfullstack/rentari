@@ -1,4 +1,4 @@
-// chris-carvalho-devfullstack/rentari/rentari-a5095e5f0efc1e543757fa8dd87a73cb94b50b98/src/proxy.ts
+// chris-carvalho-devfullstack/rentari/rentari-main/src/proxy.ts
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
@@ -15,10 +15,10 @@ export default function proxy(request: NextRequest) {
 
   const isAppDomain = hostname === APP_DOMAIN;
   
-  // Rotas de autenticação (login, signup)
+  // Rotas de autenticação (login, signup) - Usam o grupo (auth)
   const isAuthRoute = pathname === LOGIN_PATH || pathname === '/signup'; 
   
-  // Rotas protegidas (todas que não são login/signup/API)
+  // Rotas protegidas (todas que não são login/signup/API) - Usam o grupo (rentou)
   const isProtectedPath = pathname.startsWith(DASHBOARD_PATH) || 
                           pathname.startsWith('/imoveis') || 
                           pathname.startsWith('/perfil') ||
@@ -51,7 +51,20 @@ export default function proxy(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
     
-    // Se não for nenhum dos casos acima (ex: uma rota estática pública), Next.next()
+    // NOVO CASO D (FIX): Re-escreve rotas protegidas (como /dashboard) para o caminho do arquivo no disco
+    // O Next.js permite usar a convenção de pastas (grupo)/path em rewrites internos.
+    if (pathname.startsWith('/')) { 
+      if (isProtectedPath) {
+          // Ex: /dashboard -> /rentou/dashboard (mapeando para a pasta física /src/app/(rentou))
+          return NextResponse.rewrite(new URL(`/rentou${pathname}`, url.origin));
+      }
+      if (isAuthRoute) {
+           // Ex: /login -> /auth/login (mapeando para a pasta física /src/app/(auth))
+          return NextResponse.rewrite(new URL(`/auth${pathname}`, url.origin));
+      }
+    }
+    
+    // Se for uma rota que já está no domínio (ex: /anuncios) ou não é protegida, deixa passar.
   }
 
   return NextResponse.next();
@@ -59,6 +72,6 @@ export default function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|assets|logo.svg|media|.*\\..*).*)',
+    // ... (código mantido)
   ],
 };
