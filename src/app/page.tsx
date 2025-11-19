@@ -14,7 +14,7 @@ export default function LandingPage() {
         
         {/* Logomarca Rentou (Prominente) */}
         <Image
-          src="/media/Rentou logomarcca.png"
+          src="/media/rentou-logo.png" // <-- CORRIGIDO: Nome do arquivo atualizado
           alt="Rentou Logomarca"
           width={250} // Aumentado o tamanho
           height={75}

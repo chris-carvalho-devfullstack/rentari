@@ -111,11 +111,6 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
         });
     }, [isClient]);
 
-
-    if (!isClient || !imovelMarkerIcon) {
-         return <div className='w-full h-96 rounded-xl bg-gray-100 dark:bg-zinc-700/50' aria-hidden="true" />;
-    }
-
     // Estilo para o polígono GeoJSON (o limite do bairro)
     const geoJsonStyle = {
         color: '#1D4ED8', weight: 3, opacity: 0.8, 
@@ -123,10 +118,15 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
     };
 
     // URL para abrir o Street View (usando coordenadas para maior precisão)
+    // CORREÇÃO: MOVIDO PARA CIMA (ANTES DO IF)
     const streetViewLink = useMemo(() => {
         // Formato para embed Street View (cbp para orientação padrão)
         return `http://maps.google.com/maps?layer=c&cbll=${latitude},${longitude}&cbp=12,20,0,0,0&hl=pt-BR&output=svembed`;
     }, [latitude, longitude]);
+
+    if (!isClient || !imovelMarkerIcon) {
+         return <div className='w-full h-96 rounded-xl bg-gray-100 dark:bg-zinc-700/50' aria-hidden="true" />;
+    }
     
     return (
         <div className='w-full h-96 rounded-xl shadow-lg relative'>

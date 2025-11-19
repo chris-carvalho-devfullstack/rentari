@@ -29,7 +29,7 @@ import {
     faToilet, faWater
 } from '@fortawesome/free-solid-svg-icons';
 
-export const runtime = 'edge';
+export const runtime = 'edge'; // <--- ADICIONE ESTA LINHA AQUI
 
 // Componente utilitário para formatação de moeda
 const formatCurrency = (value: number) =>
@@ -142,7 +142,7 @@ const FinancialCard: React.FC<FinancialCardProps> = ({ label, value, icon, color
 
 // MOCK DE IMAGENS (Corrigido para usar Picsum)
 const mockPhotos = [
-    '/media/Rentou logomarcca.png', 
+    '/media/rentou-logo.png', // <-- CORRIGIDO: Nome do arquivo atualizado
     'https://picsum.photos/seed/imovel1/1600/900', 
     'https://picsum.photos/seed/imovel2/1200/800', 
     'https://picsum.photos/seed/imovel3/1920/1080', 

@@ -84,7 +84,7 @@ export default function Sidebar() {
         {/* CORREÇÃO: Adicionado 'relative' ao Link e 'fill' no Image para preencher o container */}
         <Link href="/dashboard" className="w-full h-full flex items-center justify-center relative">
           <Image
-            src="/media/Rentou logomarcca.png"
+            src="/media/rentou-logo.png" // <-- CORRIGIDO: Nome do arquivo atualizado
             alt="Rentou Logomarca"
             fill // Define que a imagem deve preencher as dimensões do pai
             priority 
