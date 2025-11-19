@@ -1,4 +1,4 @@
-// chris-carvalho-devfullstack/rentari/rentari-a5095e5f0efc1e543757fa8dd87a73cb94b50b98/next.config.ts
+// chris-carvalho-devfullstack/rentari/rentari-main/next.config.ts
 
 import type { NextConfig } from "next";
 
@@ -42,16 +42,11 @@ const nextConfig: NextConfig = {
         destination: '/auth/signup',
       },
 
-      // MAPA GERAL PARA O PORTAL DE GESTÃO: Mapeia todas as outras rotas para /(rentou)
-      {
-        source: '/:path*',
-        has: [
-          { type: 'host', value: 'app.rentou.com.br' },
-        ],
-        destination: '/rentou/:path*', 
-      },
-      // MAPA DA RAIZ: Deve ser tratada pela regra de cima se o proxy não atuar,
-      // mas garantimos que o /login e /dashboard não caiam no /rentou.
+      // REGRA REMOVIDA: A regra que mapeava '/:path*' para '/rentou/:path*'
+      // foi removida para permitir que o Middleware (src/proxy.ts) trate a 
+      // autenticação e o redirecionamento de raiz corretamente (para /dashboard ou /login).
+      // O Next.js fará o roteamento de /dashboard, /imoveis, etc., diretamente para
+      // a pasta de agrupamento (rentou) sem a necessidade de um rewrite.
     ];
   },
 };
