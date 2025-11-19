@@ -3,9 +3,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
+  // CORREÇÃO 1: Removido 'reactCompiler: true,' para evitar o erro Invalid next.config.ts options
   images: {
-    unoptimized: true, // <--- Desativa a otimização de imagem da Vercel
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -25,9 +25,7 @@ const nextConfig: NextConfig = {
       }
     ],
   },
-  // =======================================================
-  // NOVO: CONFIGURAÇÃO DE REWRITES PARA SUBDOMÍNIOS
-  // =======================================================
+  
   async rewrites() {
     return [
       // 1. Roteamento para o Portal de Gestão (app.rentou.com.br)
@@ -39,11 +37,11 @@ const nextConfig: NextConfig = {
             value: 'app.rentou.com.br',
           },
         ],
-        // Reescreve as rotas de app.rentou.com.br para o grupo /rentou
-        // Ex: app.rentou.com.br/dashboard -> /dashboard (do grupo /rentou)
-        destination: '/(rentou)/:path*',
+        // CORREÇÃO 2: Usa o nome do grupo sem parênteses no destino
+        // O Next.js sabe que 'rentou' mapeia para a pasta '(rentou)'
+        destination: '/rentou/:path*',
       },
-      // 2. Roteamento para rotas de autenticação (sem /rentou prefixo)
+      // 2. Roteamento para rotas de autenticação
       {
         source: '/:path*',
         has: [
@@ -52,8 +50,8 @@ const nextConfig: NextConfig = {
             value: 'app.rentou.com.br',
           },
         ],
-        // Permite que as rotas de autenticação (/login, /signup) funcionem no app.rentou.com.br
-        destination: '/(auth)/:path*', 
+        // CORREÇÃO 2: Usa o nome do grupo sem parênteses no destino
+        destination: '/auth/:path*', 
       },
       // 3. Redirecionamento da raiz www.rentou.com.br para /anuncios
       {
@@ -68,7 +66,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // =======================================================
 };
 
 export default nextConfig;
