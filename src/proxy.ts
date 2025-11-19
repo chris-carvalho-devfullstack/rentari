@@ -21,29 +21,30 @@ export default function proxy(request: NextRequest) {
   // 1. Verifica se está no domínio PROTEGIDO (app.rentou.com.br)
   const isAppDomain = hostname === APP_DOMAIN;
   
-  // As rotas de autenticação (login, signup)
-  const isAuthRoute = pathname === LOGIN_URL || pathname === '/signup'; 
-  
-  // As rotas que são internas ao portal de gestão e não são autenticação
+  // Rotas que são internas ao portal de gestão e não são autenticação
   const isProtectedPath = pathname.startsWith(DASHBOARD_URL) || 
                           pathname.startsWith('/imoveis') || 
                           pathname.startsWith('/perfil') ||
                           pathname.startsWith('/financeiro');
 
+  // As rotas de autenticação (login, signup)
+  const isAuthRoute = pathname === LOGIN_URL || pathname === '/signup'; 
+
   if (isAppDomain) {
     
     // CASO 1: Usuário AUTENTICADO acessando a RAIZ (/) OU uma rota de AUTENTICAÇÃO
     if (authToken && (pathname === '/' || isAuthRoute)) {
-      // Redireciona para o dashboard
+      // Se logado, sempre redireciona para o dashboard
       return NextResponse.redirect(new URL(DASHBOARD_URL, url.origin));
     }
     
     // CASO 2: Usuário NÃO AUTENTICADO acessando a RAIZ (/) OU uma rota PROTEGIDA
-    // O '/' (raiz) será tratado aqui se o usuário não tiver o token
+    // O '/' (raiz) será tratado aqui para forçar o login.
     if (!authToken && (pathname === '/' || isProtectedPath)) {
       // Redireciona para o login
       const redirectUrl = new URL(LOGIN_URL, url.origin);
-      // Mantém a origem da rota que o usuário tentou acessar, a menos que seja a raiz
+      
+      // Adiciona o 'from' apenas se não for a raiz
       if(pathname !== '/') {
         redirectUrl.searchParams.set('from', pathname); 
       }
