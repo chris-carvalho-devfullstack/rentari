@@ -2,9 +2,15 @@
 
 import { create } from 'zustand';
 import { Usuario, QualificacaoPF, QualificacaoPJ, UpdateUserDadosBancarios } from '@/types/usuario';
-import { signOut } from 'firebase/auth'; 
+import { signOut, deleteUser } from 'firebase/auth'; // <--- ADICIONADO deleteUser
 import { auth } from '@/services/FirebaseService'; 
-import { fetchUserByUid, createNewUserDocument, updateUserInFirestore, fetchUserByEmail } from '@/services/UserService'; 
+import { 
+    fetchUserByUid, 
+    createNewUserDocument, 
+    updateUserInFirestore, 
+    fetchUserByEmail,
+    deleteUserDocument // <--- ADICIONADO
+} from '@/services/UserService'; 
 
 // --- Interface de Estado Atualizada ---
 interface AuthState {
@@ -13,6 +19,7 @@ interface AuthState {
   setUser: (user: Usuario) => void;
   clearUser: () => void;
   logout: () => Promise<void>; 
+  deleteAccount: () => Promise<void>; // <--- NOVA AÇÃO
   fetchUserData: (id: string, email: string, name: string) => Promise<Usuario>;
   updateUser: (newUserData: Partial<Usuario> | QualificacaoPF | QualificacaoPJ) => Promise<Usuario>; 
 }
@@ -47,37 +54,77 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  // NOVO: Lógica de busca/criação/associação de usuário no Firestore
+  // --- NOVA FUNÇÃO: DELETAR CONTA ---
+  deleteAccount: async () => {
+    const currentUser = auth.currentUser;
+    const currentStoreUser = get().user;
+
+    if (!currentUser || !currentStoreUser) {
+        throw new Error("Nenhum usuário autenticado para exclusão.");
+    }
+
+    try {
+        console.log('--- [DEBUG] Iniciando processo de exclusão de conta...');
+
+        // 1. Excluir dados do Firestore (Perfil)
+        await deleteUserDocument(currentStoreUser.id);
+        
+        // 2. Excluir usuário do Firebase Authentication
+        // Nota: Isso requer que o login seja recente. Se falhar, o frontend deve pedir re-login.
+        await deleteUser(currentUser);
+
+        // 3. Limpar sessão local
+        if (typeof window !== 'undefined') {
+            clearAuthCookie();
+        }
+        get().clearUser();
+
+        console.log('--- [DEBUG] Conta excluída permanentemente.');
+
+    } catch (error: any) {
+        console.error('Erro ao excluir conta:', error);
+        if (error.code === 'auth/requires-recent-login') {
+            throw new Error("Por segurança, faça logout e login novamente antes de excluir sua conta.");
+        }
+        throw new Error("Falha ao excluir a conta. Tente novamente mais tarde.");
+    }
+  },
+
+  // Lógica de busca/criação/associação de usuário no Firestore
   fetchUserData: async (id: string, email: string, name: string): Promise<Usuario> => {
     // 1. Tenta buscar pelo UID (Método principal - para usuários existentes)
     let userData = await fetchUserByUid(id);
 
     if (userData) {
         console.log('[useAuthStore] Usuário encontrado por UID.');
+
+        // === CORREÇÃO AQUI ===
+        // Se o usuário já existe, mas o nome fornecido agora (no cadastro) é válido 
+        // e diferente do nome genérico que está no banco, atualizamos.
+        const nomesGenericos = ['Usuário Rentou', 'Proprietário Rentou', 'Novo Usuário'];
+        
+        if (name && !nomesGenericos.includes(name) && userData.nome !== name) {
+             console.log(`[useAuthStore] Atualizando nome do perfil: De '${userData.nome}' para '${name}'`);
+             await updateUserInFirestore(id, { nome: name });
+             userData = { ...userData, nome: name };
+        }
+        // =====================
+
         return userData;
     }
     
-    // 2. Se não encontrou por UID, checa se o email já existe (para associação de credenciais)
+    // 2. Se não encontrou por UID, checa se o email já existe
     const existingUserByEmail = await fetchUserByEmail(email);
 
     if (existingUserByEmail) {
-        // CASO: Usuário existe (registrado com Email/Senha), mas está logando com Google
-        // O Firebase Auth já cuidou de associar a credencial. 
-        // Apenas criamos o documento com o NOVO UID, se for o caso, 
-        // ou buscamos o documento existente (se tivesse UID antigo).
-        // Aqui, criamos um novo documento com o UID do Google para garantir a persistência.
-        console.warn(`[useAuthStore] Usuário com email ${email} já existia (UID: ${existingUserByEmail.id}). Criando documento com o novo UID (${id}).`);
-
-        // Copiamos os dados importantes do documento antigo para o novo UID (ex: nome, telefone)
-        // Nota: Idealmente, você migraria *todos* os dados para o novo UID ou forçaria o login com o provedor original. 
-        // Para simplificar, o sistema assume que o documento do novo UID (Google) está sendo criado/atualizado agora.
+        console.warn(`[useAuthStore] Usuário com email ${email} já existia. Criando documento com o novo UID.`);
     }
     
-    // CASO: Usuário totalmente novo (Google ou Email/Senha)
+    // CASO: Usuário totalmente novo
     userData = await createNewUserDocument(id, email, name);
     console.log('[useAuthStore] Novo usuário criado do zero.');
     
-    // Garante que o email seja o mais atualizado (do Firebase Auth)
+    // Garante que o email seja o mais atualizado
     if (userData.email !== email) {
       userData = { ...userData, email: email };
     }
@@ -85,7 +132,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     return userData;
   },
   
-  // ATUALIZADO: updateUser... (Mantida a lógica de persistência no Firestore e mesclagem de estado)
+  // Atualiza dados do usuário
   updateUser: async (newUserData) => {
     const currentState = get();
     
@@ -127,15 +174,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // 1. Prepara o payload do Firestore (dados básicos)
         firestorePayload = { ...partialUpdate };
         
-        // Se o campo 'fotoUrl' estiver na atualização e for null, deve ser salvo como ''
         if ('fotoUrl' in partialUpdate && partialUpdate.fotoUrl === null) {
              firestorePayload.fotoUrl = '';
         }
         
-        // Se for atualização de dados bancários, aninha-os para o Firestore
         if (partialUpdate.dadosBancarios) {
             firestorePayload['dadosBancarios'] = partialUpdate.dadosBancarios;
-            delete firestorePayload.dadosBancarios; // Garante que o campo não vá como undefined
+            delete firestorePayload.dadosBancarios; 
         }
         
         // 2. Atualiza o estado local mesclando
@@ -149,16 +194,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         };
     }
     
-    // Persiste no Firestore
     try {
         await updateUserInFirestore(currentUser.id, firestorePayload);
-        
-        // Atualiza o Zustand APENAS se o Firestore tiver sucesso
         set({ user: updatedUser });
-
-        console.log('--- [DEBUG] Usuário atualizado com sucesso no Zustand e Firestore.');
         return updatedUser;
-        
     } catch (e) {
         console.error('Falha na persistência do usuário no Firestore:', e);
         throw new Error("Falha ao salvar dados no banco de dados.");

@@ -6,11 +6,11 @@ import {
     doc, 
     getDoc, 
     setDoc, 
-    updateDoc, 
+    updateDoc,
+    deleteDoc, // <--- ADICIONADO
     PartialWithFieldValue,
     DocumentData,
     serverTimestamp, 
-    FieldValue,
     query, 
     collection, 
     where, 
@@ -71,7 +71,7 @@ export async function fetchUserByUid(uid: string): Promise<Usuario | null> {
 }
 
 /**
- * NOVO: Busca um usuário pelo campo 'email'. Útil para associar contas Google/Email+Senha.
+ * Busca um usuário pelo campo 'email'. Útil para associar contas Google/Email+Senha.
  */
 export async function fetchUserByEmail(email: string): Promise<Usuario | null> {
     console.log(`[UserService] Buscando usuário pelo email: ${email} (para associação)...`);
@@ -92,7 +92,7 @@ export async function fetchUserByEmail(email: string): Promise<Usuario | null> {
 }
 
 /**
- * NOVO: Busca um usuário pelo handle público (para página pública de proprietário).
+ * Busca um usuário pelo handle público (para página pública de proprietário).
  */
 export async function fetchUserByHandle(handle: string): Promise<Usuario | null> {
     console.log(`[UserService] Buscando usuário pelo handle público: ${handle}...`);
@@ -174,4 +174,14 @@ export async function updateUserInFirestore(
     
     await updateDoc(userDocRef, updatePayload);
     console.log('[UserService] Dados atualizados no Firestore.');
+}
+
+/**
+ * EXCLUIR USUÁRIO: Remove permanentemente o documento do usuário do Firestore.
+ */
+export async function deleteUserDocument(uid: string): Promise<void> {
+    console.log(`[UserService] Excluindo documento do usuário UID: ${uid}...`);
+    const userDocRef = doc(db, 'usuarios', uid);
+    await deleteDoc(userDocRef);
+    console.log('[UserService] Documento do usuário excluído com sucesso.');
 }
