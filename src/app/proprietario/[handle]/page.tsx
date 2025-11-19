@@ -8,6 +8,8 @@ import { AnuncioCard } from '@/components/anuncios/AnuncioCard';
 import { Icon } from '@/components/ui/Icon';
 import { faSpinner, faHome, faUserTie, faBuilding } from '@fortawesome/free-solid-svg-icons'; 
 
+export const runtime = 'edge';
+
 /**
  * @fileoverview Página Pública de Anúncios de um Proprietário específico (www.rentou.com.br/proprietario/[handle]).
  */
