@@ -27,26 +27,12 @@ const nextConfig: NextConfig = {
     ];
   },
   
-  // 2. REWRITES (Resolve app.rentou.com.br)
+  // 2. REWRITES (Removidas todas as regras de app.rentou.com.br para evitar o conflito /rentou)
   async rewrites() {
     return [
-      // FORÇA O MAPA DA AUTENTICAÇÃO PRIMEIRO: /login -> /auth/login
-      {
-        source: '/login',
-        has: [ { type: 'host', value: 'app.rentou.com.br' } ],
-        destination: '/auth/login',
-      },
-      {
-        source: '/signup',
-        has: [ { type: 'host', value: 'app.rentou.com.br' } ],
-        destination: '/auth/signup',
-      },
-
-      // REGRA REMOVIDA: A regra que mapeava '/:path*' para '/rentou/:path*'
-      // foi removida para permitir que o Middleware (src/proxy.ts) trate a 
-      // autenticação e o redirecionamento de raiz corretamente (para /dashboard ou /login).
-      // O Next.js fará o roteamento de /dashboard, /imoveis, etc., diretamente para
-      // a pasta de agrupamento (rentou) sem a necessidade de um rewrite.
+      // As regras de rewrite para 'app.rentou.com.br' foram removidas.
+      // O Middleware (src/proxy.ts) agora fará o redirecionamento da raiz (/)
+      // para /dashboard ou /login, conforme a autenticação.
     ];
   },
 };
