@@ -3,10 +3,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const DASHBOARD_URL = '/dashboard'; 
-const LOGIN_URL = '/login'; 
-
-// Domínios de referência
+const DASHBOARD_PATH = '/dashboard'; 
+const LOGIN_PATH = '/login'; 
 const APP_DOMAIN = 'app.rentou.com.br';
 
 /**
@@ -18,33 +16,36 @@ export default function proxy(request: NextRequest) {
   const hostname = url.hostname;
   const pathname = url.pathname;
 
-  // 1. Verifica se está no domínio PROTEGIDO (app.rentou.com.br)
+  // 1. Detecção do Domínio de Aplicação
   const isAppDomain = hostname === APP_DOMAIN;
   
-  // Rotas que são internas ao portal de gestão e não são autenticação
-  const isProtectedPath = pathname.startsWith(DASHBOARD_URL) || 
-                          pathname.startsWith('/imoveis') || 
-                          pathname.startsWith('/perfil') ||
-                          pathname.startsWith('/financeiro');
-
-  // As rotas de autenticação (login, signup)
-  const isAuthRoute = pathname === LOGIN_URL || pathname === '/signup'; 
+  // Rotas de autenticação
+  const isAuthRoute = pathname === LOGIN_PATH || pathname === '/signup'; 
+  
+  // Condição para determinar se a rota é protegida (incluindo a raiz /)
+  const isProtectedOrRoot = pathname === '/' || 
+                            pathname.startsWith(DASHBOARD_PATH) || 
+                            pathname.startsWith('/imoveis') || 
+                            pathname.startsWith('/perfil') ||
+                            pathname.startsWith('/financeiro');
 
   if (isAppDomain) {
     
     // CASO 1: Usuário AUTENTICADO acessando a RAIZ (/) OU uma rota de AUTENTICAÇÃO
-    if (authToken && (pathname === '/' || isAuthRoute)) {
-      // Se logado, sempre redireciona para o dashboard
-      return NextResponse.redirect(new URL(DASHBOARD_URL, url.origin));
+    // Se logado, sempre vai para o Dashboard (resolve a Landing Page e o loop de login)
+    if (authToken && (isProtectedOrRoot || isAuthRoute)) {
+      if (pathname !== DASHBOARD_PATH) {
+        return NextResponse.redirect(new URL(DASHBOARD_PATH, url.origin));
+      }
+      return NextResponse.next();
     }
     
-    // CASO 2: Usuário NÃO AUTENTICADO acessando a RAIZ (/) OU uma rota PROTEGIDA
-    // O '/' (raiz) será tratado aqui para forçar o login.
-    if (!authToken && (pathname === '/' || isProtectedPath)) {
+    // CASO 2: Usuário NÃO AUTENTICADO acessando a RAIZ (/) OU uma ROTA PROTEGIDA
+    if (!authToken && isProtectedOrRoot) {
       // Redireciona para o login
-      const redirectUrl = new URL(LOGIN_URL, url.origin);
+      const redirectUrl = new URL(LOGIN_PATH, url.origin);
       
-      // Adiciona o 'from' apenas se não for a raiz
+      // Adiciona o 'from' para redirecionar de volta após o login
       if(pathname !== '/') {
         redirectUrl.searchParams.set('from', pathname); 
       }
@@ -52,13 +53,12 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  // 2. Comportamento para o domínio público (www.rentou.com.br)
+  // 2. Permite o fluxo normal para www.rentou.com.br (que é tratado pelo next.config.ts/redirects)
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
-    // O matcher deve continuar amplo
     '/((?!api|_next/static|_next/image|favicon.ico|assets|logo.svg|media|.*\\..*).*)',
   ],
 };
