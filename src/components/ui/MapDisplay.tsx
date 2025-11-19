@@ -130,8 +130,12 @@ export const MapDisplay: React.FC<MapDisplayProps> = ({
     
     return (
         <div className='w-full h-96 rounded-xl shadow-lg relative'>
+            {/* Adicionamos a prop 'key' aqui. 
+                Usar JSON.stringify(centerPosition) garante que se a posição mudar, 
+                o React destrói o mapa antigo e cria um novo, evitando o erro de inicialização. */}
              <MapContainer 
                 // Zoom inicial é o initialZoom. O ChangeView fará o ajuste fino.
+                key={JSON.stringify(centerPosition)} // <--- O SEGREDO ESTÁ AQUI
                 zoom={initialZoom} 
                 scrollWheelZoom={true} 
                 className="w-full h-full rounded-xl"
