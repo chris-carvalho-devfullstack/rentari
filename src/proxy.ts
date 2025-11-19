@@ -11,7 +11,6 @@ const APP_DOMAIN = 'app.rentou.com.br';
 
 /**
  * Middleware para controle de acesso ao Portal do Proprietário (app.rentou.com.br).
- * A proteção é baseada na URL e no token de autenticação (cookie).
  */
 export default function proxy(request: NextRequest) {
   const authToken = request.cookies.get('rentou-auth-token')?.value;
@@ -25,35 +24,40 @@ export default function proxy(request: NextRequest) {
   // As rotas de autenticação (login, signup)
   const isAuthRoute = pathname === LOGIN_URL || pathname === '/signup'; 
   
-  // CORREÇÃO: Define que a rota raiz (/) e qualquer rota que não seja Auth são protegidas
-  const isProtectedRoute = !isAuthRoute;
+  // As rotas que são internas ao portal de gestão e não são autenticação
+  const isProtectedPath = pathname.startsWith(DASHBOARD_URL) || 
+                          pathname.startsWith('/imoveis') || 
+                          pathname.startsWith('/perfil') ||
+                          pathname.startsWith('/financeiro');
 
   if (isAppDomain) {
-    // 1.1. Usuário NÃO AUTENTICADO e tentando acessar uma rota PROTEGIDA OU A RAIZ (/)
-    if (!authToken && isProtectedRoute || (pathname === '/' && !authToken)) {
-      // Redireciona para o login do subdomínio
-      const redirectUrl = new URL(LOGIN_URL, url.origin);
-      redirectUrl.searchParams.set('from', pathname); 
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    // 1.2. Usuário AUTENTICADO e tentando acessar uma rota de AUTENTICAÇÃO (Login/Cadastro)
-    if (authToken && isAuthRoute) {
-      // Redireciona para o dashboard do subdomínio
+    
+    // CASO 1: Usuário AUTENTICADO acessando a RAIZ (/) OU uma rota de AUTENTICAÇÃO
+    if (authToken && (pathname === '/' || isAuthRoute)) {
+      // Redireciona para o dashboard
       return NextResponse.redirect(new URL(DASHBOARD_URL, url.origin));
+    }
+    
+    // CASO 2: Usuário NÃO AUTENTICADO acessando a RAIZ (/) OU uma rota PROTEGIDA
+    // O '/' (raiz) será tratado aqui se o usuário não tiver o token
+    if (!authToken && (pathname === '/' || isProtectedPath)) {
+      // Redireciona para o login
+      const redirectUrl = new URL(LOGIN_URL, url.origin);
+      // Mantém a origem da rota que o usuário tentou acessar, a menos que seja a raiz
+      if(pathname !== '/') {
+        redirectUrl.searchParams.set('from', pathname); 
+      }
+      return NextResponse.redirect(redirectUrl);
     }
   }
 
   // 2. Comportamento para o domínio público (www.rentou.com.br)
-  // Permite acesso irrestrito.
-  
   return NextResponse.next();
 }
 
 export const config = {
-  // O matcher precisa ser amplo para pegar todos os caminhos, exceto os assets estáticos.
   matcher: [
-    // Nota: O matcher pega TUDO, incluindo / e /anuncios.
+    // O matcher deve continuar amplo
     '/((?!api|_next/static|_next/image|favicon.ico|assets|logo.svg|media|.*\\..*).*)',
   ],
 };
