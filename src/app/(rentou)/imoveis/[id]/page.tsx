@@ -29,6 +29,8 @@ import {
     faToilet, faWater
 } from '@fortawesome/free-solid-svg-icons';
 
+export const runtime = 'edge';
+
 // Componente utilitário para formatação de moeda
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', {

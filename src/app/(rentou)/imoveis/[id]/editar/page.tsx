@@ -8,6 +8,8 @@ import FormularioImovel from '@/components/imoveis/FormularioImovel';
 import { fetchImovelPorId } from '@/services/ImovelService'; 
 import { Imovel } from '@/types/imovel';
 
+export const runtime = 'edge';
+
 /**
  * @fileoverview Página para editar um imóvel existente.
  * AGORA: Rota utiliza o ID ÚNICO do Firestore.

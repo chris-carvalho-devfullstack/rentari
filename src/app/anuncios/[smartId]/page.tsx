@@ -19,6 +19,8 @@ import {
     faBuilding, faMountain, faStreetView, faTimes // <-- Adicionado faStreetView e faTimes para o modal
 } from '@fortawesome/free-solid-svg-icons';
 
+export const runtime = 'edge';
+
 // Carregamento Dinâmico do Mapa (MapDisplay)
 const DynamicMapDisplay = dynamic(() => 
     import('@/components/ui/MapDisplay').then((mod) => mod.MapDisplay),
