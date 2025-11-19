@@ -1,28 +1,29 @@
 // src/app/anuncios/page.tsx
 'use client';
 
-import { useState, useMemo } from 'react'; // <-- CORRIGIDO: useState e useMemo importados de 'react'
-import { Metadata } from 'next';
-import Link from 'next/link'; // Importado para o link de Acesso Proprietário
+import { useState, useMemo } from 'react';
+import Link from 'next/link'; 
 import { useAnunciosPublicos } from '@/hooks/useAnunciosPublicos'; 
 import { AnuncioCard } from '@/components/anuncios/AnuncioCard';
 import { Icon } from '@/components/ui/Icon';
 import { faSearch, faSpinner, faBuilding } from '@fortawesome/free-solid-svg-icons'; 
-
-// A Metadata pode ser definida de forma estática, se for Server Component, ou ignorada aqui.
-// Para fins de demonstração, o componente é 'use client'.
 
 /**
  * @fileoverview Página Principal do Catálogo de Anúncios (www.rentou.com.br/anuncios).
  * Estilo Rightmove/Zillow (foco em busca e listagem).
  */
 export default function AnunciosPage() {
-    const { anuncios, loading, error, refetch } = useAnunciosPublicos();
+    const { anuncios, loading, error } = useAnunciosPublicos();
     
     // Implementação mockada de filtro de busca para demonstrar a UI
     const [searchTerm, setSearchTerm] = useState('');
     const [filterCategory, setFilterCategory] = useState<'TODOS' | 'Residencial' | 'Comercial'>('TODOS');
     
+    // Lógica para definir a URL de login com base no ambiente
+    const loginUrl = process.env.NODE_ENV === 'development' 
+        ? '/login'  // Em desenvolvimento (localhost), usa rota relativa
+        : 'https://app.rentou.com.br/login'; // Em produção, força o subdomínio do App
+
     const filteredAnuncios = useMemo(() => {
         return anuncios.filter(anuncio => {
             const matchesSearch = anuncio.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -48,14 +49,19 @@ export default function AnunciosPage() {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-zinc-900">
             
-            {/* Navbar Minimalista (Mock) */}
+            {/* Navbar Minimalista */}
             <header className="sticky top-0 bg-white dark:bg-zinc-800 shadow z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
                     <h1 className="text-2xl font-bold text-rentou-primary">Rentou Anúncios</h1>
-                    {/* Ações: Login Proprietário */}
-                    <Link href="/login" className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-rentou-primary transition-colors">
+                    
+                    {/* Botão de Acesso Proprietário com Lógica de Ambiente */}
+                    {/* Usamos a tag <a> para garantir a navegação externa correta em produção */}
+                    <a 
+                        href={loginUrl} 
+                        className="text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-rentou-primary transition-colors cursor-pointer"
+                    >
                         Acesso Proprietário
-                    </Link>
+                    </a>
                 </div>
             </header>
             
@@ -105,7 +111,7 @@ export default function AnunciosPage() {
                 </h3>
                 
                 {error && (
-                    <div className="p-4 bg-red-100 text-red-700 rounded-lg">{error}</div>
+                    <div className="p-4 bg-red-100 text-red-700 rounded-lg mb-6">{error}</div>
                 )}
                 
                 {filteredAnuncios.length === 0 && !error && (
@@ -115,13 +121,13 @@ export default function AnunciosPage() {
                     </div>
                 )}
 
-                {/* GRID DE ANÚNCIOS (Inspirado em Rightmove) */}
+                {/* GRID DE ANÚNCIOS */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {filteredAnuncios.map((imovel) => (
                         <AnuncioCard 
                             key={imovel.smartId} 
                             imovel={imovel} 
-                            detailUrlPrefix="/anuncios" // Prefixo para a rota de detalhe
+                            detailUrlPrefix="/anuncios"
                         />
                     ))}
                 </div>
