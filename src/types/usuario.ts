@@ -6,7 +6,7 @@
 export interface EnderecoCompleto {
   logradouro: string;
   numero: string;
-  complemento?: string; // Opcional
+  complemento?: string;
   bairro: string;
   cidade: string;
   estado: string; // UF
@@ -22,7 +22,7 @@ export interface QualificacaoPF {
   cpf: string;
   nacionalidade: string;
   estadoCivil: 'Solteiro(a)' | 'Casado(a)' | 'Divorciado(a)' | 'Viúvo(a)' | 'União Estável';
-  regimeDeBens?: string; // Obrigatório se Casado(a) ou União Estável
+  regimeDeBens?: string;
   profissao: string;
   dataNascimento: string;
   rgNumero: string;
@@ -58,50 +58,53 @@ export interface QualificacaoPJ {
     rgUF: string;
     cpf: string;
   }
-  baseDeRepresentacao: string; // Ex: "Contrato Social / Estatuto / Procuração"
+  baseDeRepresentacao: string;
 }
 
+// --- NOVAS ESTRUTURAS PARA O PERFIL DE USUÁRIO E POIs ---
+
+export interface PontoImportante {
+    id: string;
+    nome: string; // Ex: "Trabalho", "Escola das Crianças"
+    endereco: string;
+    latitude: number;
+    longitude: number;
+}
+
+export type PerfilUsuario = 'PROPRIETARIO' | 'INQUILINO' | 'AMBOS';
 
 /**
  * Define a estrutura de dados básica para um Usuário autenticado.
  */
 export interface Usuario {
-  /** UID do usuário, geralmente fornecido pelo Firebase Auth */
   id: string;
-  /** E-mail do usuário */
   email: string;
-  /** Nome completo ou de exibição */
   nome: string;
-  /** CPF ou CNPJ de acesso rápido (preenchido no cadastro ou na qualificação) */
   documentoIdentificacao?: string; 
-  /** Tipo de perfil do usuário. 'PROPRIETARIO' acessa a plataforma 'Rentou'. */
-  tipo: 'PROPRIETARIO' | 'CORRETOR' | 'ADMIN'; 
   
-  // URL da foto de perfil no Firebase Storage
+  tipo: 'PROPRIETARIO' | 'CORRETOR' | 'ADMIN'; // Mantido para compatibilidade, mas o foco agora será 'perfil'
+  
+  // NOVO: Define se é Proprietário, Inquilino ou Ambos
+  perfil: PerfilUsuario; 
+
   fotoUrl?: string; 
-  
-  // Campos adicionados para o formulário de Perfil básico
-  cpf?: string; // CPF/CNPJ de acesso rápido no formato limpo
+  cpf?: string; 
   telefone: string;
-
-  // NOVO CAMPO: SLUG PÚBLICO PARA A PÁGINA DO PROPRIETÁRIO
   handlePublico?: string;
-
-  // NOVO CAMPO: QUALIFICAÇÃO LEGAL COMPLETA
   qualificacao?: QualificacaoPF | QualificacaoPJ;
 
-  // === DADOS BANCÁRIOS E PIX (AGORA COM TIPO DE CONTA) ===
+  // NOVO: Lista de pontos importantes salvos (Máx 3)
+  pontosImportantes?: PontoImportante[];
+
   dadosBancarios: {
     banco: string;
     agencia: string;
     conta: string;
-    // NOVO: Tipo de Conta
     tipo: 'CORRENTE' | 'POUPANCA'; 
     pixTipo: 'EMAIL' | 'TELEFONE' | 'CPF_CNPJ' | 'ALEATORIA';
     pixChave: string;
   }
 }
 
-// Tipos auxiliares para funções de atualização
 export type UpdateUserBasicData = Pick<Usuario, 'nome' | 'telefone' | 'fotoUrl'>;
 export type UpdateUserDadosBancarios = Usuario['dadosBancarios'];

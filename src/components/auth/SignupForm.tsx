@@ -7,8 +7,10 @@ import Link from 'next/link';
 import { createUserWithEmailAndPassword, updateProfile, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
+import { updateUserInFirestore } from '@/services/UserService'; // Importe direto do serviço
 import { Icon } from '@/components/ui/Icon';
-import { faUser, faEnvelope, faLock, faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
+import { faUser, faEnvelope, faLock, faEye, faEyeSlash, faBuilding, faHome, faSync } from '@fortawesome/free-solid-svg-icons';
+import { PerfilUsuario } from '@/types/usuario';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5 mr-3" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -26,6 +28,10 @@ export default function SignupForm() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // NOVO: Estado para o perfil selecionado
+  const [perfil, setPerfil] = useState<PerfilUsuario>('INQUILINO'); 
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -39,11 +45,23 @@ export default function SignupForm() {
     date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
     document.cookie = `rentou-auth-token=${user.uid}; expires=${date.toUTCString()}; path=/; SameSite=Lax; Secure`;
 
-    // Chama fetchUserData passando o NOME digitado no formulário (displayName)
-    // Graças à correção no useAuthStore, se o usuário já existir com nome errado, ele será corrigido agora.
+    // 1. Garante que o usuário exista no Firestore
     const userData = await fetchUserData(user.uid, user.email || '', displayName || user.displayName || 'Novo Usuário');
+    
+    // 2. Atualiza o PERFIL escolhido (caso o fetchUserData tenha criado com o padrão)
+    if (userData.perfil !== perfil) {
+        await updateUserInFirestore(user.uid, { perfil });
+        userData.perfil = perfil;
+    }
+    
     setUser(userData);
-    router.push('/dashboard');
+
+    // 3. Redirecionamento Baseado no Perfil
+    if (perfil === 'INQUILINO') {
+        router.push('/meu-espaco'); // Área do Inquilino
+    } else {
+        router.push('/dashboard'); // Dashboard do Proprietário
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,7 +72,6 @@ export default function SignupForm() {
       setError('As senhas não conferem.');
       return;
     }
-
     if (password.length < 6) {
       setError('A senha deve ter pelo menos 6 caracteres.');
       return;
@@ -64,12 +81,8 @@ export default function SignupForm() {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // Tenta atualizar o perfil no Auth (pode não propagar a tempo)
       await updateProfile(userCredential.user, { displayName: nome });
-      
-      // Chama o sucesso passando o NOME explicitamente
       await handleSuccess(userCredential.user, nome);
-
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
@@ -131,78 +144,71 @@ export default function SignupForm() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        
+        {/* SELEÇÃO DE PERFIL */}
+        <div className="space-y-2 pb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">O que você busca na Rentou?</label>
+            <div className="grid grid-cols-1 gap-2">
+                <button
+                    type="button"
+                    onClick={() => setPerfil('PROPRIETARIO')}
+                    className={`flex items-center p-3 text-left border rounded-lg text-sm transition-all ${perfil === 'PROPRIETARIO' ? 'border-rentou-primary bg-blue-50 dark:bg-blue-900/30 text-rentou-primary ring-1 ring-rentou-primary' : 'border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 dark:text-gray-300'}`}
+                >
+                    <Icon icon={faBuilding} className="w-4 h-4 mr-3" />
+                    <span>Sou Proprietário <span className="text-xs opacity-75 block font-normal">Quero anunciar e gerir imóveis</span></span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setPerfil('INQUILINO')}
+                    className={`flex items-center p-3 text-left border rounded-lg text-sm transition-all ${perfil === 'INQUILINO' ? 'border-rentou-primary bg-blue-50 dark:bg-blue-900/30 text-rentou-primary ring-1 ring-rentou-primary' : 'border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 dark:text-gray-300'}`}
+                >
+                    <Icon icon={faHome} className="w-4 h-4 mr-3" />
+                    <span>Sou Inquilino <span className="text-xs opacity-75 block font-normal">Quero buscar um imóvel para alugar</span></span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setPerfil('AMBOS')}
+                    className={`flex items-center p-3 text-left border rounded-lg text-sm transition-all ${perfil === 'AMBOS' ? 'border-rentou-primary bg-blue-50 dark:bg-blue-900/30 text-rentou-primary ring-1 ring-rentou-primary' : 'border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 dark:text-gray-300'}`}
+                >
+                    <Icon icon={faSync} className="w-4 h-4 mr-3" />
+                    <span>Ambos <span className="text-xs opacity-75 block font-normal">Investidor e morador</span></span>
+                </button>
+            </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome Completo</label>
           <div className="relative mt-1">
-            <input
-              type="text"
-              required
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm"
-            />
-            <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none">
-              <Icon icon={faUser} className="h-4 w-4" />
-            </span>
+            <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faUser} className="h-4 w-4" /></span>
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
           <div className="relative mt-1">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm"
-            />
-            <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none">
-              <Icon icon={faEnvelope} className="h-4 w-4" />
-            </span>
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faEnvelope} className="h-4 w-4" /></span>
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Senha</label>
           <div className="relative mt-1">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm"
-            />
-            <span 
-              className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-              onClick={handleTogglePassword}
-            >
-              <Icon icon={showPassword ? faEye : faEyeSlash} className="h-4 w-4" />
-            </span>
+            <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={handleTogglePassword}><Icon icon={showPassword ? faEye : faEyeSlash} className="h-4 w-4" /></span>
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirmar Senha</label>
           <div className="relative mt-1">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              required
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm"
-            />
-            <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none">
-               <Icon icon={faLock} className="h-4 w-4" />
-            </span>
+            <input type={showPassword ? 'text' : 'password'} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faLock} className="h-4 w-4" /></span>
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer transition-colors"
-        >
+        <button type="submit" disabled={loading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer transition-colors">
           {loading ? 'Cadastrando...' : 'Criar Conta'}
         </button>
       </form>
