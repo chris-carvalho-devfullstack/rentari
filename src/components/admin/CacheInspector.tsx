@@ -179,7 +179,8 @@ export const CacheInspector = () => {
             
             try {
                 const res = await fetch(url, { 
-                    headers: { 'x-audit-mode': '1' }
+                    headers: { 'x-audit-mode': '1' },
+                    cache: 'no-store' // <-- ADICIONADO: Força ignorar cache do navegador
                 });
                 
                 const endTime = performance.now();
