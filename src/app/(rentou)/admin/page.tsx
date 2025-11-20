@@ -1,15 +1,14 @@
 // src/app/(rentou)/admin/page.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { CacheInspector } from '@/components/admin/CacheInspector';
 import { Icon } from '@/components/ui/Icon';
 import { 
-    faChartLine, faShieldAlt, faBuilding, faUsers, 
-    faUserTie, faHome, faSync, faCheckCircle, 
-    faWallet, faServer, faExclamationTriangle, faQuestionCircle, faTimes,
-    faDatabase, faImages, faMapMarkedAlt, faStopwatch
+    faChartLine, faShieldAlt, 
+    faDatabase, faImages, faMapMarkedAlt, faStopwatch, faSync, faCheckCircle, faQuestionCircle, faTimes, faExclamationTriangle,
+    faList, faFilter, faSearch
 } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
 import { db } from '@/services/FirebaseService';
@@ -32,6 +31,17 @@ interface AdminStats {
     dbResponseTime: number;
 }
 
+// Interface para os detalhes da auditoria
+interface AuditDetail {
+    smartId: string;
+    address: string;
+    cfStatus: string;
+    age: string;
+    latency: number;
+    isHit: boolean;
+    timestamp: string;
+}
+
 // --- COMPONENTE DE MODAL DE AJUDA ---
 const HelpModal = ({ title, content, isOpen, onClose }: { title: string, content: React.ReactNode, isOpen: boolean, onClose: () => void }) => {
     if (!isOpen) return null;
@@ -51,6 +61,122 @@ const HelpModal = ({ title, content, isOpen, onClose }: { title: string, content
                 <div className="mt-6 text-right">
                     <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-zinc-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-600 font-medium text-sm">
                         Entendi
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- NOVO: COMPONENTE MODAL DE DETALHES DA AUDITORIA ---
+const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: AuditDetail[] }) => {
+    const [filter, setFilter] = useState('');
+
+    // Filtra os dados com base no Smart ID digitado
+    const filteredData = useMemo(() => {
+        if (!filter) return data;
+        return data.filter(item => item.smartId.toLowerCase().includes(filter.toLowerCase()));
+    }, [data, filter]);
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl max-w-5xl w-full p-6 relative animate-in zoom-in-95 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                
+                {/* Header */}
+                <div className="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-zinc-700 pb-4">
+                    <div>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center">
+                            <Icon icon={faList} className="w-6 h-6 mr-3 text-rentou-primary" />
+                            Relatório Detalhado de Cache
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            Status real da CDN Cloudflare para {data.length} imóveis auditados.
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                        <Icon icon={faTimes} className="w-6 h-6" />
+                    </button>
+                </div>
+
+                {/* Filtros */}
+                <div className="mb-4 flex items-center space-x-4 bg-gray-50 dark:bg-zinc-700/50 p-3 rounded-lg border border-gray-200 dark:border-zinc-700">
+                    <Icon icon={faFilter} className="text-gray-400" />
+                    <div className="relative flex-1">
+                        <input 
+                            type="text" 
+                            placeholder="Filtrar por Smart ID..." 
+                            value={filter}
+                            onChange={(e) => setFilter(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-sm focus:ring-2 focus:ring-rentou-primary focus:border-transparent outline-none transition-all dark:text-white"
+                        />
+                        <Icon icon={faSearch} className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                        {filteredData.length} resultados
+                    </div>
+                </div>
+
+                {/* Tabela */}
+                <div className="flex-1 overflow-auto rounded-lg border border-gray-200 dark:border-zinc-700">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-100 dark:bg-zinc-900 text-xs uppercase text-gray-500 dark:text-gray-400 sticky top-0 z-10">
+                            <tr>
+                                <th className="px-4 py-3 font-semibold">Smart ID</th>
+                                <th className="px-4 py-3 font-semibold">Localização (Bairro/Cidade)</th>
+                                <th className="px-4 py-3 text-center font-semibold">Status CF</th>
+                                <th className="px-4 py-3 text-center font-semibold">Age (s)</th>
+                                <th className="px-4 py-3 text-center font-semibold">Latência</th>
+                                <th className="px-4 py-3 text-right font-semibold">Auditado em</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
+                            {filteredData.length > 0 ? (
+                                filteredData.map((row) => (
+                                    <tr key={row.smartId} className="hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors">
+                                        <td className="px-4 py-3 font-mono font-medium text-rentou-primary">{row.smartId}</td>
+                                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={row.address}>{row.address}</td>
+                                        <td className="px-4 py-3 text-center">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                                row.isHit 
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                            }`}>
+                                                {row.cfStatus || 'MISS'}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-center font-mono text-gray-600 dark:text-gray-400">
+                                            {row.age || '0'}
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <span className={`font-medium ${row.latency < 100 ? 'text-green-600' : 'text-orange-500'}`}>
+                                                {row.latency}ms
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right text-gray-500 text-xs">
+                                            {new Date(row.timestamp).toLocaleTimeString()}
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                        Nenhum registro encontrado.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Footer */}
+                <div className="mt-6 flex justify-end">
+                    <button 
+                        onClick={onClose}
+                        className="px-6 py-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium rounded-lg shadow-sm transition-colors dark:bg-zinc-700 dark:border-zinc-600 dark:text-gray-200 dark:hover:bg-zinc-600"
+                    >
+                        Fechar
                     </button>
                 </div>
             </div>
@@ -89,8 +215,12 @@ export default function AdminDashboard() {
         checked: 0, totalToCheck: 0, hits: 0, loading: false, completed: false,
         averageLatency: 0 // Média acumulada
     });
+    
+    // Novos estados para o Relatório Detalhado
+    const [auditDetails, setAuditDetails] = useState<AuditDetail[]>([]);
+    const [showAuditModal, setShowAuditModal] = useState(false);
 
-    // 1. Carregar Estatísticas (Com medição de performance e contagem de mídia)
+    // 1. Carregar Estatísticas
     useEffect(() => {
         const fetchStats = async () => {
             const startTime = performance.now(); // Início da medição
@@ -150,9 +280,10 @@ export default function AdminDashboard() {
         }
     }, [user]);
 
-    // 2. Auditoria de Cache (Com Validação Rigorosa de Borda)
+    // 2. Auditoria de Cache (Com Validação Rigorosa de Borda - CUSTO ZERO e Coleta de Detalhes)
     const runCacheAudit = async () => {
         setCacheAudit({ checked: 0, totalToCheck: 0, hits: 0, loading: true, completed: false, averageLatency: 0 });
+        setAuditDetails([]); // Limpa detalhes anteriores
         
         try {
             const q = query(collection(db, 'imoveis'), where('status', '==', 'ANUNCIADO'));
@@ -165,6 +296,7 @@ export default function AdminDashboard() {
             let processed = 0;
             let totalLatencySum = 0;
             let latenciesRecorded = 0;
+            const newDetails: AuditDetail[] = []; // Array temporário para coleta
 
             const batchSize = 5;
             for (let i = 0; i < imoveis.length; i += batchSize) {
@@ -174,21 +306,33 @@ export default function AdminDashboard() {
                     const url = `/api/pois?lat=${imovel.latitude}&lon=${imovel.longitude}&tag=school`;
                     const start = performance.now();
                     try {
-                        // --- AQUI ESTÁ A MÁGICA ---
-                        // { cache: 'no-cache' } diz ao navegador: "Não use o SEU cache de disco, vá na rede".
-                        // A rede é o Cloudflare. Se o Cloudflare tiver (HIT), ele retorna rápido.
-                        // Se não tiver (MISS), ele busca no servidor e cacheia.
-                        const res = await fetch(url, { cache: 'no-cache' }); 
+                        // --- MODO AUDITORIA SEGURA ---
+                        const res = await fetch(url, { 
+                            headers: { 'x-audit-mode': '1' }
+                        }); 
                         const end = performance.now();
-                        const latency = end - start;
+                        const latency = Math.round(end - start);
                         
+                        const data = await res.json();
+                        
+                        // SE data for array, Cloudflare entregou o cache antigo (HIT).
+                        // SE data for { audit: 'miss' }, foi um MISS seguro (sem custo).
+                        const isRealHit = Array.isArray(data);
                         const cfStatus = res.headers.get('cf-cache-status');
-                        const cfAge = res.headers.get('age');
+                        const age = res.headers.get('age');
+
+                        // Constrói objeto de detalhe
+                        const detail: AuditDetail = {
+                            smartId: imovel.smartId || 'N/A',
+                            address: `${imovel.endereco.bairro}, ${imovel.endereco.cidade}`,
+                            cfStatus: cfStatus || (isRealHit ? 'HIT' : 'MISS (Safe)'),
+                            age: age || '0',
+                            latency: latency,
+                            isHit: isRealHit,
+                            timestamp: new Date().toISOString()
+                        };
                         
-                        // CRITÉRIOS: HIT explícito OU latência muito baixa (< 200ms) OU Age > 0
-                        const isHit = cfStatus === 'HIT' || (cfAge && parseInt(cfAge) > 0) || latency < 200;
-                        
-                        return { isHit, latency };
+                        return detail;
                     } catch {
                         return null;
                     }
@@ -198,12 +342,19 @@ export default function AdminDashboard() {
                 
                 results.forEach(res => {
                     if (res) {
-                        if (res.isHit) hitCount++;
-                        totalLatencySum += res.latency;
-                        latenciesRecorded++;
+                        newDetails.push(res); // Adiciona ao acumulador
+                        if (res.isHit) {
+                            if (res.isHit) hitCount++;
+                             totalLatencySum += res.latency;
+                             latenciesRecorded++;
+                        }
                     }
                 });
                 
+                // Ordena por Smart ID para facilitar leitura
+                newDetails.sort((a, b) => a.smartId.localeCompare(b.smartId));
+                setAuditDetails([...newDetails]); // Atualiza o estado progressivamente
+
                 processed += batch.length;
                 const currentAvg = latenciesRecorded > 0 ? Math.round(totalLatencySum / latenciesRecorded) : 0;
                 
@@ -252,14 +403,14 @@ export default function AdminDashboard() {
             );
             case 'latency': return (
                 <>
-                    <p>A <strong>prova real</strong> da velocidade do seu site para o usuário final.</p>
-                    <p className="mt-2">Calculada em tempo real durante a auditoria. Se o cache da Cloudflare estiver funcionando ("quente"), este valor deve ser baixíssimo (20-50ms). Se estiver alto, significa que seu servidor está tendo que trabalhar (e gastar) para gerar os mapas.</p>
+                    <p>A <strong>prova real</strong> da velocidade do seu site para o usuário final (apenas para requisições em Cache).</p>
+                    <p className="mt-2">Calculada em tempo real durante a auditoria. Se o cache da Cloudflare estiver funcionando ("quente"), este valor deve ser baixíssimo (20-50ms). Se estiver alto, significa que o HIT não está ocorrendo no Edge mais próximo.</p>
                 </>
             );
             case 'status_cache': return (
                 <>
-                    <p>Auditoria global dos pontos de interesse (POIs) de todos os imóveis publicados.</p>
-                    <p className='mt-2'>Ao clicar em "Auditar", o sistema simula um usuário visitando cada imóvel. Isso "aquece" o cache da Cloudflare, garantindo que os próximos visitantes tenham carregamento instantâneo.</p>
+                    <p>Auditoria global de <strong>Custo Zero</strong>.</p>
+                    <p className='mt-2'>O sistema verifica se a Cloudflare possui o cache. Se <strong>NÃO</strong> possuir (MISS), a API aborta a chamada ao Mapbox para não gerar custos. A porcentagem mostra quantos imóveis estão sendo servidos "de graça" pelo cache da Cloudflare.</p>
                 </>
             );
             case 'auditoria_individual': return (
@@ -281,6 +432,13 @@ export default function AdminDashboard() {
                 onClose={() => setHelpModalKey(null)}
                 title="Entenda a Métrica"
                 content={helpModalKey ? getHelpContent(helpModalKey) : null}
+            />
+
+            {/* MODAL DE DETALHES DA AUDITORIA */}
+            <AuditDetailsModal 
+                isOpen={showAuditModal} 
+                onClose={() => setShowAuditModal(false)} 
+                data={auditDetails} 
             />
 
             <div className="flex justify-between items-end">
@@ -410,7 +568,7 @@ export default function AdminDashboard() {
                     <span className="text-2xl font-bold text-gray-800 dark:text-white">
                         {cacheAudit.averageLatency > 0 ? `${cacheAudit.averageLatency}ms` : '--'}
                     </span>
-                    <span className="text-xs text-gray-500 mt-1">Latência Média da API (Cache)</span>
+                    <span className="text-xs text-gray-500 mt-1">Latência Média do Cache</span>
                     {cacheAudit.loading && <div className="absolute bottom-0 left-0 h-1 bg-orange-500 animate-progress w-full"></div>}
                 </div>
             </div>
@@ -440,7 +598,7 @@ export default function AdminDashboard() {
                                         <span className={`text-4xl font-extrabold ${cachePercentage > 80 ? 'text-green-600' : cachePercentage > 50 ? 'text-yellow-600' : 'text-gray-400'}`}>
                                             {cacheAudit.loading ? '...' : cacheAudit.completed ? `${cachePercentage}%` : '--'}
                                         </span>
-                                        <span className="text-sm text-gray-500 max-w-[150px] leading-tight">dos imóveis com POIs otimizados</span>
+                                        <span className="text-sm text-gray-500 max-w-[150px] leading-tight">HIT Rate (Economia)</span>
                                     </div>
                                 </div>
                                 
@@ -456,7 +614,7 @@ export default function AdminDashboard() {
                                     {cacheAudit.loading ? (
                                         <><Icon icon={faSync} spin className="mr-2" /> Verificando...</>
                                     ) : (
-                                        <><Icon icon={faChartLine} className="mr-2" /> Auditar Cache Agora</>
+                                        <><Icon icon={faChartLine} className="mr-2" /> Auditar Sem Custos</>
                                     )}
                                 </button>
                             </div>
@@ -477,15 +635,25 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                         
-                        <div className='mt-4'>
+                        {/* Footer com resultado e botão de detalhes */}
+                        <div className='mt-4 space-y-3'>
                             {cacheAudit.completed ? (
-                                <p className="text-sm text-green-600 dark:text-green-400 flex items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800">
-                                    <Icon icon={faCheckCircle} className="mr-2" />
-                                    Auditoria concluída: {cacheAudit.hits} imóveis entregues via Edge Cache (rápido).
-                                </p>
+                                <>
+                                    <p className="text-sm text-green-600 dark:text-green-400 flex items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800">
+                                        <Icon icon={faCheckCircle} className="mr-2" />
+                                        Auditoria concluída: {cacheAudit.hits} imóveis em Cache (HIT).
+                                    </p>
+                                    <button 
+                                        onClick={() => setShowAuditModal(true)}
+                                        className="w-full py-2 text-sm font-bold text-rentou-primary bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/40 rounded-lg border border-blue-200 dark:border-blue-800 transition-colors flex items-center justify-center"
+                                    >
+                                        <Icon icon={faList} className="mr-2" />
+                                        Ver Relatório Detalhado
+                                    </button>
+                                </>
                             ) : (
                                 <p className="text-xs text-gray-400 italic mt-4">
-                                    Clique em "Auditar" para verificar o status atual do cache e medir a latência real.
+                                    Esta auditoria usa a técnica <strong>"Safe Miss"</strong> para economizar custos de API.
                                 </p>
                             )}
                         </div>

@@ -19,6 +19,23 @@ export async function GET(request: Request) {
     const lon = searchParams.get('lon');
     const tag = searchParams.get('tag'); 
 
+    // --- LÓGICA DE AUDITORIA DE CUSTO ZERO ---
+    // Se o admin enviou este header, ele só quer saber se o cache existe.
+    // Se a requisição chegou até aqui (Origin), significa que a Cloudflare NÃO tinha o cache (MISS).
+    // Nós retornamos um aviso de "MISS" e abortamos a chamada ao Mapbox para economizar.
+    if (request.headers.get('x-audit-mode') === '1') {
+        return NextResponse.json({ audit: 'miss', message: 'Cache MISS na Cloudflare. Economia de API ativada.' }, {
+            headers: {
+                'Content-Type': 'application/json',
+                // Instruímos a Cloudflare e o Navegador a NÃO cachear essa resposta de auditoria.
+                // Assim, a próxima visita real de um usuário tentará buscar os dados reais novamente.
+                'Cache-Control': 'private, no-store, no-cache, max-age=0',
+                'Cloudflare-CDN-Cache-Control': 'no-store' 
+            }
+        });
+    }
+    // -----------------------------------------
+
     if (!lat || !lon || !tag) {
         return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
     }
