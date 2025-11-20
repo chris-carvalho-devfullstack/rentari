@@ -5,15 +5,12 @@ import { NextResponse } from 'next/server';
 const MAPBOX_ACCESS_TOKEN = process.env.MAPBOX_SECRET_TOKEN || process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const MAPBOX_API_URL = 'https://api.mapbox.com/search/searchbox/v1/category';
 
-// MAPEAMENTO ESTRITO (Apenas categorias oficiais do Mapbox)
+// MAPEAMENTO ESTRITO (Whitelist)
 const CATEGORY_MAPPING: Record<string, string> = {
-    // Educação
-    'school': 'school',
-    // Transporte (Mapbox separa bus e train)
-    'bus_station': 'bus_station', 
-    'station': 'train_station', // Usado para Metrô/Trem
-    // Comércio e Saúde
-    'supermarket': 'grocery', // "grocery" é o termo oficial para mercado/supermercado
+    'school': 'school', 
+    'bus_station': 'bus_stop,bus_station', 
+    'station': 'metro_station,train_station', 
+    'supermarket': 'grocery', 
     'hospital': 'hospital',
 };
 
@@ -23,20 +20,20 @@ export async function GET(request: Request) {
     const lon = searchParams.get('lon');
     const tag = searchParams.get('tag'); 
 
+    // 1. Validação Básica
     if (!lat || !lon || !tag) {
         return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 });
     }
 
     try {
-        // 1. Identifica a categoria única
+        // 2. Seleção Rigorosa da Categoria
         const mapboxCategory = CATEGORY_MAPPING[tag];
 
-        // Se a tag não for mapeada, retorna vazio (evita busca genérica)
         if (!mapboxCategory) {
-            return NextResponse.json([]); 
+            return NextResponse.json([]); // Retorna vazio para tags não permitidas
         }
 
-        // 2. Requisição ao Mapbox (Limite de 20 para ter margem de filtro)
+        // 3. Requisição Mapbox (Limitada a 20 para filtrar depois)
         const url = `${MAPBOX_API_URL}/${mapboxCategory}` +
                     `?proximity=${lon},${lat}` + 
                     `&limit=20` + 
@@ -45,7 +42,7 @@ export async function GET(request: Request) {
         const response = await fetch(url);
         
         if(!response.ok) {
-            // Se der erro no Mapbox, retorna vazio silenciosamente
+            console.error(`[Mapbox API Error] Status: ${response.status}`);
             return NextResponse.json([]);
         }
         
@@ -53,12 +50,11 @@ export async function GET(request: Request) {
         
         if (!data.features) return NextResponse.json([]);
 
-        // 3. Processamento e Filtragem
+        // 4. Mapeamento e Filtragem Rígida (Máx 2km)
         const mappedResults = data.features
             .map((f: any) => {
-                const distMeters = f.properties.distance || 0;
+                const distMeters = f.properties.distance;
                 return {
-                    id: f.properties.mapbox_id || Math.random().toString(), // ID único
                     name: f.properties.name,
                     type: mapboxCategory,
                     tag: tag,
@@ -69,22 +65,26 @@ export async function GET(request: Request) {
                     longitude: f.geometry.coordinates[0]
                 };
             })
-            // FILTRO RÍGIDO DE RAIO: Apenas locais até 2km (2000 metros)
             .filter((poi: any) => poi.distanceMeters <= 2000);
 
-        // 4. Ordenação e LIMITE FINAL (Top 10 mais próximos)
-        // Isso impede que "65 locais" sejam retornados
+        // 5. Ordenação e Limite Final (Top 10)
         mappedResults.sort((a: any, b: any) => a.distanceMeters - b.distanceMeters);
         const finalResults = mappedResults.slice(0, 10);
 
         return NextResponse.json(finalResults, {
             headers: {
-                'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600'
+                // CACHE CLOUDFLARE: 20 DIAS
+                // 'max-age': Navegador do cliente (20 dias)
+                // 's-maxage': Edge Cache (Cloudflare) (20 dias)
+                // 'Cloudflare-CDN-Cache-Control': Prioridade específica para CF
+                'Cache-Control': 'public, max-age=1728000, s-maxage=1728000, stale-while-revalidate=86400',
+                'Cloudflare-CDN-Cache-Control': 'public, max-age=1728000',
+                'CDN-Cache-Control': 'public, max-age=1728000'
             }
         });
 
     } catch (error: any) {
         console.error("[API POIS] Erro Interno:", error);
-        return NextResponse.json([], { status: 500 });
+        return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
     }
 }

@@ -7,8 +7,8 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation'; 
 import { useAuthStore } from '@/hooks/useAuthStore'; 
 import { Icon } from '@/components/ui/Icon'; 
-// Ícones atualizados: Adicionado faGlobe
-import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt, faUser, faGlobe } from '@fortawesome/free-solid-svg-icons'; 
+// Ícones atualizados: Adicionado faUserShield
+import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt, faUser, faGlobe, faUserShield } from '@fortawesome/free-solid-svg-icons'; 
 
 // Definição dos links de navegação com ícones
 const navItems = [
@@ -21,16 +21,15 @@ const navItems = [
   { name: 'Meu Perfil', href: '/perfil', icon: faUser }, 
 ];
 
-// CORREÇÃO: Recebendo as props de forma mais segura para evitar o ReferenceError
+// Componente de Item da Sidebar
 const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean; icon: any }> = (props) => {
-  const { href, name, isActive, icon } = props; // Desestruturação explícita dentro da função
+  const { href, name, isActive, icon } = props; 
 
   const baseClasses =
     'flex items-center p-3 rounded-lg transition-colors duration-200 group';
-  // CORREÇÃO CRÍTICA: Item ATIVO (Selecionado) usa fundo claro (bg-blue-100), texto da cor primária e borda.
+  // Item ATIVO
   const activeClasses = 'bg-blue-100 text-rentou-primary border border-rentou-primary shadow-inner'; 
-  
-  // O estado inativo mantém o texto escuro no modo claro, o que já está correto.
+  // Item INATIVO
   const inactiveClasses =
     'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700';
 
@@ -39,7 +38,6 @@ const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean; ico
       href={href}
       className={`${baseClasses} ${isActive ? activeClasses : inactiveClasses}`}
     >
-      {/* Usando o componente Icon do Font Awesome */}
       <Icon icon={icon} className="w-5 h-5 mr-3" />
       <span className="font-medium">{name}</span>
     </Link>
@@ -52,26 +50,26 @@ const SidebarItem: React.FC<{ href: string; name: string; isActive: boolean; ico
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter(); 
-  const { logout } = useAuthStore(); 
+  // Obtemos também o 'user' para verificar o tipo de permissão
+  const { logout, user } = useAuthStore(); 
 
   // FUNÇÃO DE LOGOUT COMPLETA E FUNCIONAL
   const handleLogout = async () => {
     await logout(); // Dispara o logout (Firebase e limpeza de cookie)
-    // ALTERAÇÃO AQUI: Redireciona para a Landing Page (/) em vez de /login
     router.push('/'); 
   };
 
-  // Funções de verificação de rota ativa (adaptadas para o novo link de anúncios)
+  // Funções de verificação de rota ativa
   const isLinkActive = (href: string) => {
-      // Regra especial para a raiz do Imóveis, que tem sub-rotas
+      // Regra especial para a raiz do Imóveis
       if (href === '/imoveis' && pathname.startsWith('/imoveis')) {
           return true;
       }
-      // Se a rota for o link direto para o catálogo (/anuncios)
+      // Se a rota for o link direto para o catálogo
       if (href === '/anuncios' && pathname.startsWith('/anuncios')) {
           return true;
       }
-      // Regra para Dashboard, Financeiro e Perfil
+      // Regra para Dashboard, Financeiro, Perfil e Admin
        return pathname.startsWith(href) && href !== '/imoveis'; 
   }
 
@@ -81,14 +79,12 @@ export default function Sidebar() {
     <div className="fixed top-0 left-0 h-screen w-64 bg-white dark:bg-zinc-800 shadow-xl z-20 flex flex-col border-r border-gray-200 dark:border-zinc-700">
       {/* Logomarca */}
       <div className="p-4 h-16 flex items-center justify-center border-b border-gray-200 dark:border-zinc-700">
-        {/* CORREÇÃO: Adicionado 'relative' ao Link e 'fill' no Image para preencher o container */}
         <Link href="/dashboard" className="w-full h-full flex items-center justify-center relative">
           <Image
-            src="/media/rentou-logo.png" // <-- CORRIGIDO: Nome do arquivo atualizado
+            src="/media/rentou-logo.png" 
             alt="Rentou Logomarca"
-            fill // Define que a imagem deve preencher as dimensões do pai
+            fill 
             priority 
-            // object-contain é ideal para logos, pois maximiza o tamanho sem cortar
             className="object-contain" 
           />
         </Link>
@@ -101,18 +97,31 @@ export default function Sidebar() {
             key={item.href}
             href={item.href}
             name={item.name}
-            icon={item.icon} // Passando o ícone
+            icon={item.icon} 
             isActive={isLinkActive(item.href)}
           />
         ))}
+
+        {/* ITEM EXCLUSIVO DE ADMIN */}
+        {user?.tipo === 'ADMIN' && (
+            <>
+                <div className="my-2 border-t border-gray-200 dark:border-zinc-700"></div>
+                <SidebarItem 
+                    href="/admin"
+                    name="Super Admin"
+                    icon={faUserShield}
+                    isActive={isLinkActive('/admin')}
+                />
+            </>
+        )}
       </nav>
 
       {/* Rodapé/Sair (Logout Funcional e Estilizado) */}
       <div className="p-4 border-t border-gray-200 dark:border-zinc-700">
         <button 
             onClick={handleLogout}
-            title="Sair do Portal do Proprietário e encerrar a sessão." // Adicionado o title para o tooltip
-            className="w-full text-left p-3 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-zinc-700 transition-colors duration-200 font-medium flex items-center cursor-pointer" // Adicionado cursor-pointer
+            title="Sair do Portal do Proprietário e encerrar a sessão."
+            className="w-full text-left p-3 rounded-lg text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-zinc-700 transition-colors duration-200 font-medium flex items-center cursor-pointer" 
         >
             {/* Ícone de Log Out (Font Awesome) */}
             <Icon icon={faSignOutAlt} className="w-5 h-5 mr-3" />
