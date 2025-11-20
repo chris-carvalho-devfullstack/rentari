@@ -7,7 +7,7 @@ interface Coordinates {
     longitude: number;
 }
 
-// A interface é mantida para tipagem no frontend
+// Interface atualizada com o campo address opcional
 export interface PoiResult {
     name: string;
     type: string;
@@ -15,8 +15,8 @@ export interface PoiResult {
     distanceKm: number;
     latitude: number;
     longitude: number;
+    address?: string; // <--- Campo adicionado corretamente
 }
-
 
 const buildNominatimUrl = (addressQuery: string): string => {
     const encodedAddress = encodeURIComponent(addressQuery);
@@ -69,13 +69,12 @@ export async function fetchCoordinatesByAddress(endereco: EnderecoImovel): Promi
     if (coordinates) return coordinates;
     
     console.error("[GeocodingService] Geocoding falhou. Usando fallback.");
-    // Fallback: Coordenadas Mock de SP
+    // Fallback: Coordenadas Mock de SP (caso falhe tudo)
     return { latitude: -23.55052, longitude: -46.633307 }; 
 }
 
-
 /**
- * Busca POIs (Points of Interest) da NOSSA PRÓPRIA API (Mantido).
+ * Busca POIs chamando nossa API Route (que usa Mapbox + Cache).
  */
 export async function fetchNearbyPois(
     lat: number, 
@@ -84,7 +83,7 @@ export async function fetchNearbyPois(
     distance: number = 2000
 ): Promise<PoiResult[]> {
     
-    // Constrói a URL para a nossa API route
+    // Constrói a URL para a nossa API route interna
     const apiUrl = `/api/pois?lat=${lat}&lon=${lon}&tag=${poiTag}&distance=${distance}`;
     
     try {
@@ -105,7 +104,7 @@ export async function fetchNearbyPois(
 }
 
 /**
- * NOVO: Função para buscar o GeoJSON (limites) da nossa nova API de backend.
+ * Busca o GeoJSON (limites) via Nominatim (backend).
  */
 export async function fetchBairroGeoJsonLimits(bairro: string, cidade: string, estado: string): Promise<any | null> {
     const apiUrl = `/api/bairro?bairro=${bairro}&cidade=${cidade}&estado=${estado}`;
@@ -114,13 +113,11 @@ export async function fetchBairroGeoJsonLimits(bairro: string, cidade: string, e
         const response = await fetch(apiUrl);
 
         if (!response.ok) {
-            // Se não encontrar (404) ou der erro (500/502), retorna null
             return null;
         }
         
         const geoJsonData = await response.json();
         
-        // Retorna o GeoJSON se for um objeto válido
         if (geoJsonData && geoJsonData.type) {
             return geoJsonData;
         }
