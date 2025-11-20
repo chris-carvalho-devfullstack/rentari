@@ -1,117 +1,507 @@
 // src/app/(rentou)/admin/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { CacheInspector } from '@/components/admin/CacheInspector';
 import { Icon } from '@/components/ui/Icon';
-import { faChartLine, faCoins, faShieldAlt } from '@fortawesome/free-solid-svg-icons';
+import { 
+    faChartLine, faShieldAlt, faBuilding, faUsers, 
+    faUserTie, faHome, faSync, faCheckCircle, 
+    faWallet, faServer, faExclamationTriangle, faQuestionCircle, faTimes,
+    faDatabase, faImages, faMapMarkedAlt, faStopwatch
+} from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
+import { db } from '@/services/FirebaseService';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { Imovel } from '@/types/imovel';
 
-// Dados Mockados para simular a visão futura (quando tivermos Analytics no banco)
-const MOCK_STATS = [
-    { label: 'Requisições Hoje', value: '1,240', change: '+12%', icon: faChartLine, color: 'text-blue-500' },
-    { label: 'Taxa de Cache Hit', value: '94.5%', change: '+5%', icon: faShieldAlt, color: 'text-green-500' },
-    { label: 'Custo Estimado (Mapbox)', value: 'R$ 0,00', change: '-100%', icon: faCoins, color: 'text-yellow-500' },
-];
+// Interface para as estatísticas
+interface AdminStats {
+    totalImoveis: number;
+    imoveisPublicados: number;
+    totalUsuarios: number;
+    proprietarios: number;
+    inquilinos: number;
+    ambos: number;
+    receitaEstimada: number;
+    pendenciasFinanceiras: number;
+    // Novas Métricas de Infra
+    imoveisSemCoordenadas: number;
+    totalFotos: number;
+    dbResponseTime: number;
+}
+
+// --- COMPONENTE DE MODAL DE AJUDA ---
+const HelpModal = ({ title, content, isOpen, onClose }: { title: string, content: React.ReactNode, isOpen: boolean, onClose: () => void }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl max-w-md w-full p-6 relative animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <Icon icon={faTimes} className="w-5 h-5" />
+                </button>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+                    <Icon icon={faQuestionCircle} className="w-6 h-6 mr-2 text-blue-500" />
+                    {title}
+                </h3>
+                <div className="text-sm text-gray-600 dark:text-gray-300 space-y-3 leading-relaxed">
+                    {content}
+                </div>
+                <div className="mt-6 text-right">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-zinc-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-600 font-medium text-sm">
+                        Entendi
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Botão de Ajuda Reutilizável para os Cards
+const CardHelpButton = ({ onClick }: { onClick: () => void }) => (
+    <button 
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
+        className="text-gray-400 hover:text-blue-500 transition-colors ml-auto"
+        title="O que é isso?"
+    >
+        <Icon icon={faQuestionCircle} className="w-4 h-4" />
+    </button>
+);
 
 export default function AdminDashboard() {
     const { user } = useAuthStore();
     const router = useRouter();
 
-    // Proteção básica de renderização (A proteção real deve ser no Middleware)
+    // Estados de Ajuda (Modal)
+    const [helpModalKey, setHelpModalKey] = useState<string | null>(null);
+
+    // Estado das Estatísticas
+    const [stats, setStats] = useState<AdminStats>({
+        totalImoveis: 0, imoveisPublicados: 0,
+        totalUsuarios: 0, proprietarios: 0, inquilinos: 0, ambos: 0,
+        receitaEstimada: 0, pendenciasFinanceiras: 0,
+        imoveisSemCoordenadas: 0, totalFotos: 0, dbResponseTime: 0
+    });
+
+    // Estado da Auditoria de Cache
+    const [cacheAudit, setCacheAudit] = useState({
+        checked: 0, totalToCheck: 0, hits: 0, loading: false, completed: false,
+        averageLatency: 0 // Média acumulada
+    });
+
+    // 1. Carregar Estatísticas (Com medição de performance e contagem de mídia)
+    useEffect(() => {
+        const fetchStats = async () => {
+            const startTime = performance.now(); // Início da medição
+            try {
+                const imoveisColl = collection(db, 'imoveis');
+                const imoveisSnapshot = await getDocs(imoveisColl);
+                
+                let countTotal = 0;
+                let countPublicados = 0;
+                let countSemCoords = 0;
+                let countFotos = 0;
+
+                imoveisSnapshot.forEach(doc => {
+                    const data = doc.data() as Imovel;
+                    countTotal++;
+                    if (data.status === 'ANUNCIADO') countPublicados++;
+                    if (!data.latitude || !data.longitude) countSemCoords++;
+                    if (data.fotos && Array.isArray(data.fotos)) countFotos += data.fotos.length;
+                });
+
+                const usuariosColl = collection(db, 'usuarios');
+                const usuariosSnap = await getDocs(usuariosColl);
+                
+                let props = 0, inqs = 0, ambs = 0;
+                usuariosSnap.forEach(doc => {
+                    const data = doc.data();
+                    if (data.perfil === 'PROPRIETARIO') props++;
+                    else if (data.perfil === 'INQUILINO') inqs++;
+                    else if (data.perfil === 'AMBOS') ambs++;
+                    else props++;
+                });
+
+                const receitaEstimada = countPublicados * 2500; 
+                const endTime = performance.now(); // Fim da medição
+
+                setStats({
+                    totalImoveis: countTotal,
+                    imoveisPublicados: countPublicados,
+                    totalUsuarios: usuariosSnap.size,
+                    proprietarios: props,
+                    inquilinos: inqs,
+                    ambos: ambs,
+                    receitaEstimada: receitaEstimada,
+                    pendenciasFinanceiras: 3,
+                    imoveisSemCoordenadas: countSemCoords,
+                    totalFotos: countFotos,
+                    dbResponseTime: Math.round(endTime - startTime)
+                });
+
+            } catch (error) {
+                console.error("Erro ao carregar estatísticas admin:", error);
+            }
+        };
+
+        if (user?.tipo === 'ADMIN') {
+            fetchStats();
+        }
+    }, [user]);
+
+    // 2. Auditoria de Cache (Com Validação Rigorosa de Borda)
+    const runCacheAudit = async () => {
+        setCacheAudit({ checked: 0, totalToCheck: 0, hits: 0, loading: true, completed: false, averageLatency: 0 });
+        
+        try {
+            const q = query(collection(db, 'imoveis'), where('status', '==', 'ANUNCIADO'));
+            const snapshot = await getDocs(q);
+            const imoveis = snapshot.docs.map(d => d.data() as Imovel);
+            
+            setCacheAudit(prev => ({ ...prev, totalToCheck: imoveis.length }));
+
+            let hitCount = 0;
+            let processed = 0;
+            let totalLatencySum = 0;
+            let latenciesRecorded = 0;
+
+            const batchSize = 5;
+            for (let i = 0; i < imoveis.length; i += batchSize) {
+                const batch = imoveis.slice(i, i + batchSize);
+                const promises = batch.map(async (imovel) => {
+                    if (!imovel.latitude || !imovel.longitude) return null;
+                    const url = `/api/pois?lat=${imovel.latitude}&lon=${imovel.longitude}&tag=school`;
+                    const start = performance.now();
+                    try {
+                        // --- AQUI ESTÁ A MÁGICA ---
+                        // { cache: 'no-cache' } diz ao navegador: "Não use o SEU cache de disco, vá na rede".
+                        // A rede é o Cloudflare. Se o Cloudflare tiver (HIT), ele retorna rápido.
+                        // Se não tiver (MISS), ele busca no servidor e cacheia.
+                        const res = await fetch(url, { cache: 'no-cache' }); 
+                        const end = performance.now();
+                        const latency = end - start;
+                        
+                        const cfStatus = res.headers.get('cf-cache-status');
+                        const cfAge = res.headers.get('age');
+                        
+                        // CRITÉRIOS: HIT explícito OU latência muito baixa (< 200ms) OU Age > 0
+                        const isHit = cfStatus === 'HIT' || (cfAge && parseInt(cfAge) > 0) || latency < 200;
+                        
+                        return { isHit, latency };
+                    } catch {
+                        return null;
+                    }
+                });
+
+                const results = await Promise.all(promises);
+                
+                results.forEach(res => {
+                    if (res) {
+                        if (res.isHit) hitCount++;
+                        totalLatencySum += res.latency;
+                        latenciesRecorded++;
+                    }
+                });
+                
+                processed += batch.length;
+                const currentAvg = latenciesRecorded > 0 ? Math.round(totalLatencySum / latenciesRecorded) : 0;
+                
+                setCacheAudit(prev => ({ ...prev, checked: processed, hits: hitCount, averageLatency: currentAvg }));
+            }
+            setCacheAudit(prev => ({ ...prev, loading: false, completed: true }));
+        } catch (error) {
+            console.error("Erro na auditoria:", error);
+            setCacheAudit(prev => ({ ...prev, loading: false }));
+        }
+    };
+
     if (user?.tipo !== 'ADMIN') {
-        return (
-            <div className="flex flex-col items-center justify-center h-[60vh] text-center">
-                <h1 className="text-2xl font-bold text-red-600 mb-2">Acesso Negado</h1>
-                <p className="text-gray-600">Esta área é restrita para administradores do sistema.</p>
-                <button onClick={() => router.push('/dashboard')} className="mt-4 text-blue-600 hover:underline">Voltar ao Dashboard</button>
-            </div>
-        );
+        return <div className="flex justify-center items-center h-screen text-red-600 font-bold">Acesso Negado</div>;
     }
 
+    const cachePercentage = cacheAudit.totalToCheck > 0 
+        ? Math.round((cacheAudit.hits / cacheAudit.totalToCheck) * 100) 
+        : 0;
+    
+    const formatMoney = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+
+    // Conteúdo dos Modais de Ajuda
+    const getHelpContent = (key: string) => {
+        switch(key) {
+            case 'db_health': return (
+                <>
+                    <p>Mede o tempo total necessário para conectar ao <strong>Firebase Firestore</strong>, baixar os dados iniciais e processar as estatísticas desta tela.</p>
+                    <ul className="list-disc pl-4 space-y-1 mt-2">
+                        <li><strong>&lt; 500ms:</strong> Excelente saúde do banco.</li>
+                        <li><strong>&gt; 2s:</strong> Atenção. Pode indicar que o banco está grande demais e precisa de otimização (índices ou paginação).</li>
+                    </ul>
+                </>
+            );
+            case 'geocoding': return (
+                <>
+                    <p>Monitora a integridade dos dados de localização.</p>
+                    <p className="mt-2">Imóveis sem Latitude/Longitude não aparecem no mapa para os clientes, mesmo que tenham endereço escrito. Se este número crescer, verifique o serviço de Geocoding automático.</p>
+                </>
+            );
+            case 'storage': return (
+                <>
+                    <p>Contagem total de fotos de alta resolução armazenadas no bucket.</p>
+                    <p className="mt-2">Um número muito alto pode impactar os custos de armazenamento do Firebase. Use esta métrica para decidir quando rodar scripts de limpeza ou compressão de imagens antigas.</p>
+                </>
+            );
+            case 'latency': return (
+                <>
+                    <p>A <strong>prova real</strong> da velocidade do seu site para o usuário final.</p>
+                    <p className="mt-2">Calculada em tempo real durante a auditoria. Se o cache da Cloudflare estiver funcionando ("quente"), este valor deve ser baixíssimo (20-50ms). Se estiver alto, significa que seu servidor está tendo que trabalhar (e gastar) para gerar os mapas.</p>
+                </>
+            );
+            case 'status_cache': return (
+                <>
+                    <p>Auditoria global dos pontos de interesse (POIs) de todos os imóveis publicados.</p>
+                    <p className='mt-2'>Ao clicar em "Auditar", o sistema simula um usuário visitando cada imóvel. Isso "aquece" o cache da Cloudflare, garantindo que os próximos visitantes tenham carregamento instantâneo.</p>
+                </>
+            );
+            case 'auditoria_individual': return (
+                <>
+                    <p>Ferramenta de diagnóstico cirúrgico.</p>
+                    <p className='mt-2'>Permite testar um imóvel específico pelo Smart ID para ver se as coordenadas estão corretas e se as APIs de escolas, transporte e hospitais estão respondendo corretamente para aquela região.</p>
+                </>
+            );
+            default: return null;
+        }
+    };
+
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500 relative pb-20">
+            
+            {/* MODAL DE AJUDA */}
+            <HelpModal 
+                isOpen={!!helpModalKey} 
+                onClose={() => setHelpModalKey(null)}
+                title="Entenda a Métrica"
+                content={helpModalKey ? getHelpContent(helpModalKey) : null}
+            />
+
             <div className="flex justify-between items-end">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                        Super Admin <span className="text-sm font-normal text-purple-600 bg-purple-100 px-2 py-1 rounded-full ml-2">Beta</span>
+                        Painel Master <span className="text-sm font-normal text-white bg-gradient-to-r from-purple-600 to-blue-600 px-3 py-1 rounded-full ml-2 shadow-sm">Admin 2.0</span>
                     </h1>
-                    <p className="text-gray-600 dark:text-gray-400 mt-1">Controle de infraestrutura, cache e custos.</p>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">Visão geral da plataforma, usuários e infraestrutura.</p>
                 </div>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {MOCK_STATS.map((stat, idx) => (
-                    <div key={idx} className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-zinc-700">
-                        <div className="flex justify-between items-start mb-4">
-                            <div className={`p-3 rounded-lg bg-opacity-10 ${stat.color.replace('text-', 'bg-')}`}>
-                                <Icon icon={stat.icon} className={`w-6 h-6 ${stat.color}`} />
-                            </div>
-                            <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded">{stat.change}</span>
-                        </div>
-                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{stat.label}</p>
+            {/* === LINHA 1: NEGÓCIO (KPIs Principais) === */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Imóveis */}
+                <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider flex justify-between">
+                        Imóveis
+                    </h3>
+                    <div className="mt-2 flex items-baseline space-x-2">
+                        <span className="text-3xl font-extrabold text-gray-900 dark:text-white">{stats.totalImoveis}</span>
+                        <span className="text-sm text-gray-500">cadastrados</span>
                     </div>
-                ))}
+                    <div className="mt-4 w-full bg-gray-200 dark:bg-zinc-700 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${stats.totalImoveis > 0 ? (stats.imoveisPublicados / stats.totalImoveis) * 100 : 0}%` }}></div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2"><strong className="text-blue-600">{stats.imoveisPublicados}</strong> publicados</p>
+                </div>
+
+                {/* Usuários */}
+                <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Usuários</h3>
+                    <div className="mt-2">
+                        <span className="text-3xl font-extrabold text-gray-900 dark:text-white">{stats.totalUsuarios}</span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-1 text-center text-xs">
+                        <div className='bg-purple-50 dark:bg-purple-900/20 p-1 rounded text-purple-700 dark:text-purple-300'><span className='block font-bold'>{stats.proprietarios}</span> Prop.</div>
+                        <div className='bg-green-50 dark:bg-green-900/20 p-1 rounded text-green-700 dark:text-green-300'><span className='block font-bold'>{stats.inquilinos}</span> Inq.</div>
+                        <div className='bg-orange-50 dark:bg-orange-900/20 p-1 rounded text-orange-700 dark:text-orange-300'><span className='block font-bold'>{stats.ambos}</span> Ambos</div>
+                    </div>
+                </div>
+
+                {/* Financeiro */}
+                <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Receita Potencial</h3>
+                    <div className="mt-2">
+                        <span className="text-3xl font-extrabold text-green-600 dark:text-green-400">{formatMoney(stats.receitaEstimada)}</span>
+                    </div>
+                    <div className="mt-4 flex items-center text-xs text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded w-fit">
+                        <Icon icon={faExclamationTriangle} className="mr-1" /> {stats.pendenciasFinanceiras} Alertas de Pagamento
+                    </div>
+                </div>
+
+                {/* Status Geral */}
+                <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700 flex flex-col justify-between">
+                     <div>
+                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Estado do Sistema</h3>
+                        <div className="mt-2 flex items-center space-x-2">
+                            <span className="flex h-3 w-3 relative">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                            </span>
+                            <span className="font-bold text-green-600 text-lg">Operacional</span>
+                        </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Todas as APIs e Banco de Dados respondendo.</p>
+                </div>
             </div>
 
-            {/* Ferramentas */}
+            {/* === LINHA 2: INFRAESTRUTURA & SAÚDE (NOVAS MÉTRICAS) === */}
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 pt-4 border-t border-gray-200 dark:border-zinc-700">
+                Monitoramento de Infraestrutura
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                {/* Métrica 1: Saúde do Banco */}
+                <div className="bg-white dark:bg-zinc-800 p-5 rounded-lg border border-gray-200 dark:border-zinc-700 flex flex-col">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg dark:bg-blue-900/30 dark:text-blue-400">
+                            <Icon icon={faDatabase} className="w-5 h-5" />
+                        </div>
+                        <CardHelpButton onClick={() => setHelpModalKey('db_health')} />
+                    </div>
+                    <span className="text-2xl font-bold text-gray-800 dark:text-white">{stats.dbResponseTime}ms</span>
+                    <span className="text-xs text-gray-500 mt-1">Tempo de resposta do Banco</span>
+                    <div className="w-full bg-gray-200 h-1.5 rounded-full mt-3 overflow-hidden">
+                        <div className={`h-1.5 rounded-full ${stats.dbResponseTime < 500 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${Math.min(stats.dbResponseTime / 10, 100)}%` }}></div>
+                    </div>
+                </div>
+
+                {/* Métrica 2: Integridade Geocoding */}
+                <div className="bg-white dark:bg-zinc-800 p-5 rounded-lg border border-gray-200 dark:border-zinc-700 flex flex-col">
+                     <div className="flex justify-between items-start mb-2">
+                        <div className={`p-2 rounded-lg ${stats.imoveisSemCoordenadas === 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                            <Icon icon={faMapMarkedAlt} className="w-5 h-5" />
+                        </div>
+                        <CardHelpButton onClick={() => setHelpModalKey('geocoding')} />
+                    </div>
+                    <span className="text-2xl font-bold text-gray-800 dark:text-white">{stats.imoveisSemCoordenadas}</span>
+                    <span className="text-xs text-gray-500 mt-1">Imóveis sem coordenadas (Invisíveis)</span>
+                    {stats.imoveisSemCoordenadas > 0 && <span className="text-[10px] text-red-500 font-bold mt-1">Ação necessária!</span>}
+                </div>
+
+                {/* Métrica 3: Volume de Storage */}
+                <div className="bg-white dark:bg-zinc-800 p-5 rounded-lg border border-gray-200 dark:border-zinc-700 flex flex-col">
+                     <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-purple-100 text-purple-600 rounded-lg dark:bg-purple-900/30 dark:text-purple-400">
+                            <Icon icon={faImages} className="w-5 h-5" />
+                        </div>
+                        <CardHelpButton onClick={() => setHelpModalKey('storage')} />
+                    </div>
+                    <span className="text-2xl font-bold text-gray-800 dark:text-white">{stats.totalFotos}</span>
+                    <span className="text-xs text-gray-500 mt-1">Fotos hospedadas no total</span>
+                </div>
+
+                {/* Métrica 4: Latência Média (Resultado da Auditoria) */}
+                <div className="bg-white dark:bg-zinc-800 p-5 rounded-lg border border-gray-200 dark:border-zinc-700 flex flex-col relative overflow-hidden">
+                     <div className="flex justify-between items-start mb-2">
+                        <div className={`p-2 rounded-lg transition-colors ${
+                            cacheAudit.averageLatency === 0 ? 'bg-gray-100 text-gray-400' : 
+                            cacheAudit.averageLatency < 100 ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
+                        }`}>
+                            <Icon icon={faStopwatch} className="w-5 h-5" />
+                        </div>
+                        <CardHelpButton onClick={() => setHelpModalKey('latency')} />
+                    </div>
+                    <span className="text-2xl font-bold text-gray-800 dark:text-white">
+                        {cacheAudit.averageLatency > 0 ? `${cacheAudit.averageLatency}ms` : '--'}
+                    </span>
+                    <span className="text-xs text-gray-500 mt-1">Latência Média da API (Cache)</span>
+                    {cacheAudit.loading && <div className="absolute bottom-0 left-0 h-1 bg-orange-500 animate-progress w-full"></div>}
+                </div>
+            </div>
+
+            {/* === LINHA 3: FERRAMENTAS DE CACHE === */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
-                {/* Coluna 1: Inspetor de Cache */}
-                <div className="space-y-6">
-                    <CacheInspector />
+                {/* Auditoria em Massa */}
+                <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700 relative overflow-hidden h-full">
+                    <button 
+                        onClick={() => setHelpModalKey('status_cache')}
+                        className="absolute top-4 right-4 text-gray-400 hover:text-blue-500 transition-colors z-10"
+                    >
+                        <Icon icon={faQuestionCircle} className="w-5 h-5" />
+                    </button>
+
+                    <div className="absolute right-0 top-0 p-4 opacity-10 pointer-events-none">
+                        <Icon icon={faShieldAlt} className="w-20 h-20 text-orange-500" />
+                    </div>
                     
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-100 dark:border-blue-800">
-                        <h4 className="font-bold text-blue-800 dark:text-blue-300 mb-2">Estratégia de Cache Ativa</h4>
-                        <ul className="list-disc list-inside text-sm text-blue-700 dark:text-blue-400 space-y-1">
-                            <li><strong>Browser Cache:</strong> 20 dias (Navegação instantânea)</li>
-                            <li><strong>Edge Cache (Vercel/CF):</strong> 20 dias (Proteção de API)</li>
-                            <li><strong>Stale-While-Revalidate:</strong> 1 dia (Atualização silenciosa)</li>
-                            <li><strong>API Mapbox:</strong> Chamada apenas em caso de MISS total.</li>
-                        </ul>
+                    <div className="flex flex-col h-full justify-between">
+                        <div>
+                            <div className="flex justify-between items-start pr-8">
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Status de Cache (Cloudflare)</h3>
+                                    <div className="mt-2 flex items-center space-x-2">
+                                        <span className={`text-4xl font-extrabold ${cachePercentage > 80 ? 'text-green-600' : cachePercentage > 50 ? 'text-yellow-600' : 'text-gray-400'}`}>
+                                            {cacheAudit.loading ? '...' : cacheAudit.completed ? `${cachePercentage}%` : '--'}
+                                        </span>
+                                        <span className="text-sm text-gray-500 max-w-[150px] leading-tight">dos imóveis com POIs otimizados</span>
+                                    </div>
+                                </div>
+                                
+                                <button 
+                                    onClick={runCacheAudit}
+                                    disabled={cacheAudit.loading}
+                                    className={`px-4 py-3 rounded-lg text-sm font-bold text-white shadow-md transition-all flex items-center ${
+                                        cacheAudit.loading 
+                                        ? 'bg-gray-400 cursor-not-allowed' 
+                                        : 'bg-orange-600 hover:bg-orange-700 hover:scale-105 active:scale-95'
+                                    }`}
+                                >
+                                    {cacheAudit.loading ? (
+                                        <><Icon icon={faSync} spin className="mr-2" /> Verificando...</>
+                                    ) : (
+                                        <><Icon icon={faChartLine} className="mr-2" /> Auditar Cache Agora</>
+                                    )}
+                                </button>
+                            </div>
+
+                            <div className="mt-8">
+                                <div className="flex justify-between text-xs mb-1 font-medium text-gray-500">
+                                    <span>Progresso da Verificação</span>
+                                    <span>{cacheAudit.checked} / {cacheAudit.totalToCheck} Imóveis</span>
+                                </div>
+                                <div className="w-full bg-gray-200 dark:bg-zinc-700 rounded-full h-4 overflow-hidden shadow-inner">
+                                    <div 
+                                        className="bg-gradient-to-r from-orange-500 to-yellow-400 h-4 transition-all duration-500 ease-out relative"
+                                        style={{ width: `${cacheAudit.totalToCheck > 0 ? (cacheAudit.checked / cacheAudit.totalToCheck) * 100 : 0}%` }}
+                                    >
+                                        {cacheAudit.loading && <div className="absolute top-0 left-0 bottom-0 right-0 bg-white/30 animate-pulse"></div>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className='mt-4'>
+                            {cacheAudit.completed ? (
+                                <p className="text-sm text-green-600 dark:text-green-400 flex items-center bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-100 dark:border-green-800">
+                                    <Icon icon={faCheckCircle} className="mr-2" />
+                                    Auditoria concluída: {cacheAudit.hits} imóveis entregues via Edge Cache (rápido).
+                                </p>
+                            ) : (
+                                <p className="text-xs text-gray-400 italic mt-4">
+                                    Clique em "Auditar" para verificar o status atual do cache e medir a latência real.
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                {/* Coluna 2: Imóveis Populares (Mock por enquanto) */}
-                <div className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-zinc-700">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
-                        Imóveis com Maior Carga de Requisições
-                    </h3>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left text-gray-500 dark:text-gray-400">
-                            <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-zinc-700 dark:text-gray-400">
-                                <tr>
-                                    <th className="px-4 py-3">Smart ID</th>
-                                    <th className="px-4 py-3">Visualizações</th>
-                                    <th className="px-4 py-3">Cache Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {/* Dados simulados - Futuramente conectar com Firestore */}
-                                <tr className="border-b dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700">
-                                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">RS0311...X9Y</td>
-                                    <td className="px-4 py-3">1,042</td>
-                                    <td className="px-4 py-3"><span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">98% HIT</span></td>
-                                </tr>
-                                <tr className="border-b dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-700">
-                                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">CM0102...A2B</td>
-                                    <td className="px-4 py-3">856</td>
-                                    <td className="px-4 py-3"><span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs">92% HIT</span></td>
-                                </tr>
-                                <tr className="hover:bg-gray-50 dark:hover:bg-zinc-700">
-                                    <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">RU0500...K7L</td>
-                                    <td className="px-4 py-3">120</td>
-                                    <td className="px-4 py-3"><span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded text-xs">MISS RECENTE</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-4 italic text-center">
-                        *Dados de visualização simulados. Implementar contador no Firestore para dados reais.
-                    </p>
+                {/* Auditoria Individual */}
+                <div className="h-full relative">
+                     <button 
+                        onClick={() => setHelpModalKey('auditoria_individual')}
+                        className="absolute top-4 right-4 text-gray-400 hover:text-blue-500 transition-colors z-20"
+                        style={{ marginTop: '5px', marginRight: '5px' }} 
+                    >
+                        <Icon icon={faQuestionCircle} className="w-5 h-5" />
+                    </button>
+                    <CacheInspector />
                 </div>
             </div>
         </div>
