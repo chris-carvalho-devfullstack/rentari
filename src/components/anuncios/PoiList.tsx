@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/hooks/useAuthStore';
-import { PoiResult, fetchCoordinatesByAddress } from '@/services/GeocodingService';
+import { fetchCoordinatesByAddress } from '@/services/GeocodingService';
 import { Icon } from '@/components/ui/Icon';
 import { 
     faSchool, faBus, faShoppingCart, faSubway, faHospital, faMapPin, 
@@ -12,10 +12,22 @@ import {
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// Definição da interface PoiResult localmente ou importada se estiver em outro lugar
+export interface PoiResult {
+  name: string;
+  type: string;
+  tag: string;
+  address: string;
+  distanceKm: string;
+  distanceMeters: number;
+  latitude: number;
+  longitude: number;
+}
+
 interface PoiListProps {
     latitude: number;
     longitude: number;
-    onClickPoi: (poi: PoiResult | null) => void; 
+    onClickPoi: (lat: number, lng: number) => void; // Ajustado para corresponder à assinatura usada no código
     onPoisFetched: (pois: PoiResult[]) => void; 
 }
 
@@ -46,7 +58,8 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
     const router = useRouter();
 
     const [activeTag, setActiveTag] = useState<string>('school'); 
-    const [pois, setPois] = useState<PoiResult[]>([]);
+    const [allPoisCache, setAllPoisCache] = useState<PoiResult[]>([]); // Cache local de TODOS os POIs vindos da API
+    const [pois, setPois] = useState<PoiResult[]>([]); // POIs filtrados exibidos atualmente
     const [loading, setLoading] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const [accessDenied, setAccessDenied] = useState(false);
@@ -57,43 +70,44 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
     const [newPointAddress, setNewPointAddress] = useState('');
     const [addingLoading, setAddingLoading] = useState(false);
 
-    // --- Busca POIs da API ---
-    const fetchPois = useCallback(async (tag: string) => {
+    // --- Busca POIs da API (Requisição Única) ---
+    const fetchAllPois = useCallback(async () => {
         if (!latitude || !longitude) return;
 
         setLoading(true);
-        setAccessDenied(false);
-        setPois([]); // Limpa visualmente a lista
-        onPoisFetched([]); // Limpa visualmente o mapa
-
         try {
-            // A API agora retorna no MÁXIMO 10 itens
-            const res = await fetch(`/api/pois?lat=${latitude}&lon=${longitude}&tag=${tag}`);
+            // A API agora retorna TODOS os POIs de uma vez (Batching)
+            // Não passamos mais 'tag' na URL.
+            const res = await fetch(`/api/pois?lat=${latitude}&lon=${longitude}`);
+            
             if (!res.ok) throw new Error('Erro na busca');
             
             const data = await res.json();
             
             if (Array.isArray(data)) {
-                setPois(data);
-                onPoisFetched(data); 
+                setAllPoisCache(data); // Salva tudo no cache local
+
+                // Filtra inicial (Escolas)
+                const initialFilter = data.filter((p: any) => p.tag === 'school');
+                setPois(initialFilter);
+                onPoisFetched(initialFilter); 
             }
         } catch (error) {
             console.error("Erro ao buscar POIs:", error);
+            setPois([]);
+            onPoisFetched([]);
         } finally {
             setLoading(false);
         }
     }, [latitude, longitude, onPoisFetched]);
 
-    // Efeito Inicial: Carrega apenas 'school'
+    // Efeito Inicial: Busca tudo uma única vez
     useEffect(() => {
-        fetchPois('school');
+        fetchAllPois();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [latitude, longitude]); // Recarrega se mudar de imóvel
 
     const handleFilterClick = (tag: string, isProtected: boolean) => {
-        // Se clicar no que já está ativo, ignora para não recarregar
-        if (activeTag === tag && !accessDenied) return;
-
         setActiveTag(tag);
         setIsExpanded(false);
 
@@ -104,7 +118,12 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
             return;
         }
 
-        fetchPois(tag);
+        setAccessDenied(false);
+
+        // Filtra LOCALMENTE do cache em vez de chamar a API novamente
+        const filtered = allPoisCache.filter(p => p.tag === tag);
+        setPois(filtered);
+        onPoisFetched(filtered);
     };
 
     // --- LÓGICA VIP ---
@@ -147,6 +166,7 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
             };
 
             const updatedPoints = [...userPoints, newPoint];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await updateUser({ pontosImportantes: updatedPoints } as any);
             
             setIsAddingPoint(false);
@@ -161,9 +181,12 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                 longitude: newPoint.longitude,
                 type: 'custom',
                 tag: 'custom',
-                distanceKm: parseFloat(getDistanceToSavedPoint(newPoint.latitude, newPoint.longitude))
+                distanceKm: getDistanceToSavedPoint(newPoint.latitude, newPoint.longitude),
+                distanceMeters: parseFloat(getDistanceToSavedPoint(newPoint.latitude, newPoint.longitude)) * 1000
             };
-            onClickPoi(customPoi);
+            
+            // Ajuste na chamada do onClickPoi para passar lat/lng separados
+            onClickPoi(customPoi.latitude, customPoi.longitude);
             onPoisFetched([customPoi]); 
 
         } catch (err) {
@@ -179,6 +202,7 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
         if (!user || !confirm("Deseja remover este ponto importante?")) return;
 
         const updatedPoints = userPoints.filter(p => p.id !== idToDelete);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await updateUser({ pontosImportantes: updatedPoints } as any);
     };
 
@@ -187,16 +211,18 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
             name: pt.nome,
             type: 'custom',
             tag: 'custom',
-            distanceKm: parseFloat(getDistanceToSavedPoint(pt.latitude, pt.longitude)),
+            distanceKm: getDistanceToSavedPoint(pt.latitude, pt.longitude),
+            distanceMeters: parseFloat(getDistanceToSavedPoint(pt.latitude, pt.longitude)) * 1000,
             latitude: pt.latitude,
             longitude: pt.longitude,
             address: pt.endereco
         };
-        onClickPoi(customPoi);
+        // Ajuste na chamada do onClickPoi para passar lat/lng separados
+        onClickPoi(customPoi.latitude, customPoi.longitude);
         onPoisFetched([customPoi]); 
     };
 
-    // Como o backend já limita a 10, a paginação local é mais simples
+    // Paginação local simples
     const itemsToShow = isExpanded ? pois : pois.slice(0, 5);
 
     return (
@@ -276,7 +302,7 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                         {itemsToShow.map((poi, idx) => (
                             <button 
                                 key={idx} 
-                                onClick={() => onClickPoi(poi)}
+                                onClick={() => onClickPoi(poi.latitude, poi.longitude)}
                                 className="w-full flex justify-between items-center p-3 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all group text-left"
                             >
                                 <div className="flex items-center overflow-hidden">
