@@ -77,19 +77,16 @@ export async function GET(request: Request) {
         // Achata o array de arrays em uma única lista e ordena por distância
         const allPois = results.flat().sort((a: any, b: any) => a.distanceMeters - b.distanceMeters);
 
-        // [OPCIONAL] Se quiser monitorar custos, incremente o contador no Firebase aqui.
-        // await incrementMapboxCounter(); 
-
         return NextResponse.json(allPois, {
             headers: {
                 'Content-Type': 'application/json',
-                // --- ESTRATÉGIA DE CACHE DE 30 DIAS ---
-                // Browser: 1 dia (86400s)
-                // Cloudflare CDN: 30 dias (2592000s)
-                // Stale-while-revalidate: Serve o velho enquanto busca o novo se vencer (resiliência)
-                'Cache-Control': 'public, max-age=86400, s-maxage=2592000, stale-while-revalidate=86400',
+                // --- ESTRATÉGIA DE CACHE HÍBRIDA (CLOUD = LONGO, BROWSER = ZERO) ---
+                // max-age=0: O Navegador (Chrome/Firefox) NÃO guarda localmente. Ele sempre pergunta pra Cloudflare.
+                // s-maxage=2592000: A Cloudflare guarda por 30 dias.
+                // stale-while-revalidate: Resiliência para entregar conteúdo antigo enquanto atualiza.
+                'Cache-Control': 'public, max-age=0, s-maxage=2592000, stale-while-revalidate=86400',
                 
-                // O Header Supremo que a Cloudflare obedece acima de tudo (graças à sua Regra de Cache criada)
+                // O Header Supremo que a Cloudflare obedece acima de tudo
                 'Cloudflare-CDN-Cache-Control': 'public, max-age=2592000',
                 'CDN-Cache-Control': 'public, max-age=2592000'
             }

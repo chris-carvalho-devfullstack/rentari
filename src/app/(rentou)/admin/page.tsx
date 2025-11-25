@@ -1,4 +1,3 @@
-// src/app/(rentou)/admin/page.tsx
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -303,12 +302,14 @@ export default function AdminDashboard() {
                 const batch = imoveis.slice(i, i + batchSize);
                 const promises = batch.map(async (imovel) => {
                     if (!imovel.latitude || !imovel.longitude) return null;
-                    const url = `/api/pois?lat=${imovel.latitude}&lon=${imovel.longitude}&tag=school`;
+                    // Removido o 'tag' da URL para bater na mesma chave de cache do usuário real (All-in-One)
+                    const url = `/api/pois?lat=${imovel.latitude}&lon=${imovel.longitude}`;
                     const start = performance.now();
                     try {
                         // --- MODO AUDITORIA SEGURA ---
                         const res = await fetch(url, { 
-                            headers: { 'x-audit-mode': '1' }
+                            headers: { 'x-audit-mode': '1' },
+                            // cache: 'no-store' REMOVIDO para permitir que bata no cache da Cloudflare
                         }); 
                         const end = performance.now();
                         const latency = Math.round(end - start);

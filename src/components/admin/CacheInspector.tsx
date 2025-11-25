@@ -1,17 +1,13 @@
-// src/components/admin/CacheInspector.tsx
 'use client';
 
 import React, { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { 
     faSearch, faCloud, faSync, faMapMarkerAlt, faCheck, faShieldAlt, 
-    faTimes, faList // <-- Novos ícones adicionados
+    faTimes, faList 
 } from '@fortawesome/free-solid-svg-icons';
 import { fetchImovelPorSmartId } from '@/services/ImovelService';
 import { Imovel } from '@/types/imovel';
-
-// Lista de tags para auditar
-const POI_TAGS = ['school', 'bus_station', 'station', 'supermarket', 'hospital'];
 
 interface CacheResult {
     tag: string;
@@ -50,7 +46,7 @@ const AuditResultsModal = ({ isOpen, onClose, results }: { isOpen: boolean, onCl
                     </button>
                 </div>
 
-                {/* Tabela de Resultados (Movida para cá) */}
+                {/* Tabela de Resultados */}
                 <div className="flex-1 overflow-auto rounded-lg border border-gray-200 dark:border-zinc-700 mb-6">
                     <table className="w-full text-sm text-left">
                         <thead className="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-zinc-900 dark:text-gray-300 sticky top-0">
@@ -94,14 +90,14 @@ const AuditResultsModal = ({ isOpen, onClose, results }: { isOpen: boolean, onCl
                     </table>
                 </div>
 
-                {/* Nota de Auditoria (Movida para cá) */}
+                {/* Nota de Auditoria */}
                 <div className="text-xs text-gray-500 dark:text-gray-400 bg-blue-50 dark:bg-blue-900/10 p-3 rounded border border-blue-200 dark:border-blue-800/30 flex items-start mb-4">
                     <Icon icon={faShieldAlt} className="w-4 h-4 mr-2 mt-0.5 text-blue-600" />
                     <div>
                         <p className='font-bold text-blue-700 dark:text-blue-400'>Modo Auditoria Segura Ativado</p>
                         <p>
-                            Se a Cloudflare não tiver o cache (MISS), a API retorna <code>MISS (Safe)</code> e <strong>não consome a cota do Mapbox</strong>.
-                            Se aparecer <code>HIT</code> e contagem de itens, significa que os dados reais estão cacheados.
+                            Se a Cloudflare não tiver o cache (MISS), a API retorna <code>MISS (Safe)</code> e <strong>não consome a cota do Mapbox</strong>.<br/>
+                            Se aparecer <code>HIT</code> e contagem de itens, significa que os dados reais estão cacheados na Cloudflare e prontos para entrega rápida.
                         </p>
                     </div>
                 </div>
@@ -120,20 +116,14 @@ const AuditResultsModal = ({ isOpen, onClose, results }: { isOpen: boolean, onCl
 };
 // --- FIM NOVO COMPONENTE ---
 
-export const CacheInspector = () => {
-    // Estado para busca por Smart ID
+export const CacheInspector: React.FC = () => {
     const [searchSmartId, setSearchSmartId] = useState('');
     const [foundImovel, setFoundImovel] = useState<Imovel | null>(null);
-
-    // Estados de Coordenadas (Manual ou Automático)
     const [lat, setLat] = useState('');
     const [lon, setLon] = useState('');
-    
     const [results, setResults] = useState<CacheResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchingImovel, setSearchingImovel] = useState(false);
-    
-    // Estado para controle do Modal
     const [showModal, setShowModal] = useState(false);
 
     // 1. Função para Buscar o Imóvel e preencher coordenadas
@@ -143,7 +133,7 @@ export const CacheInspector = () => {
 
         setSearchingImovel(true);
         setFoundImovel(null);
-        setResults([]); // Limpa resultados anteriores
+        setResults([]); 
 
         try {
             const imovel = await fetchImovelPorSmartId(searchSmartId.trim());
@@ -173,54 +163,55 @@ export const CacheInspector = () => {
         setLoading(true);
         setResults([]);
         
-        const promises = POI_TAGS.map(async (tag) => {
-            const url = `/api/pois?lat=${lat}&lon=${lon}&tag=${tag}`;
-            const startTime = performance.now();
-            
-            try {
-                const res = await fetch(url, { 
-                    headers: { 'x-audit-mode': '1' },
-                    cache: 'no-store' // <-- ADICIONADO: Força ignorar cache do navegador
-                });
-                
-                const endTime = performance.now();
-                const data = await res.json();
-                
-                const isAuditMiss = data.audit === 'miss';
-                
-                const cfStatus = res.headers.get('cf-cache-status') || (isAuditMiss ? 'MISS (Safe)' : 'HIT (Cloudflare)');
-                const age = res.headers.get('age') || (isAuditMiss ? '0' : '> 0');
-                
-                return {
-                    tag,
-                    status: res.status,
-                    cfStatus,
-                    age,
-                    latency: (endTime - startTime).toFixed(0),
-                    itemCount: Array.isArray(data) ? data.length : 'Audit',
-                    size: (JSON.stringify(data).length / 1024).toFixed(2),
-                    isSafeMiss: isAuditMiss
-                };
-
-            } catch (error) {
-                return {
-                    tag,
-                    status: 500,
-                    cfStatus: 'ERROR',
-                    age: '-',
-                    latency: '-',
-                    itemCount: 0,
-                    size: '0'
-                };
-            }
-        });
-
-        const finalResults = await Promise.all(promises);
-        setResults(finalResults);
-        setLoading(false);
+        // IMPORTANTE: A URL da auditoria deve ser IDÊNTICA à do usuário real (sem params extras)
+        // para verificar a mesma chave de cache.
+        const url = `/api/pois?lat=${lat}&lon=${lon}`;
+        const startTime = performance.now();
         
-        // Abre o modal automaticamente após finalizar a auditoria
-        setShowModal(true);
+        try {
+            const res = await fetch(url, { 
+                headers: { 'x-audit-mode': '1' },
+                // cache: 'no-store' foi REMOVIDO.
+                // Agora o fetch tenta pegar o cache da rede (Cloudflare) se o navegador permitir.
+                // Como o backend manda 'max-age=0' para o browser, o browser vai perguntar pra Cloudflare.
+            });
+            
+            const endTime = performance.now();
+            const data = await res.json();
+            
+            const isAuditMiss = data.audit === 'miss';
+            
+            const cfStatus = res.headers.get('cf-cache-status') || (isAuditMiss ? 'MISS (Safe)' : 'HIT (Cloudflare)');
+            const age = res.headers.get('age') || (isAuditMiss ? '0' : '> 0');
+            
+            const result: CacheResult = {
+                tag: 'ALL_POIS (Pacote Único)',
+                status: res.status,
+                cfStatus,
+                age,
+                latency: (endTime - startTime).toFixed(0),
+                itemCount: Array.isArray(data) ? data.length : 'Audit',
+                size: (JSON.stringify(data).length / 1024).toFixed(2),
+                isSafeMiss: isAuditMiss
+            };
+
+            setResults([result]);
+
+        } catch (error) {
+            setResults([{
+                tag: 'ALL_POIS',
+                status: 500,
+                cfStatus: 'ERROR',
+                age: '-',
+                latency: '-',
+                itemCount: 0,
+                size: '0',
+                isSafeMiss: false
+            }]);
+        } finally {
+            setLoading(false);
+            setShowModal(true);
+        }
     };
 
     return (
@@ -272,8 +263,8 @@ export const CacheInspector = () => {
                     </label>
                     <input 
                         type="text" 
-                        value={lat}
-                        onChange={(e) => setLat(e.target.value)}
+                        value={lat} 
+                        onChange={e => setLat(e.target.value)}
                         className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-600 font-mono text-sm text-gray-600"
                         placeholder="-00.0000"
                     />
@@ -284,8 +275,8 @@ export const CacheInspector = () => {
                     </label>
                     <input 
                         type="text" 
-                        value={lon}
-                        onChange={(e) => setLon(e.target.value)}
+                        value={lon} 
+                        onChange={e => setLon(e.target.value)}
                         className="w-full p-2 border rounded dark:bg-zinc-800 dark:border-zinc-600 font-mono text-sm text-gray-600"
                         placeholder="-00.0000"
                     />
