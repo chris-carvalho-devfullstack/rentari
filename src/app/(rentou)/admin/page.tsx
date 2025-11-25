@@ -30,7 +30,7 @@ interface AdminStats {
     dbResponseTime: number;
 }
 
-// Interface para os detalhes da auditoria
+// Interface para os detalhes da auditoria (ATUALIZADO)
 interface AuditDetail {
     smartId: string;
     address: string;
@@ -39,6 +39,7 @@ interface AuditDetail {
     latency: number;
     isHit: boolean;
     timestamp: string;
+    fullHeaders: Record<string, string>; // <--- NOVO CAMPO: Guarda os headers brutos
 }
 
 // --- COMPONENTE DE MODAL DE AJUDA ---
@@ -67,7 +68,19 @@ const HelpModal = ({ title, content, isOpen, onClose }: { title: string, content
     );
 };
 
-// --- NOVO: COMPONENTE MODAL DE DETALHES DA AUDITORIA ---
+// --- NOVO: TOOLTIP TÉCNICO (Para mostrar dados brutos no hover) ---
+const TechTooltip = ({ headers }: { headers: Record<string, string> }) => (
+    <div className="hidden group-hover:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs p-3 rounded shadow-xl z-50 text-left font-mono border border-gray-700 pointer-events-none">
+        <div className="font-bold text-gray-400 border-b border-gray-700 pb-1 mb-1">Cloudflare Debug</div>
+        {headers['cf-ray'] && <div><span className="text-blue-300">RAY:</span> {headers['cf-ray'].split('-')[0]}...</div>}
+        {headers['server'] && <div><span className="text-blue-300">SRV:</span> {headers['server']}</div>}
+        {headers['date'] && <div><span className="text-blue-300">Date:</span> {headers['date'].split(' ').slice(4).join(' ')}</div>}
+        {!headers['cf-ray'] && <div className="italic text-gray-500">Headers raw indisponíveis</div>}
+        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
+    </div>
+);
+
+// --- COMPONENTE MODAL DE DETALHES DA AUDITORIA ---
 const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: AuditDetail[] }) => {
     const [filter, setFilter] = useState('');
 
@@ -91,7 +104,7 @@ const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose
                             Relatório Detalhado de Cache
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Status real da CDN Cloudflare para {data.length} imóveis auditados.
+                            Passe o mouse sobre o Status para ver detalhes técnicos (RAY ID, Server).
                         </p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
@@ -133,17 +146,19 @@ const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose
                         <tbody className="divide-y divide-gray-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
                             {filteredData.length > 0 ? (
                                 filteredData.map((row) => (
-                                    <tr key={row.smartId} className="hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors">
+                                    <tr key={row.smartId} className="hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors group">
                                         <td className="px-4 py-3 font-mono font-medium text-rentou-primary">{row.smartId}</td>
                                         <td className="px-4 py-3 text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={row.address}>{row.address}</td>
-                                        <td className="px-4 py-3 text-center">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                        <td className="px-4 py-3 text-center relative">
+                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold cursor-help ${
                                                 row.isHit 
                                                 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
                                                 : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                                             }`}>
                                                 {row.cfStatus || 'MISS'}
                                             </span>
+                                            {/* TOOLTIP TÉCNICO */}
+                                            <TechTooltip headers={row.fullHeaders} />
                                         </td>
                                         <td className="px-4 py-3 text-center font-mono text-gray-600 dark:text-gray-400">
                                             {row.age || '0'}
@@ -316,6 +331,12 @@ export default function AdminDashboard() {
                         
                         const data = await res.json();
                         
+                        // CAPTURA HEADERS COMPLETOS
+                        const headersObj: Record<string, string> = {};
+                        res.headers.forEach((val, key) => {
+                            headersObj[key] = val;
+                        });
+
                         // SE data for array, Cloudflare entregou o cache antigo (HIT).
                         // SE data for { audit: 'miss' }, foi um MISS seguro (sem custo).
                         const isRealHit = Array.isArray(data);
@@ -330,7 +351,8 @@ export default function AdminDashboard() {
                             age: age || '0',
                             latency: latency,
                             isHit: isRealHit,
-                            timestamp: new Date().toISOString()
+                            timestamp: new Date().toISOString(),
+                            fullHeaders: headersObj // NOVO: Salva headers completos para o Modal
                         };
                         
                         return detail;

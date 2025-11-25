@@ -32,10 +32,11 @@ export async function GET(request: Request) {
             headers: {
                 'Content-Type': 'application/json',
                 // Instruímos Cloudflare e Navegador a NÃO cachearem essa resposta de teste.
-                // A próxima visita real tentará buscar os dados reais.
                 'Cache-Control': 'private, no-store, no-cache, max-age=0',
                 'Cloudflare-CDN-Cache-Control': 'no-store',
-                'CDN-Cache-Control': 'no-store'
+                'CDN-Cache-Control': 'no-store',
+                // ATUALIZAÇÃO: Permite que o frontend leia os headers técnicos da Cloudflare
+                'Access-Control-Expose-Headers': 'Age, CF-Cache-Status, CF-RAY, Server, Date, Cache-Control, CDN-Cache-Control'
             }
         });
     }
@@ -88,7 +89,10 @@ export async function GET(request: Request) {
                 
                 // O Header Supremo que a Cloudflare obedece acima de tudo
                 'Cloudflare-CDN-Cache-Control': 'public, max-age=2592000',
-                'CDN-Cache-Control': 'public, max-age=2592000'
+                'CDN-Cache-Control': 'public, max-age=2592000',
+
+                // ATUALIZAÇÃO: Permite que o frontend leia os headers técnicos da Cloudflare em caso de HIT
+                'Access-Control-Expose-Headers': 'Age, CF-Cache-Status, CF-RAY, Server, Date, Cache-Control, CDN-Cache-Control'
             }
         });
 
