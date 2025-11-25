@@ -12,12 +12,13 @@ import {
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+// Update interface to match GeocodingService (likely expects number for distanceKm)
 export interface PoiResult {
   name: string;
   type: string;
   tag: string;
   address: string;
-  distanceKm: string;
+  distanceKm: number; // Changed from string to number to match GeocodingService
   distanceMeters: number;
   latitude: number;
   longitude: number;
@@ -26,7 +27,6 @@ export interface PoiResult {
 interface PoiListProps {
     latitude: number;
     longitude: number;
-    // CORREÇÃO: A prop deve aceitar o objeto PoiResult, como o pai espera
     onClickPoi: (poi: PoiResult | null) => void; 
     onPoisFetched: (pois: PoiResult[]) => void; 
 }
@@ -80,8 +80,14 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
             const data = await res.json();
             
             if (Array.isArray(data)) {
-                setAllPoisCache(data);
-                const initialFilter = data.filter((p: any) => p.tag === 'school');
+                // Ensure API data matches our interface (API might return string/number for distance)
+                const formattedData: PoiResult[] = data.map((p: any) => ({
+                    ...p,
+                    distanceKm: typeof p.distanceKm === 'string' ? parseFloat(p.distanceKm) : p.distanceKm
+                }));
+
+                setAllPoisCache(formattedData);
+                const initialFilter = formattedData.filter((p: any) => p.tag === 'school');
                 setPois(initialFilter);
                 onPoisFetched(initialFilter); 
             }
@@ -119,7 +125,8 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
     const userPoints = user?.pontosImportantes || [];
     const canAddMore = userPoints.length < 6; 
 
-    const getDistanceToSavedPoint = (ptLat: number, ptLon: number) => {
+    // Return number instead of string
+    const getDistanceToSavedPoint = (ptLat: number, ptLon: number): number => {
         const R = 6371; 
         const dLat = (ptLat - latitude) * Math.PI / 180;
         const dLon = (ptLon - longitude) * Math.PI / 180;
@@ -127,7 +134,7 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                   Math.cos(latitude * Math.PI / 180) * Math.cos(ptLat * Math.PI / 180) *
                   Math.sin(dLon/2) * Math.sin(dLon/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        return (R * c).toFixed(1);
+        return parseFloat((R * c).toFixed(1)); // Convert back to number
     };
 
     const handleAddPoint = async (e: React.FormEvent) => {
@@ -161,6 +168,8 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
             setNewPointName('');
             setNewPointAddress('');
             
+            const distKm = getDistanceToSavedPoint(newPoint.latitude, newPoint.longitude);
+
             const customPoi: PoiResult = {
                 name: newPoint.nome,
                 address: newPoint.endereco,
@@ -168,11 +177,10 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                 longitude: newPoint.longitude,
                 type: 'custom',
                 tag: 'custom',
-                distanceKm: getDistanceToSavedPoint(newPoint.latitude, newPoint.longitude),
-                distanceMeters: parseFloat(getDistanceToSavedPoint(newPoint.latitude, newPoint.longitude)) * 1000
+                distanceKm: distKm,
+                distanceMeters: distKm * 1000
             };
             
-            // CORREÇÃO: Passando o objeto completo
             onClickPoi(customPoi);
             onPoisFetched([customPoi]); 
 
@@ -193,17 +201,17 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
     };
 
     const handleSavedPointClick = (pt: any) => {
+        const distKm = getDistanceToSavedPoint(pt.latitude, pt.longitude);
         const customPoi: PoiResult = {
             name: pt.nome,
             type: 'custom',
             tag: 'custom',
-            distanceKm: getDistanceToSavedPoint(pt.latitude, pt.longitude),
-            distanceMeters: parseFloat(getDistanceToSavedPoint(pt.latitude, pt.longitude)) * 1000,
+            distanceKm: distKm,
+            distanceMeters: distKm * 1000,
             latitude: pt.latitude,
             longitude: pt.longitude,
             address: pt.endereco
         };
-        // CORREÇÃO: Passando o objeto completo
         onClickPoi(customPoi);
         onPoisFetched([customPoi]); 
     };
@@ -284,7 +292,6 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                         {itemsToShow.map((poi, idx) => (
                             <button 
                                 key={idx} 
-                                // CORREÇÃO: Passando o objeto POI inteiro
                                 onClick={() => onClickPoi(poi)}
                                 className="w-full flex justify-between items-center p-3 hover:bg-white dark:hover:bg-zinc-700 rounded-md transition-all group text-left"
                             >
@@ -352,7 +359,6 @@ export const PoiList: React.FC<PoiListProps> = ({ latitude, longitude, onClickPo
                         {userPoints.map(pt => (
                             <div 
                                 key={pt.id} 
-                                // CORREÇÃO: Passando o objeto montado
                                 onClick={() => handleSavedPointClick(pt)}
                                 className="flex justify-between items-center p-3 bg-white dark:bg-zinc-800 border border-yellow-200 dark:border-yellow-900/30 rounded-lg shadow-sm hover:shadow-md transition-all cursor-pointer group"
                             >
