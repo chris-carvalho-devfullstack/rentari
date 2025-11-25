@@ -7,7 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { 
     faChartLine, faShieldAlt, 
     faDatabase, faImages, faMapMarkedAlt, faStopwatch, faSync, faCheckCircle, faQuestionCircle, faTimes, faExclamationTriangle,
-    faList, faFilter, faSearch
+    faList, faFilter, faSearch, faChevronDown, faInfoCircle
 } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
 import { db } from '@/services/FirebaseService';
@@ -30,7 +30,7 @@ interface AdminStats {
     dbResponseTime: number;
 }
 
-// Interface para os detalhes da auditoria (ATUALIZADO)
+// Interface para os detalhes da auditoria
 interface AuditDetail {
     smartId: string;
     address: string;
@@ -39,7 +39,7 @@ interface AuditDetail {
     latency: number;
     isHit: boolean;
     timestamp: string;
-    fullHeaders: Record<string, string>; // <--- NOVO CAMPO: Guarda os headers brutos
+    fullHeaders: Record<string, string>;
 }
 
 // --- COMPONENTE DE MODAL DE AJUDA ---
@@ -68,33 +68,103 @@ const HelpModal = ({ title, content, isOpen, onClose }: { title: string, content
     );
 };
 
-// --- NOVO: TOOLTIP TÉCNICO (Para mostrar dados brutos no hover) ---
-const TechTooltip = ({ headers }: { headers: Record<string, string> }) => (
-    <div className="hidden group-hover:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs p-3 rounded shadow-xl z-50 text-left font-mono border border-gray-700 pointer-events-none">
-        <div className="font-bold text-gray-400 border-b border-gray-700 pb-1 mb-1">Cloudflare Debug</div>
-        {headers['cf-ray'] && <div><span className="text-blue-300">RAY:</span> {headers['cf-ray'].split('-')[0]}...</div>}
-        {headers['server'] && <div><span className="text-blue-300">SRV:</span> {headers['server']}</div>}
-        {headers['date'] && <div><span className="text-blue-300">Date:</span> {headers['date'].split(' ').slice(4).join(' ')}</div>}
-        {!headers['cf-ray'] && <div className="italic text-gray-500">Headers raw indisponíveis</div>}
-        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45 border-r border-b border-gray-700"></div>
-    </div>
-);
+// --- NOVO: POPOVER TÉCNICO INTERATIVO (POSICIONAMENTO INTELIGENTE) ---
+interface TechDetailsPopoverProps {
+    headers: Record<string, string>;
+    onClose: () => void;
+    position?: 'top' | 'bottom'; // Nova prop para controlar a direção
+}
 
-// --- COMPONENTE MODAL DE DETALHES DA AUDITORIA ---
+const TechDetailsPopover = ({ headers, onClose, position = 'top' }: TechDetailsPopoverProps) => {
+    // Define classes baseadas na posição
+    const containerClasses = position === 'top' 
+        ? "bottom-full mb-3 animate-in slide-in-from-bottom-2" // Abre para CIMA
+        : "top-full mt-3 animate-in slide-in-from-top-2";      // Abre para BAIXO
+
+    const arrowClasses = position === 'top'
+        ? "-bottom-1 border-r border-b" // Seta aponta para baixo
+        : "-top-1.5 border-l border-t";   // Seta aponta para cima
+
+    return (
+        <div 
+            className={`absolute left-1/2 transform -translate-x-1/2 w-72 bg-gray-900 text-white text-xs rounded-lg shadow-2xl z-50 text-left font-mono border border-gray-700 flex flex-col overflow-hidden fade-in zoom-in-95 duration-200 ${containerClasses}`}
+            onClick={(e) => e.stopPropagation()} 
+        >
+            {/* Header do Popover */}
+            <div className="flex justify-between items-center px-3 py-2 bg-gray-800 border-b border-gray-700">
+                 <span className="font-bold text-gray-300 flex items-center gap-2">
+                    <Icon icon={faList} className="text-blue-400" /> Cloudflare Debug
+                 </span>
+                 <button onClick={(e) => { e.stopPropagation(); onClose(); }} className="text-gray-400 hover:text-white p-1">
+                    <Icon icon={faTimes} />
+                 </button>
+            </div>
+            
+            {/* Conteúdo */}
+            <div className="p-3 space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                {headers['cf-ray'] ? (
+                    <>
+                        <div className="flex flex-col">
+                            <span className="text-gray-500 uppercase text-[10px]">Ray ID (Rastreio)</span>
+                            <span className="text-blue-300 break-all select-all">{headers['cf-ray']}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="flex flex-col">
+                                <span className="text-gray-500 uppercase text-[10px]">Datacenter</span>
+                                <span className="text-green-400 select-all">{headers['cf-ray'].split('-')[1] || 'N/A'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                                <span className="text-gray-500 uppercase text-[10px]">Server</span>
+                                <span className="text-gray-300 select-all">{headers['server'] || 'N/A'}</span>
+                            </div>
+                        </div>
+                        <div className="flex flex-col border-t border-gray-700 pt-2 mt-1">
+                            <span className="text-gray-500 uppercase text-[10px]">Date</span>
+                            <span className="text-gray-400">{headers['date']}</span>
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-center text-gray-500 py-2 italic">
+                        Headers raw indisponíveis.<br/>
+                        Verifique o CORS.
+                    </div>
+                )}
+            </div>
+    
+            {/* Seta do Popover (Dinâmica) */}
+            <div className={`absolute left-1/2 transform -translate-x-1/2 w-3 h-3 bg-gray-900 rotate-45 border-gray-700 ${arrowClasses}`}></div>
+        </div>
+    );
+};
+
+// --- COMPONENTE MODAL DE DETALHES DA AUDITORIA (ATUALIZADO) ---
 const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose: () => void; data: AuditDetail[] }) => {
-    const [filter, setFilter] = useState('');
+    const [searchFilter, setSearchFilter] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'ALL' | 'HIT' | 'MISS'>('ALL');
+    const [activePopoverId, setActivePopoverId] = useState<string | null>(null);
 
-    // Filtra os dados com base no Smart ID digitado
+    // Filtra os dados com base no Smart ID e no Status
     const filteredData = useMemo(() => {
-        if (!filter) return data;
-        return data.filter(item => item.smartId.toLowerCase().includes(filter.toLowerCase()));
-    }, [data, filter]);
+        return data.filter(item => {
+            const matchesSearch = item.smartId.toLowerCase().includes(searchFilter.toLowerCase());
+            
+            let matchesStatus = true;
+            if (statusFilter === 'HIT') matchesStatus = item.isHit;
+            if (statusFilter === 'MISS') matchesStatus = !item.isHit;
+
+            return matchesSearch && matchesStatus;
+        });
+    }, [data, searchFilter, statusFilter]);
+
+    const handleTogglePopover = (id: string) => {
+        setActivePopoverId(prev => prev === id ? null : id);
+    };
 
     if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-            <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl max-w-5xl w-full p-6 relative animate-in zoom-in-95 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <div className="bg-white dark:bg-zinc-800 rounded-xl shadow-2xl max-w-5xl w-full p-6 relative animate-in zoom-in-95 flex flex-col max-h-[90vh]" onClick={e => { e.stopPropagation(); setActivePopoverId(null); }}>
                 
                 {/* Header */}
                 <div className="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-zinc-700 pb-4">
@@ -104,7 +174,7 @@ const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose
                             Relatório Detalhado de Cache
                         </h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Passe o mouse sobre o Status para ver detalhes técnicos (RAY ID, Server).
+                            Clique no status para ver detalhes técnicos profundos.
                         </p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
@@ -112,71 +182,116 @@ const AuditDetailsModal = ({ isOpen, onClose, data }: { isOpen: boolean; onClose
                     </button>
                 </div>
 
-                {/* Filtros */}
-                <div className="mb-4 flex items-center space-x-4 bg-gray-50 dark:bg-zinc-700/50 p-3 rounded-lg border border-gray-200 dark:border-zinc-700">
-                    <Icon icon={faFilter} className="text-gray-400" />
-                    <div className="relative flex-1">
+                {/* Barra de Ferramentas (Filtros) */}
+                <div className="mb-4 flex flex-col sm:flex-row gap-4">
+                    
+                    {/* Busca */}
+                    <div className="flex-1 relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icon icon={faSearch} className="text-gray-400 w-4 h-4" />
+                        </div>
                         <input 
                             type="text" 
                             placeholder="Filtrar por Smart ID..." 
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-sm focus:ring-2 focus:ring-rentou-primary focus:border-transparent outline-none transition-all dark:text-white"
+                            value={searchFilter}
+                            onChange={(e) => setSearchFilter(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-zinc-600 bg-gray-50 dark:bg-zinc-700/50 text-sm focus:ring-2 focus:ring-rentou-primary focus:border-transparent outline-none transition-all dark:text-white"
                         />
-                        <Icon icon={faSearch} className="absolute left-3 top-2.5 text-gray-400 w-4 h-4" />
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+
+                    {/* Filtro de Status */}
+                    <div className="relative min-w-[180px]">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icon icon={faFilter} className="text-gray-400 w-3 h-3" />
+                        </div>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as any)}
+                            className="w-full pl-9 pr-8 py-2 appearance-none rounded-lg border border-gray-300 dark:border-zinc-600 bg-gray-50 dark:bg-zinc-700/50 text-sm font-medium text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-rentou-primary outline-none cursor-pointer"
+                        >
+                            <option value="ALL">Todos os Status</option>
+                            <option value="HIT">✅ Apenas HIT (Cache)</option>
+                            <option value="MISS">⚠️ Apenas MISS / Bypass</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-gray-500">
+                            <Icon icon={faChevronDown} className="w-3 h-3" />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center px-3 py-2 bg-gray-100 dark:bg-zinc-700 rounded-lg border border-gray-200 dark:border-zinc-600 text-sm font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
                         {filteredData.length} resultados
                     </div>
                 </div>
 
                 {/* Tabela */}
-                <div className="flex-1 overflow-auto rounded-lg border border-gray-200 dark:border-zinc-700">
+                <div className="flex-1 overflow-auto rounded-lg border border-gray-200 dark:border-zinc-700 relative">
                     <table className="w-full text-sm text-left">
                         <thead className="bg-gray-100 dark:bg-zinc-900 text-xs uppercase text-gray-500 dark:text-gray-400 sticky top-0 z-10">
                             <tr>
                                 <th className="px-4 py-3 font-semibold">Smart ID</th>
-                                <th className="px-4 py-3 font-semibold">Localização (Bairro/Cidade)</th>
+                                <th className="px-4 py-3 font-semibold">Localização</th>
                                 <th className="px-4 py-3 text-center font-semibold">Status CF</th>
                                 <th className="px-4 py-3 text-center font-semibold">Age (s)</th>
                                 <th className="px-4 py-3 text-center font-semibold">Latência</th>
-                                <th className="px-4 py-3 text-right font-semibold">Auditado em</th>
+                                <th className="px-4 py-3 text-right font-semibold">Timestamp</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-zinc-700 bg-white dark:bg-zinc-800">
                             {filteredData.length > 0 ? (
-                                filteredData.map((row) => (
-                                    <tr key={row.smartId} className="hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors group">
-                                        <td className="px-4 py-3 font-mono font-medium text-rentou-primary">{row.smartId}</td>
-                                        <td className="px-4 py-3 text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={row.address}>{row.address}</td>
-                                        <td className="px-4 py-3 text-center relative">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold cursor-help ${
-                                                row.isHit 
-                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                            }`}>
-                                                {row.cfStatus || 'MISS'}
-                                            </span>
-                                            {/* TOOLTIP TÉCNICO */}
-                                            <TechTooltip headers={row.fullHeaders} />
-                                        </td>
-                                        <td className="px-4 py-3 text-center font-mono text-gray-600 dark:text-gray-400">
-                                            {row.age || '0'}
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            <span className={`font-medium ${row.latency < 100 ? 'text-green-600' : 'text-orange-500'}`}>
-                                                {row.latency}ms
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-gray-500 text-xs">
-                                            {new Date(row.timestamp).toLocaleTimeString()}
-                                        </td>
-                                    </tr>
-                                ))
+                                filteredData.map((row, index) => {
+                                    // LÓGICA DE POSICIONAMENTO INTELIGENTE
+                                    // Se for uma das primeiras 3 linhas, abre para BAIXO ('bottom').
+                                    // Senão, abre para CIMA ('top') padrão.
+                                    const popoverPosition = index < 3 ? 'bottom' : 'top';
+
+                                    return (
+                                        <tr key={row.smartId} className="hover:bg-gray-50 dark:hover:bg-zinc-700/50 transition-colors group">
+                                            <td className="px-4 py-3 font-mono font-medium text-rentou-primary">{row.smartId}</td>
+                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300 truncate max-w-[200px]" title={row.address}>{row.address}</td>
+                                            
+                                            {/* Célula de Status Interativa */}
+                                            <td className="px-4 py-3 text-center relative">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleTogglePopover(row.smartId); }}
+                                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold transition-transform hover:scale-105 active:scale-95 outline-none focus:ring-2 focus:ring-offset-1 ${
+                                                        row.isHit 
+                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 focus:ring-green-500' 
+                                                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 focus:ring-yellow-500'
+                                                    }`}
+                                                >
+                                                    {row.cfStatus || 'MISS'}
+                                                    <Icon icon={faInfoCircle} className="w-3 h-3 opacity-50" />
+                                                </button>
+                                                
+                                                {/* Renderização Condicional da Caixa de Detalhes */}
+                                                {activePopoverId === row.smartId && (
+                                                    <TechDetailsPopover 
+                                                        headers={row.fullHeaders} 
+                                                        onClose={() => setActivePopoverId(null)}
+                                                        position={popoverPosition} 
+                                                    />
+                                                )}
+                                            </td>
+
+                                            <td className="px-4 py-3 text-center font-mono text-gray-600 dark:text-gray-400">
+                                                {row.age || '0'}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`font-medium ${row.latency < 100 ? 'text-green-600' : 'text-orange-500'}`}>
+                                                    {row.latency}ms
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-gray-500 text-xs">
+                                                {new Date(row.timestamp).toLocaleTimeString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             ) : (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                        Nenhum registro encontrado.
+                                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500 dark:text-gray-400 flex flex-col items-center justify-center">
+                                        <Icon icon={faSearch} className="w-8 h-8 mb-2 text-gray-300" />
+                                        <p>Nenhum registro encontrado com estes filtros.</p>
                                     </td>
                                 </tr>
                             )}

@@ -26,6 +26,27 @@ const nextConfig: NextConfig = {
     ];
   },
   
+  // --- CORREÇÃO PARA O "MISS VERDE" ---
+  async headers() {
+    return [
+      {
+        // Aplica a todas as rotas da API
+        source: "/api/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Credentials", value: "true" },
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET,DELETE,PATCH,POST,PUT" },
+          { 
+            key: "Access-Control-Allow-Headers", 
+            // AQUI ESTÁ O SEGREDO: Autorizamos o x-audit-mode explicitamente
+            value: "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, x-audit-mode" 
+          },
+        ]
+      }
+    ]
+  },
+  // ----------------------------------
+
   async rewrites() {
     return [];
   },
