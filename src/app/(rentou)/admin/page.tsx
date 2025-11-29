@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link'; // ADICIONADO
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { CacheInspector } from '@/components/admin/CacheInspector';
 import { Icon } from '@/components/ui/Icon';
 import { 
     faChartLine, faShieldAlt, 
     faDatabase, faImages, faMapMarkedAlt, faStopwatch, faSync, faCheckCircle, faQuestionCircle, faTimes, faExclamationTriangle,
-    faList, faFilter, faSearch, faChevronDown, faInfoCircle
+    faList, faFilter, faSearch, faChevronDown, faInfoCircle, faLifeRing // ADICIONADO faLifeRing
 } from '@fortawesome/free-solid-svg-icons';
 import { useRouter } from 'next/navigation';
 import { db } from '@/services/FirebaseService';
@@ -586,6 +587,15 @@ export default function AdminDashboard() {
                     </h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-1">Visão geral da plataforma, usuários e infraestrutura.</p>
                 </div>
+
+                {/* BOTÃO PARA A CENTRAL DE AJUDA */}
+                <Link 
+                    href="/admin/ajuda" 
+                    className="flex items-center px-4 py-2 bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-zinc-600 rounded-lg shadow-sm hover:bg-gray-50 dark:hover:bg-zinc-700 transition-colors font-medium text-sm"
+                >
+                    <Icon icon={faLifeRing} className="w-4 h-4 mr-2 text-red-500" />
+                    Central de Ajuda & Manuais
+                </Link>
             </div>
 
             {/* === LINHA 1: NEGÓCIO (KPIs Principais) === */}
