@@ -5,6 +5,9 @@ import React, { useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { faGlobe, faCheckCircle, faPauseCircle, faEyeSlash, faEye } from '@fortawesome/free-solid-svg-icons';
 
+// ADICIONE ESTA LINHA PARA CORRIGIR O ERRO DE DEPLOY NA CLOUDFLARE
+export const runtime = 'edge'; 
+
 export default function PublicidadePage() {
     const [config, setConfig] = useState({
         status: 'ATIVO',
