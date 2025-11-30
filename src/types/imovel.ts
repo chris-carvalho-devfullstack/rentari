@@ -32,9 +32,10 @@ export interface CondominioData {
     areaLazer?: boolean;
 }
 
+// ATUALIZADO: Adicionado mais tipos de revestimento
 export interface PiscinaPrivativaData {
     possuiPiscina: boolean;
-    tipo?: 'VINIL' | 'AZULEJO' | 'FIBRA' | 'NATURAL' | 'OUTRO';
+    tipo?: 'VINIL' | 'AZULEJO' | 'FIBRA' | 'NATURAL' | 'PASTILHA' | 'CONCRETO' | 'AREIA_COMPACTADA' | 'PEDRA_NATURAL' | 'OUTRO';
     aquecida?: boolean;
 }
 
@@ -66,6 +67,25 @@ export interface DispensaData {
     possuiDispensa: boolean;
     prateleirasEmbutidas?: boolean;
     area?: number; // Área em m²
+}
+
+// --- NOVO: Estrutura para Construções Externas (Edículas, etc.) ---
+export interface ConstrucaoExternaData {
+    tipo: string; // Ex: Edícula, Sauna, Oficina, Casa de Hóspedes
+    nomeCustomizado?: string;
+    area: number;
+    possuiBanheiro?: boolean;
+}
+
+// --- NOVO: Estrutura para Regras Detalhadas de Animais ---
+export interface RegrasAnimaisData {
+    permiteGatos: boolean;
+    permiteCaes: boolean;
+    outrosAnimais: boolean;
+    descricaoOutros?: string;
+    portePequeno: boolean;
+    porteMedio: boolean;
+    porteGrande: boolean;
 }
 
 // --- NOVAS ESTRUTURAS (Financeiro & Publicidade) ---
@@ -117,6 +137,13 @@ export interface Imovel {
   areaTotal: number; // Área total (incluindo comuns/externas)
   areaTerreno: number; // Importante para Casas e Rural
   
+  // NOVO: Metragens Detalhadas
+  areaMediaQuartos?: number;
+  areaMediaSuites?: number;
+  areaTotalBanheiros?: number;
+  areaExternaPrivativa?: number;
+  areaQuintal?: number;
+  
   // === 4. Detalhes Estruturais ===
   quartos: number;
   suites: number; 
@@ -134,11 +161,16 @@ export interface Imovel {
   varandas: VarandaData[]; 
   dispensa: DispensaData;
   
+  // NOVO: Construções Externas
+  construcoesExternas: ConstrucaoExternaData[];
+  
   // === 5. Descrição e Comodidades ===
   descricaoLonga: string;
   /** Lista de strings. Para Rural inclui: 'Curral', 'Lago'. Para Urbano: 'Academia', 'Sauna'. */
   caracteristicas: string[]; 
   aceitaAnimais: boolean;
+  // NOVO: Detalhes de Animais
+  detalhesAnimais?: RegrasAnimaisData;
   
   // === 6. Valores, Status e Financeiro ===
   status: 'VAGO' | 'ALUGADO' | 'ANUNCIADO' | 'MANUTENCAO';
@@ -149,6 +181,15 @@ export interface Imovel {
   
   // Lista de Seguros (Incêndio, Fiança, etc)
   seguros: SeguroData[];
+  
+  // NOVO: Seguros Opcionais e Flag Obrigatória
+  seguroIncendioObrigatorio: boolean;
+  segurosOpcionais?: {
+      fiancaLocaticia: boolean;
+      danosEletricos: boolean;
+      vendaval: boolean;
+      conteudo: boolean;
+  };
 
   // Regras de Cobrança (Quem paga o quê)
   custoCondominioIncluso: boolean; // Se true, valor soma ao pacote. Se false, é cobrado à parte.
