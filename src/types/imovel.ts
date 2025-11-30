@@ -1,15 +1,13 @@
-// src/types/imovel.ts
-
 /**
- * @fileoverview Definições de Tipos para a Entidade Imóvel e seus sub-objetos.
- * Atualizado para suportar: Rural, Alto Padrão, Seguros e Publicidade Avançada.
+ * @fileoverview Definições de Tipos para a Entidade Imóvel.
+ * Atualizado para padrão "Portal Imobiliário Completo".
  */
 
 // --- ENUMS E TIPOS BÁSICOS ---
 
 export type ImovelCategoria = 'Residencial' | 'Comercial' | 'Terrenos' | 'Rural' | 'Imóveis Especiais' | 'Outro';
 export type ImovelFinalidade = 'Venda' | 'Locação Residencial' | 'Locação Comercial' | 'Locação Temporada' | 'Arrendamento Rural' | 'Permuta';
-export type ResponsavelPagamento = 'PROPRIETARIO' | 'LOCATARIO' | 'NA_LOCACAO'; // NA_LOCACAO: Cobrado separadamente ou isento
+export type ResponsavelPagamento = 'PROPRIETARIO' | 'LOCATARIO' | 'NA_LOCACAO';
 
 // --- SUB-ESTRUTURAS DE DADOS ---
 
@@ -20,64 +18,64 @@ export interface EnderecoImovel {
     complemento?: string;
     bairro: string;
     cidade: string;
-    estado: string; // UF (Ex: SP, MG)
+    estado: string; // UF
     pais: string;
 }
 
 export interface CondominioData {
     possuiCondominio: boolean;
-    condominioCadastradoId?: string; // ID de referência se o condomínio já existir no banco
-    nomeCondominio?: string; // Nome manual caso não exista ID
+    condominioCadastradoId?: string;
+    nomeCondominio?: string;
     portaria24h?: boolean;
     areaLazer?: boolean;
+    // Novos campos sugeridos
+    numeroTorres?: number;
+    elevador?: boolean;
 }
 
-// ATUALIZADO: Adicionado mais tipos de revestimento
 export interface PiscinaPrivativaData {
     possuiPiscina: boolean;
     tipo?: 'VINIL' | 'AZULEJO' | 'FIBRA' | 'NATURAL' | 'PASTILHA' | 'CONCRETO' | 'AREIA_COMPACTADA' | 'PEDRA_NATURAL' | 'OUTRO';
     aquecida?: boolean;
 }
 
-// --- ESTRUTURAS DE CÔMODOS DETALHADOS (Com Área) ---
+// --- ESTRUTURAS DE CÔMODOS ---
 
 export interface CozinhaData {
-    tipo: string; // Ex: Americana, Fechada, Gourmet
-    nomeCustomizado?: string; // Ex: "Cozinha Principal"
+    tipo: string;
+    nomeCustomizado?: string;
     possuiArmarios?: boolean;
-    area?: number; // Área em m² específica deste cômodo
+    area?: number;
 }
 
 export interface SalaData {
-    tipo: string; // Ex: Estar, Jantar, TV
+    tipo: string;
     nomeCustomizado?: string;
-    qtdAssentos?: number; // Capacidade estimada
-    area?: number; // Área em m²
+    qtdAssentos?: number;
+    area?: number;
 }
 
 export interface VarandaData {
-    tipo: string; // Ex: Gourmet, Simples, Terraço
+    tipo: string;
     nomeCustomizado?: string;
     possuiChurrasqueira?: boolean;
     temFechamentoVidro?: boolean;
-    area?: number; // Área em m²
+    area?: number;
 }
 
 export interface DispensaData {
     possuiDispensa: boolean;
     prateleirasEmbutidas?: boolean;
-    area?: number; // Área em m²
+    area?: number;
 }
 
-// --- NOVO: Estrutura para Construções Externas (Edículas, etc.) ---
 export interface ConstrucaoExternaData {
-    tipo: string; // Ex: Edícula, Sauna, Oficina, Casa de Hóspedes
+    tipo: string;
     nomeCustomizado?: string;
     area: number;
     possuiBanheiro?: boolean;
 }
 
-// --- NOVO: Estrutura para Regras Detalhadas de Animais ---
 export interface RegrasAnimaisData {
     permiteGatos: boolean;
     permiteCaes: boolean;
@@ -88,101 +86,154 @@ export interface RegrasAnimaisData {
     porteGrande: boolean;
 }
 
-// --- NOVAS ESTRUTURAS (Financeiro & Publicidade) ---
+// --- NOVAS ESTRUTURAS PARA DETALHAMENTO (Expandidas) ---
+
+// 7. Informações sobre vagas
+export interface DetalhesVagaData {
+    tipoCobertura: 'COBERTA' | 'DESCOBERTA' | 'MISTA'; // Coberta / descoberta
+    tipoManobra: 'LIVRE' | 'PRESA' | 'MISTA';          // Vaga livre / presa
+    tipoUso: 'INDIVIDUAL' | 'COMPARTILHADA' | 'ROTATIVA'; // Individual / compartilhada
+    demarcada: boolean;                                // Vaga demarcada?
+    escriturada: boolean;                              // Escritura separada
+    paralela: boolean;                                 // Vagas lado a lado ou fila indiana
+}
+
+// 9. Materiais e Acabamentos (Expandido)
+export interface AcabamentoData {
+    pisoSala: 'PORCELANATO' | 'LAMINADO' | 'TACO_MADEIRA' | 'TABUA_CORRIDA' | 'CERAMICA' | 'CIMENTO_QUEIMADO' | 'CARPETE' | 'MARDOME' | 'GRANITO' | 'OUTRO';
+    pisoQuartos: 'PORCELANATO' | 'LAMINADO' | 'TACO_MADEIRA' | 'VINILICO' | 'CARPETE' | 'CERAMICA' | 'OUTRO';
+    pisoCozinha: 'PORCELANATO' | 'CERAMICA' | 'GRANITO' | 'MARMORE' | 'CIMENTO_QUEIMADO' | 'OUTRO'; // Novo
+    pisoBanheiros: 'PORCELANATO' | 'CERAMICA' | 'GRANITO' | 'MARMORE' | 'PASTILHA' | 'OUTRO'; // Novo
+    teto: 'LAJE' | 'GESSO_REBAIXADO' | 'PVC' | 'MADEIRA' | 'APARENTE' | 'SANCAS';
+    esquadrias?: 'ALUMINIO' | 'MADEIRA' | 'PVC' | 'FERRO' | 'BLINDEX'; // Novo
+}
+
+// 3. Informações Externas e Diferenciais
+export interface CaracteristicasExternasData {
+    posicaoSolar: 'NORTE' | 'SUL' | 'LESTE' | 'OESTE' | 'SOL_DA_MANHA' | 'SOL_DA_TARDE' | 'NAO_INFORMADO';
+    posicaoImovel: 'FRENTE' | 'FUNDOS' | 'LATERAL' | 'INTERNO'; // Separado conforme pedido
+    vista: 'LIVRE' | 'MAR' | 'MONTANHA' | 'JARDIM' | 'CIDADE' | 'INTERNA' | 'PAREDE';
+    nivelBarulho: 'SILENCIOSO' | 'RUA_TRANQUILA' | 'MODERADO' | 'MOVIMENTADO'; // Barulho
+    tipoRua: 'ASFALTADA' | 'PARALELEPIPEDO' | 'TERRA' | 'CASCALHO' | 'PLANA' | 'ACLIVE' | 'DECLIVE';
+    deEsquina: boolean;
+}
+
+// 5. Documentação (Expandido)
+export interface DocumentacaoData {
+    possuiEscritura: boolean;      // Possui escritura?
+    registroCartorio: boolean;     // Registro no Cartório?
+    isentoIPTU: boolean;
+    aceitaFinanciamento: boolean;  // Imóvel financiável?
+    aceitaFGTS: boolean;           // Aceita FGTS?
+    aceitaPermuta: boolean;        // Aceita permuta?
+    situacaoLegal: 'REGULAR' | 'INVENTARIO' | 'USUFRUTO' | 'LEILAO' | 'ALIENADO' | 'OUTRO';
+}
 
 export interface SeguroData {
     tipo: 'INCENDIO' | 'FIANCA' | 'CONTEUDO' | 'OUTRO';
     valorMensal: number;
     pagoPor: 'PROPRIETARIO' | 'INQUILINO';
-    obrigatorio: boolean; // Se é exigido por lei ou pelo contrato
-    descricao?: string; // Ex: "Seguro Incêndio Obrigatório Lei do Inquilinato"
+    obrigatorio: boolean;
+    descricao?: string;
 }
 
 export interface PublicidadeConfig {
-    publicadoRentou: boolean; // Visível no portal proprietário/app
-    publicadoPortaisExternos: boolean; // Integração com Zap/VivaReal
-    mostrarEnderecoCompleto: boolean; // Se true: Rua + Num. Se false: Apenas Bairro/Cidade (Privacidade)
-    mostrarNumero: boolean; // Controle fino de privacidade
+    publicadoRentou: boolean;
+    publicadoPortaisExternos: boolean;
+    mostrarEnderecoCompleto: boolean;
+    mostrarNumero: boolean;
     statusPublicacao: 'RASCUNHO' | 'ATIVO' | 'PAUSADO' | 'VENDIDO' | 'ALUGADO';
 }
 
 // --- INTERFACE PRINCIPAL DO IMÓVEL ---
 
-/**
- * Define a estrutura de dados robusta para um Imóvel na plataforma Rentou.
- */
 export interface Imovel {
-  /** ID técnico (Firestore Document ID) */
   id: string;
-  /** ID de Negócio (Ex: RS0311142504) - Chave de rastreamento única e curta. */
   smartId: string; 
-  /** UID do proprietário associado ao imóvel */
   proprietarioId: string;
   
-  // === 1. Informações Básicas e Classificação ===
+  // === 1. Informações Básicas ===
   titulo: string;
   categoriaPrincipal: ImovelCategoria;
-  tipoDetalhado: string; // Ex: "Apartamento Alto Padrão", "Sítio Lazer"
+  tipoDetalhado: string;
   finalidades: ImovelFinalidade[]; 
 
   endereco: EnderecoImovel;
   condominio: CondominioData;
+  infraestruturaCondominio?: string[]; 
   
-  // === 2. Geolocalização (Essencial para Mapas) ===
   latitude?: number; 
   longitude?: number; 
   
-  // === 3. Áreas e Dimensões ===
-  areaUtil: number; // Área construída/privativa
-  areaTotal: number; // Área total (incluindo comuns/externas)
-  areaTerreno: number; // Importante para Casas e Rural
+  // === 2. Áreas e Topografia ===
+  areaUtil: number;
+  areaTotal: number;
+  areaTerreno: number;
   
-  // NOVO: Metragens Detalhadas
+  dimensoesTerreno?: { 
+      frente: number; // metros lineares
+      fundos: number; // metros lineares
+      lateralDireita: number;
+      lateralEsquerda: number;
+      topografia: 'PLANO' | 'ACLIVE' | 'DECLIVE' | 'IRREGULAR';
+  };
+
   areaMediaQuartos?: number;
   areaMediaSuites?: number;
   areaTotalBanheiros?: number;
   areaExternaPrivativa?: number;
   areaQuintal?: number;
   
-  // === 4. Detalhes Estruturais ===
+  // === 3. Detalhes Estruturais ===
   quartos: number;
   suites: number; 
-  banheiros: number; // Banheiros sociais
+  banheiros: number;
   lavabos: number; 
   banheirosServico: number; 
-  vagasGaragem: number;
-  andar?: number; // 0 = Térreo
   
+  vagasGaragem: number;
+  detalhesVaga?: DetalhesVagaData; // Expandido
+
+  andar?: number;
+  totalAndaresNoPredio?: number; 
+  unidadesPorAndar?: number;     
+  elevadores?: number;           
+  
+  // RURAL
+  possuiCasaSede?: boolean;
+
   piscinaPrivativa: PiscinaPrivativaData;
   
-  // Arrays de Cômodos Detalhados
+  // Arrays Dinâmicos
   cozinhas: CozinhaData[];
   salas: SalaData[];       
   varandas: VarandaData[]; 
   dispensa: DispensaData;
-  
-  // NOVO: Construções Externas
   construcoesExternas: ConstrucaoExternaData[];
   
-  // === 5. Descrição e Comodidades ===
+  // === 4. Detalhes Qualitativos e Estado ===
   descricaoLonga: string;
-  /** Lista de strings. Para Rural inclui: 'Curral', 'Lago'. Para Urbano: 'Academia', 'Sauna'. */
   caracteristicas: string[]; 
+  
+  estadoConservacao: 'EM_CONSTRUCAO' | 'NOVO' | 'REFORMADO' | 'USADO' | 'NECESSITA_REFORMA'; // 4. Estado do Imóvel
+  tipoConstrucao?: 'ALVENARIA' | 'STEEL_FRAME' | 'WOOD_FRAME' | 'DRYWALL' | 'MISTA'; // 9. Materiais
+
+  acabamentos?: AcabamentoData; // Expandido
+  dadosExternos?: CaracteristicasExternasData; // 3. Info Externas
+
   aceitaAnimais: boolean;
-  // NOVO: Detalhes de Animais
   detalhesAnimais?: RegrasAnimaisData;
   
-  // === 6. Valores, Status e Financeiro ===
+  // === 5. Financeiro & Documentação ===
   status: 'VAGO' | 'ALUGADO' | 'ANUNCIADO' | 'MANUTENCAO';
   
   valorAluguel: number; 
   valorCondominio: number; 
   valorIPTU: number; 
   
-  // Lista de Seguros (Incêndio, Fiança, etc)
   seguros: SeguroData[];
-  
-  // NOVO: Seguros Opcionais e Flag Obrigatória
+  documentacao?: DocumentacaoData; // 5. Documentação
+
   seguroIncendioObrigatorio: boolean;
   segurosOpcionais?: {
       fiancaLocaticia: boolean;
@@ -191,23 +242,19 @@ export interface Imovel {
       conteudo: boolean;
   };
 
-  // Regras de Cobrança (Quem paga o quê)
-  custoCondominioIncluso: boolean; // Se true, valor soma ao pacote. Se false, é cobrado à parte.
+  custoCondominioIncluso: boolean;
   responsavelCondominio: ResponsavelPagamento; 
-  
   custoIPTUIncluso: boolean; 
   responsavelIPTU: ResponsavelPagamento; 
 
-  dataDisponibilidade: string; // ISO Date YYYY-MM-DD
+  dataDisponibilidade: string;
   
-  // === 7. Mídia e Publicidade ===
-  fotos: string[]; // URLs das imagens
+  // === 6. Mídia ===
+  fotos: string[];
   linkVideoTour?: string;
   visitaVirtual360: boolean;
 
-  // Configurações de visibilidade no portal
   publicidade: PublicidadeConfig;
 }
 
-// Tipo auxiliar para criação (Omitindo campos gerados pelo backend)
 export type NovoImovelData = Omit<Imovel, 'id' | 'smartId' | 'proprietarioId' | 'latitude' | 'longitude'>;
