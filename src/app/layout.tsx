@@ -4,6 +4,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/providers/AuthProvider";
 
+// IMPORTAÇÃO DIRETA DA NOVA BIBLIOTECA
+import NextTopLoader from 'nextjs-toploader';
+
 // Import Font Awesome CSS e configuração
 import '@fortawesome/fontawesome-svg-core/styles.css'; 
 import { config } from '@fortawesome/fontawesome-svg-core';
@@ -34,7 +37,23 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {/* ENVOLVENDO A APLICAÇÃO COM O PROVIDER DE AUTENTICAÇÃO */}
+        {/* Barra de Progresso "Drop-in".
+          Configurada com a cor da sua marca e sem spinner (estilo YouTube).
+        */}
+        <NextTopLoader
+          color="#1D4ED8" // Azul Rentou Primary
+          initialPosition={0.08}
+          crawlSpeed={200}
+          height={3}
+          crawl={true}
+          showSpinner={false} // Sem a rodinha girando
+          easing="ease"
+          speed={200}
+          shadow="0 0 10px #1D4ED8,0 0 5px #1D4ED8" // Efeito de brilho (Glow)
+          zIndex={1600}
+          showAtBottom={false}
+        />
+        
         <AuthProvider> 
           {children}
         </AuthProvider>
