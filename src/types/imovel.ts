@@ -1,11 +1,18 @@
 // src/types/imovel.ts
 
-// Tipos de categoria e finalidade para o novo modelo hierárquico
-export type ImovelCategoria = 'Residencial' | 'Comercial' | 'Terrenos' | 'Rural' | 'Imóveis Especiais' | 'Outro';
-export type ImovelFinalidade = 'Venda' | 'Locação Residencial' | 'Locação Comercial' | 'Locação Temporada' | 'Arrendamento Rural' | 'Locação Diária' | 'Locação Coworking' | 'Permuta';
-export type ResponsavelPagamento = 'PROPRIETARIO' | 'LOCATARIO' | 'NA_LOCACAO'; // NA_LOCACAO: Cobrado separadamente
+/**
+ * @fileoverview Definições de Tipos para a Entidade Imóvel e seus sub-objetos.
+ * Atualizado para suportar: Rural, Alto Padrão, Seguros e Publicidade Avançada.
+ */
 
-// NOVO: Estrutura completa de endereço do Imóvel
+// --- ENUMS E TIPOS BÁSICOS ---
+
+export type ImovelCategoria = 'Residencial' | 'Comercial' | 'Terrenos' | 'Rural' | 'Imóveis Especiais' | 'Outro';
+export type ImovelFinalidade = 'Venda' | 'Locação Residencial' | 'Locação Comercial' | 'Locação Temporada' | 'Arrendamento Rural' | 'Permuta';
+export type ResponsavelPagamento = 'PROPRIETARIO' | 'LOCATARIO' | 'NA_LOCACAO'; // NA_LOCACAO: Cobrado separadamente ou isento
+
+// --- SUB-ESTRUTURAS DE DADOS ---
+
 export interface EnderecoImovel {
     cep: string;
     logradouro: string;
@@ -13,121 +20,153 @@ export interface EnderecoImovel {
     complemento?: string;
     bairro: string;
     cidade: string;
-    estado: string; // UF
+    estado: string; // UF (Ex: SP, MG)
     pais: string;
 }
 
-// NOVO: Estrutura de dados de Condomínio
 export interface CondominioData {
-    possuiCondominio: boolean; // Flag se está em condomínio (mesmo que não residencial)
-    nomeCondominio?: string; // Nome do condomínio/edifício
+    possuiCondominio: boolean;
+    condominioCadastradoId?: string; // ID de referência se o condomínio já existir no banco
+    nomeCondominio?: string; // Nome manual caso não exista ID
     portaria24h?: boolean;
     areaLazer?: boolean;
 }
 
-// NOVO: Detalhes da Piscina (Privativa do Imóvel)
 export interface PiscinaPrivativaData {
     possuiPiscina: boolean;
-    tipo?: 'VINIL' | 'AZULEJO' | 'FIBRA' | 'NATURAL';
+    tipo?: 'VINIL' | 'AZULEJO' | 'FIBRA' | 'NATURAL' | 'OUTRO';
     aquecida?: boolean;
 }
 
-// === NOVAS ESTRUTURAS INTERNAS (AGORA OTIMIZADAS PARA ARRAYS) ===
+// --- ESTRUTURAS DE CÔMODOS DETALHADOS (Com Área) ---
+
 export interface CozinhaData {
-    tipo: 'AMERICANA' | 'FECHADA' | 'GOURMET' | 'ILHA' | 'INTEGRADA' | 'INDUSTRIAL' | 'DE_SERVICO' | 'COPA_COZINHA' | 'OUTRA';
-    nomeCustomizado?: string; // Ex: "Cozinha 1", "Cozinha Gourmet"
+    tipo: string; // Ex: Americana, Fechada, Gourmet
+    nomeCustomizado?: string; // Ex: "Cozinha Principal"
     possuiArmarios?: boolean;
+    area?: number; // Área em m² específica deste cômodo
 }
 
 export interface SalaData {
-    tipo: 'ESTAR' | 'JANTAR' | 'TV' | 'ESCRITORIO' | 'HOME_OFFICE' | 'CINEMA' | 'JOGOS' | 'CONJUGADA' | 'OUTRA';
-    nomeCustomizado?: string; // Ex: "Sala de Estar", "Home Office"
-    qtdAssentos?: number; // Para salas de cinema/estar
+    tipo: string; // Ex: Estar, Jantar, TV
+    nomeCustomizado?: string;
+    qtdAssentos?: number; // Capacidade estimada
+    area?: number; // Área em m²
 }
 
 export interface VarandaData {
-    tipo: 'SIMPLES' | 'GOURMET' | 'FECHADA' | 'TERRACO'; // Adicionado TERRACO
-    nomeCustomizado?: string; // Ex: "Varanda Principal", "Terraço"
+    tipo: string; // Ex: Gourmet, Simples, Terraço
+    nomeCustomizado?: string;
     possuiChurrasqueira?: boolean;
     temFechamentoVidro?: boolean;
+    area?: number; // Área em m²
 }
 
 export interface DispensaData {
     possuiDispensa: boolean;
     prateleirasEmbutidas?: boolean;
+    area?: number; // Área em m²
 }
+
+// --- NOVAS ESTRUTURAS (Financeiro & Publicidade) ---
+
+export interface SeguroData {
+    tipo: 'INCENDIO' | 'FIANCA' | 'CONTEUDO' | 'OUTRO';
+    valorMensal: number;
+    pagoPor: 'PROPRIETARIO' | 'INQUILINO';
+    obrigatorio: boolean; // Se é exigido por lei ou pelo contrato
+    descricao?: string; // Ex: "Seguro Incêndio Obrigatório Lei do Inquilinato"
+}
+
+export interface PublicidadeConfig {
+    publicadoRentou: boolean; // Visível no portal proprietário/app
+    publicadoPortaisExternos: boolean; // Integração com Zap/VivaReal
+    mostrarEnderecoCompleto: boolean; // Se true: Rua + Num. Se false: Apenas Bairro/Cidade (Privacidade)
+    mostrarNumero: boolean; // Controle fino de privacidade
+    statusPublicacao: 'RASCUNHO' | 'ATIVO' | 'PAUSADO' | 'VENDIDO' | 'ALUGADO';
+}
+
+// --- INTERFACE PRINCIPAL DO IMÓVEL ---
 
 /**
  * Define a estrutura de dados robusta para um Imóvel na plataforma Rentou.
- * ATUALIZADO: Inclui Latitude e Longitude (essenciais para o mapa).
  */
 export interface Imovel {
   /** ID técnico (Firestore Document ID) */
   id: string;
-  /** ID de Negócio (Ex: RS0311142504) - Chave de rastreamento do ativo. */
+  /** ID de Negócio (Ex: RS0311142504) - Chave de rastreamento única e curta. */
   smartId: string; 
   /** UID do proprietário associado ao imóvel */
   proprietarioId: string;
   
   // === 1. Informações Básicas e Classificação ===
   titulo: string;
-  /** Categoria de alto nível (Ex: Residencial, Rural) */
   categoriaPrincipal: ImovelCategoria;
-  /** Tipo detalhado (Ex: Apartamento Padrão, Casa em Condomínio Fechado) */
-  tipoDetalhado: string; 
-  /** Múltiplas finalidades (Ex: ['Venda', 'Locação Residencial']) */
+  tipoDetalhado: string; // Ex: "Apartamento Alto Padrão", "Sítio Lazer"
   finalidades: ImovelFinalidade[]; 
 
-  endereco: EnderecoImovel; // <-- MUDANÇA: Objeto EnderecoImovel
-  condominio: CondominioData; // <-- MUDANÇA: Objeto CondominioData
+  endereco: EnderecoImovel;
+  condominio: CondominioData;
   
-  // === NOVO: GEOLOCALIZAÇÃO ===
-  latitude?: number; // Adicionado
-  longitude?: number; // Adicionado
+  // === 2. Geolocalização (Essencial para Mapas) ===
+  latitude?: number; 
+  longitude?: number; 
   
-  // === 2. Detalhes Estruturais (ATUALIZADOS) ===
+  // === 3. Áreas e Dimensões ===
+  areaUtil: number; // Área construída/privativa
+  areaTotal: number; // Área total (incluindo comuns/externas)
+  areaTerreno: number; // Importante para Casas e Rural
+  
+  // === 4. Detalhes Estruturais ===
   quartos: number;
-  suites: number; // NOVO: Contagem separada de suítes
-  banheiros: number; 
-  lavabos: number; // NOVO: Contagem de lavabos
-  banheirosServico: number; // NOVO: Contagem de banheiros de serviço
+  suites: number; 
+  banheiros: number; // Banheiros sociais
+  lavabos: number; 
+  banheirosServico: number; 
   vagasGaragem: number;
-  areaTotal: number; 
-  areaUtil: number; 
-  andar?: number; 
+  andar?: number; // 0 = Térreo
   
-  piscinaPrivativa: PiscinaPrivativaData; // NOVO: Piscina Privativa
+  piscinaPrivativa: PiscinaPrivativaData;
   
-  // NOVO: Detalhes de Cômodos - ARRAYS
-  cozinhas: CozinhaData[]; // <-- MUDANÇA CRÍTICA
-  salas: SalaData[];       // <-- MUDANÇA CRÍTICA
-  varandas: VarandaData[]; // <-- MUDANÇA CRÍTICA
-  dispensa: DispensaData; // Mantido como objeto único (estrutura simples)
+  // Arrays de Cômodos Detalhados
+  cozinhas: CozinhaData[];
+  salas: SalaData[];       
+  varandas: VarandaData[]; 
+  dispensa: DispensaData;
   
-  // === 3. Descrição e Comodidades ===
+  // === 5. Descrição e Comodidades ===
   descricaoLonga: string;
+  /** Lista de strings. Para Rural inclui: 'Curral', 'Lago'. Para Urbano: 'Academia', 'Sauna'. */
   caracteristicas: string[]; 
   aceitaAnimais: boolean;
   
-  // === 4. Valores e Status de Locação ===
+  // === 6. Valores, Status e Financeiro ===
   status: 'VAGO' | 'ALUGADO' | 'ANUNCIADO' | 'MANUTENCAO';
+  
   valorAluguel: number; 
   valorCondominio: number; 
   valorIPTU: number; 
-  dataDisponibilidade: string; 
   
-  // NOVO: Responsabilidades e Custos Inclusos (REQUISITO FINANCEIRO)
-  custoCondominioIncluso: boolean; // Se o valor já está somado em valorAluguel (Locação Total)
-  responsavelCondominio: ResponsavelPagamento; // Quem paga (Proprietário, Locatário, Não se aplica)
-  
-  custoIPTUIncluso: boolean; // Se o valor já está somado em valorAluguel (Locação Total)
-  responsavelIPTU: ResponsavelPagamento; // Quem paga (Proprietário, Locatário, Não se aplica)
+  // Lista de Seguros (Incêndio, Fiança, etc)
+  seguros: SeguroData[];
 
-  // === 5. Mídia e Publicação ===
-  fotos: string[];
+  // Regras de Cobrança (Quem paga o quê)
+  custoCondominioIncluso: boolean; // Se true, valor soma ao pacote. Se false, é cobrado à parte.
+  responsavelCondominio: ResponsavelPagamento; 
+  
+  custoIPTUIncluso: boolean; 
+  responsavelIPTU: ResponsavelPagamento; 
+
+  dataDisponibilidade: string; // ISO Date YYYY-MM-DD
+  
+  // === 7. Mídia e Publicidade ===
+  fotos: string[]; // URLs das imagens
   linkVideoTour?: string;
   visitaVirtual360: boolean;
+
+  // Configurações de visibilidade no portal
+  publicidade: PublicidadeConfig;
 }
 
-// NOVO: Define a estrutura de dados para o formulário (exclui campos auto-gerados)
+// Tipo auxiliar para criação (Omitindo campos gerados pelo backend)
 export type NovoImovelData = Omit<Imovel, 'id' | 'smartId' | 'proprietarioId' | 'latitude' | 'longitude'>;

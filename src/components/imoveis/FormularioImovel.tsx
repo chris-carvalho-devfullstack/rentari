@@ -1,32 +1,36 @@
-// src/components/imoveis/FormularioImovel.tsx
 'use client';
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
-// CORRIGIDO: Adicionado faArrowLeft à lista de importações
 import { adicionarNovoImovel, atualizarImovel, updateImovelFotos } from '@/services/ImovelService'; 
 import { uploadImovelPhotos, deleteFotoImovel } from '@/services/StorageService'; 
 // NOVO: Importa o serviço de Geocoding
 import { fetchCoordinatesByAddress } from '@/services/GeocodingService';
 // ATUALIZADO: Importar TODOS os novos tipos, incluindo Cômodos e Responsabilidade
-import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, CozinhaData, SalaData, VarandaData, DispensaData, PiscinaPrivativaData, ResponsavelPagamento } from '@/types/imovel'; 
-import { IMÓVEIS_HIERARQUIA } from '@/data/imovelHierarchy'; 
+import { Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, CozinhaData, SalaData, VarandaData, DispensaData, PiscinaPrivativaData, ResponsavelPagamento, PublicidadeConfig } from '@/types/imovel'; 
+// CORREÇÃO DE IMPORTAÇÃO: Importar as listas corretas
+import { IMÓVEIS_HIERARQUIA, COMODIDADES_RESIDENCIAIS, BENFEITORIAS_RURAIS } from '@/data/imovelHierarchy'; 
 import { useAuthStore } from '@/hooks/useAuthStore';
 // Importação do serviço de CEP
 import { fetchAddressByCep, CepData } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
-import { faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, faTag, faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, faShower, faToilet, faWater, faBed, faArrowLeft } from '@fortawesome/free-solid-svg-icons'; 
+import { 
+    faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, faUsers, 
+    faTag, faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, faShower, faToilet, 
+    faWater, faBed, faArrowLeft, faMapMarkerAlt, faSpinner, faInfoCircle, faShieldAlt, 
+    faArrowRight, faStar, faTractor 
+} from '@fortawesome/free-solid-svg-icons'; 
 
 interface FormularioImovelProps {
     initialData?: Imovel;
 }
 
-// Define os passos do formulário
+// Define os passos do formulário (ATUALIZADO)
 const formSteps = [
     { id: 1, name: 'Classificação' },
-    { id: 2, name: 'Estrutura & Cômodos' }, // NOME ATUALIZADO
-    { id: 3, name: 'Valores & Responsabilidade' }, // NOME ATUALIZADO
+    { id: 2, name: 'Estrutura & Cômodos' }, 
+    { id: 3, name: 'Valores & Responsabilidade' }, 
     { id: 4, name: 'Mídia & Fotos' }, 
 ];
 
@@ -37,6 +41,7 @@ const defaultCozinhaItem: CozinhaData = {
     tipo: 'FECHADA',
     nomeCustomizado: '', 
     possuiArmarios: false,
+    area: 0
 };
 
 // Item default para Sala (usado para inicializar ou adicionar novo)
@@ -44,6 +49,7 @@ const defaultSalaItem: SalaData = {
     tipo: 'ESTAR',
     nomeCustomizado: '', 
     qtdAssentos: 1,
+    area: 0
 };
 
 // Item default para Varanda (usado para inicializar ou adicionar novo)
@@ -52,13 +58,23 @@ const defaultVarandaItem: VarandaData = {
     nomeCustomizado: '', 
     possuiChurrasqueira: false,
     temFechamentoVidro: false,
+    area: 0
 };
+
+const defaultPublicidade: PublicidadeConfig = { publicadoRentou: true, publicadoPortaisExternos: false, mostrarEnderecoCompleto: false, mostrarNumero: false, statusPublicacao: 'RASCUNHO' };
 
 // Estruturas default aninhadas (existentes)
 const defaultEndereco: EnderecoImovel = { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', estado: '', pais: 'Brasil' };
 const defaultCondominio: CondominioData = { possuiCondominio: false, nomeCondominio: '', portaria24h: false, areaLazer: false };
 const defaultDispensa: DispensaData = { possuiDispensa: false, prateleirasEmbutidas: false };
 const defaultPiscina: PiscinaPrivativaData = { possuiPiscina: false, tipo: 'AZULEJO', aquecida: false }; // NOVO
+
+// MOCK DE CONDOMÍNIOS
+const MOCK_CONDOMINIOS = [
+    { id: 'c1', nome: 'Edifício Solar da Praça' },
+    { id: 'c2', nome: 'Condomínio Alphaville I' },
+    { id: 'c3', nome: 'Residencial Jardins' },
+];
 
 // --- DEFAULT DATA PRINCIPAL (ATUALIZADO COM OS NOVOS CAMPOS DE ARRAY) ---
 const defaultFormData: NovoImovelData = {
@@ -76,14 +92,15 @@ const defaultFormData: NovoImovelData = {
     vagasGaragem: 0,
     areaTotal: 0, 
     areaUtil: 0, 
+    areaTerreno: 0,
     andar: 1,
     
     piscinaPrivativa: defaultPiscina, // NOVO
     
     // MUDANÇA CRÍTICA: Inicializa com arrays vazios. O usuário deve adicionar.
     cozinhas: [], 
-    salas: [],       
-    varandas: [],                   
+    salas: [],        
+    varandas: [],                    
     dispensa: defaultDispensa,      
 
     descricaoLonga: '',
@@ -99,15 +116,17 @@ const defaultFormData: NovoImovelData = {
     responsavelCondominio: 'LOCATARIO',
     custoIPTUIncluso: false,
     responsavelIPTU: 'LOCATARIO',
+    seguros: [],
 
     fotos: [], 
     linkVideoTour: undefined,
     visitaVirtual360: false,
+    publicidade: defaultPublicidade,
 };
 
 
 const isNumericField = (name: string): boolean => 
-    ['quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 
+    ['quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'areaTerreno', 
      'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar'].includes(name);
 
 // ATUALIZADO: Inicia o estado com a nova estrutura de ARRAY
@@ -116,13 +135,14 @@ const getInitialState = (initialData?: Imovel) => {
 
     const initialFormData: NovoImovelData = {
         ...defaultFormData,
-        ...(initialDataPayload as any), 
+        ...(initialDataPayload as any),
         
         // Garante que os objetos aninhados sejam mesclados corretamente
         endereco: { ...defaultEndereco, ...(initialDataPayload.endereco || {}) },
         condominio: { ...defaultCondominio, ...(initialDataPayload.condominio || {}) },
         dispensa: { ...defaultDispensa, ...(initialDataPayload.dispensa || {}) },
         piscinaPrivativa: { ...defaultPiscina, ...(initialDataPayload.piscinaPrivativa || {}) }, // NOVO
+        publicidade: { ...defaultPublicidade, ...(initialDataPayload.publicidade || {}) },
         
         // Prioriza os arrays do initialData. Se não existirem, usa arrays vazios.
         cozinhas: (initialDataPayload.cozinhas?.length > 0) ? initialDataPayload.cozinhas : [],
@@ -153,6 +173,17 @@ const getInitialState = (initialData?: Imovel) => {
 
 
 // --- COMPONENTES AUXILIARES DEFINIDOS ANTES DO EXPORT DEFAULT ---
+
+const Tooltip = ({ text }: { text: string }) => (
+    <div className="group relative inline-block ml-1 align-middle z-50">
+        <Icon icon={faInfoCircle} className="w-3.5 h-3.5 text-gray-400 hover:text-rentou-primary cursor-help" />
+        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-56 p-2 bg-gray-800 text-white text-xs rounded shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+            {text}
+            <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+        </div>
+    </div>
+);
+
 const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; description?: string; }> = ({ label, name, checked, onChange, description }) => (
     <div className="flex items-center space-x-3 bg-gray-50 dark:bg-zinc-700 p-4 rounded-lg border border-gray-200 dark:border-zinc-600">
         <input
@@ -172,7 +203,10 @@ const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; o
 
 const SelectResponsabilidade: React.FC<{ label: string, name: string, value: ResponsavelPagamento, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void }> = ({ label, name, value, onChange }) => (
     <div>
-        <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+        <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+            {label}
+            <Tooltip text="Se 'Locatário', ele paga o boleto. Se 'Proprietário', você paga (e pode cobrar no aluguel)." />
+        </label>
         <select
             id={name}
             name={name}
@@ -191,7 +225,8 @@ const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracterist
     <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
         <div className="flex flex-wrap gap-2">
-            {['Piscina', 'Churrasqueira', 'Academia', 'Portaria 24h', 'Mobiliado', 'Aquecimento a Gás', 'Salão de Festas', 'Quintal/Jardim', 'Elevador', 'Acessibilidade'].map((feature) => (
+            {/* CORRIGIDO: Usando a lista importada do arquivo hierarchy */}
+            {COMODIDADES_RESIDENCIAIS.map((feature: string) => (
                 <button
                     key={feature}
                     type="button" 
@@ -276,13 +311,21 @@ const CozinhaGroup: React.FC<{ item: CozinhaData, index: number, onChange: (name
                     <input id={`cozinha-${index}-nome`} name="nomeCustomizado" type="text" value={item.nomeCustomizado || ''} onChange={handleLocalChange} placeholder={`Cozinha ${index + 1}`} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
                 </div>
             </div>
-            <div className="mt-4">
-                 <CheckboxInput 
-                    label="Possui Armários Planejados?" 
-                    name="possuiArmarios" 
-                    checked={item.possuiArmarios || false} 
-                    onChange={handleLocalChange} 
-                />
+            
+            {/* NOVO: Campo de Área */}
+            <div className="grid grid-cols-2 gap-4 mt-2">
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área (m²)</label>
+                    <input type="number" name="area" value={item.area || ''} onChange={(e) => onChange('area', parseFloat(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                 </div>
+                 <div className="flex items-center pt-6">
+                     <CheckboxInput 
+                        label="Possui Armários Planejados?" 
+                        name="possuiArmarios" 
+                        checked={item.possuiArmarios || false} 
+                        onChange={handleLocalChange} 
+                    />
+                 </div>
             </div>
             
             <RoomGroupControls onAdd={onAdd} onRemove={onRemove} index={index} count={count} />
@@ -325,9 +368,16 @@ const SalaGroup: React.FC<{ item: SalaData, index: number, onChange: (name: stri
                 </div>
             </div>
             
-            <div className="mt-4">
-                 <label htmlFor={`sala-${index}-assentos`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Capacidade (Assentos Estimação)</label>
-                 <input id={`sala-${index}-assentos`} name="qtdAssentos" type="text" value={item.qtdAssentos || 0} onChange={handleLocalChange} placeholder="4" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+            <div className="mt-4 grid grid-cols-2 gap-4">
+                 <div>
+                     <label htmlFor={`sala-${index}-assentos`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">Capacidade (Assentos Estimação)</label>
+                     <input id={`sala-${index}-assentos`} name="qtdAssentos" type="text" value={item.qtdAssentos || 0} onChange={handleLocalChange} placeholder="4" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                 </div>
+                 {/* NOVO: Campo de Área */}
+                 <div>
+                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área (m²)</label>
+                     <input type="number" name="area" value={item.area || 0} onChange={(e) => onChange('area', parseFloat(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+                 </div>
             </div>
 
             <RoomGroupControls onAdd={onAdd} onRemove={onRemove} index={index} count={count} />
@@ -365,6 +415,12 @@ const VarandaGroup: React.FC<{ item: VarandaData, index: number, onChange: (name
                 </div>
             </div>
             
+             {/* NOVO: Campo de Área */}
+             <div className="mt-2">
+                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área (m²)</label>
+                 <input type="number" name="area" value={item.area || ''} onChange={(e) => onChange('area', parseFloat(e.target.value))} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" />
+            </div>
+
             <div className="grid grid-cols-2 gap-4 mt-4">
                  <CheckboxInput label="Possui Churrasqueira?" name="possuiChurrasqueira" checked={item.possuiChurrasqueira || false} onChange={handleLocalChange} description="Infraestrutura ou churrasqueira embutida." />
                  <CheckboxInput label="Fechamento de Vidro (Reiki)?" name="temFechamentoVidro" checked={item.temFechamentoVidro || false} onChange={handleLocalChange} description="Painéis deslizantes de vidro." />
@@ -389,16 +445,26 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     const isEditing = !!initialData;
     const formTitle = isEditing ? 'Editar Imóvel Existente' : 'Adicionar Novo Imóvel';
     
+    // --- ESTADOS DE UI ADICIONADOS PARA FEEDBACK ---
+    const [cepLoading, setCepLoading] = useState(false);
+    const [cepSuccess, setCepSuccess] = useState(false);
+
     const { initialFormData, initialLocalInputs } = useMemo(() => getInitialState(initialData), [initialData]);
 
     const [localNumericInputs, setLocalNumericInputs] = useState<Record<string, string>>(initialLocalInputs);
     const [formData, setFormData] = useState<NovoImovelData>(initialFormData);
     
-    // --- ESTADO DE GERENCIAMENTO DE FOTOS ---
-    const [novasFotos, setNovasFotos] = useState<File[]>([]);
+    // --- ESTADO DE GERENCIAMENTO DE FOTOS (Melhorado para ordenação) ---
+    const [photoList, setPhotoList] = useState<{ url?: string, file?: File, isNew: boolean }[]>([]);
     const [fotosAExcluir, setFotosAExcluir] = useState<string[]>([]);
     const MAX_PHOTOS = 25;
 
+    // Inicializa lista de fotos
+    useEffect(() => {
+        if (initialData?.fotos) {
+            setPhotoList(initialData.fotos.map(url => ({ url, isNew: false })));
+        }
+    }, [initialData]);
 
     const tiposDisponiveis = useMemo(() => {
         return IMÓVEIS_HIERARQUIA.find(c => c.categoria === formData.categoriaPrincipal)?.tipos || [];
@@ -569,7 +635,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         
     }, []);
 
-    // --- FUNÇÃO PARA BUSCAR ENDEREÇO POR CEP (Mantida) ---
+    // --- FUNÇÃO PARA BUSCAR ENDEREÇO POR CEP (Mantida e Melhorada) ---
     const handleCepBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
         const value = e.target.value;
         const cleanCep = value.replace(/\D/g, '');
@@ -582,6 +648,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         
         if (cleanCep.length === 8) {
             setLoading(true);
+            setCepLoading(true); // Feedback visual on
+            setCepSuccess(false);
             setError(null);
 
             try {
@@ -601,7 +669,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         },
                     }));
                     
-                    setError(`CEP ${localNumericInputs['endereco.cep']} encontrado! Logradouro, Bairro, Cidade/UF preenchidos automaticamente. Não se esqueça de adicionar o NÚMERO!`);
+                    setCepSuccess(true); // Feedback sucesso
+                    // setError(`CEP ${localNumericInputs['endereco.cep']} encontrado! Logradouro, Bairro, Cidade/UF preenchidos automaticamente. Não se esqueça de adicionar o NÚMERO!`);
                     
                 } else {
                     setError('CEP não encontrado ou inválido. Digite o endereço manualmente.');
@@ -610,6 +679,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 setError('Erro ao se comunicar com o serviço de CEP.');
             } finally {
                 setLoading(false);
+                setCepLoading(false); // Feedback off
             }
         } else if (cleanCep.length > 0 && cleanCep.length < 8) {
              setError('O CEP deve ter 8 dígitos.');
@@ -653,43 +723,84 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         });
     }, []);
     
-    // --- Handlers de Foto (CORRIGIDOS) ---
+    // --- Handlers de Foto (CORRIGIDOS COM ORDENAÇÃO) ---
     const getAvailableSlots = useCallback(() => {
-        // CORREÇÃO DE TIPO: Garante que initialData.fotos seja um array antes de acessar .filter()
-        const existingPhotos = initialData?.fotos || []; 
-        const currentValidPhotos = existingPhotos.filter(url => !fotosAExcluir.includes(url)).length;
-        const totalNewPhotos = novasFotos.length;
-        return MAX_PHOTOS - currentValidPhotos - totalNewPhotos;
-    }, [initialData?.fotos, fotosAExcluir, novasFotos.length]);
+        // Usa a nova lista unificada
+        const totalPhotos = photoList.length;
+        return MAX_PHOTOS - totalPhotos;
+    }, [photoList]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Alias para manter compatibilidade com o nome antigo, mas usando a nova lógica
+        handlePhotoUpload(e);
+    };
+
+    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const filesArray = Array.from(e.target.files);
-            const availableSlots = getAvailableSlots();
+            const available = getAvailableSlots();
             
-            if (filesArray.length > availableSlots) {
-                setError(`Você só pode adicionar mais ${availableSlots} fotos. Remova fotos existentes ou novas fotos para continuar.`);
+            if (filesArray.length > available) {
+                setError(`Você só pode adicionar mais ${available} fotos.`);
                 e.target.value = ''; 
                 return;
             }
 
-            setNovasFotos(prev => [...prev, ...filesArray]);
+            const newPhotos = filesArray.map(file => ({
+                file,
+                isNew: true,
+                url: URL.createObjectURL(file)
+            }));
+            
+            setPhotoList(prev => [...prev, ...newPhotos]);
+            setNovasFotos(prev => [...prev, ...filesArray]); // Mantém sync
+            
             e.target.value = ''; 
             setError(null);
         }
     };
 
     const handleRemoveNewPhoto = (index: number) => {
-        setNovasFotos(prev => prev.filter((_, i) => i !== index));
+        // Adaptação: Na nova lógica, removePhoto funciona para ambos.
+        // Mas se o índice vier da lista separada antiga, precisamos achar na nova.
+        // Para segurança, usamos a nova função removePhoto que opera na lista unificada.
+        removePhoto(index); 
+    };
+    
+    const movePhoto = (index: number, direction: -1 | 1) => {
+        const newPhotos = [...photoList];
+        // Caso especial: Definir Capa (mover para index 0)
+        if (direction === -index) {
+             const item = newPhotos.splice(index, 1)[0];
+             newPhotos.unshift(item);
+        } else {
+            if (index + direction < 0 || index + direction >= newPhotos.length) return;
+            const temp = newPhotos[index];
+            newPhotos[index] = newPhotos[index + direction];
+            newPhotos[index + direction] = temp;
+        }
+        setPhotoList(newPhotos);
+    };
+
+    const removePhoto = (index: number) => {
+        const item = photoList[index];
+        if (!item.isNew && item.url) {
+             // Marca para exclusão
+             setFotosAExcluir(prev => [...prev, item.url!]);
+        } else if (item.isNew && item.file) {
+             // Remove da lista de uploads pendentes
+             setNovasFotos(prev => prev.filter(f => f !== item.file));
+        }
+        // Remove visualmente
+        setPhotoList(prev => prev.filter((_, i) => i !== index));
     };
 
     const handleToggleExistingPhoto = (url: string) => {
+        // Wrapper para manter compatibilidade se chamado diretamente
+        // Mas na nova UI usamos removePhoto
         setFotosAExcluir(prev => {
-            if (prev.includes(url)) {
-                return prev.filter(u => u !== url); 
-            } else {
-                return [...prev, url]; 
-            }
+            if (prev.includes(url)) return prev.filter(u => u !== url); 
+            return [...prev, url]; 
         });
     };
     // --- FIM Handlers de Foto ---
@@ -728,7 +839,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         // Consolidação de Valores Numéricos
         const numericFieldsToConsolidar: string[] = ['areaTotal', 'areaUtil', 'valorAluguel', 'valorCondominio', 'valorIPTU'];
         if (currentStep === 2) {
-             numericFieldsToConsolidar.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar'); // NOVO
+             numericFieldsToConsolidar.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar', 'areaTerreno'); 
         }
         
         numericFieldsToConsolidar.forEach(name => {
@@ -764,7 +875,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             let finalFormData: NovoImovelData & Partial<Pick<Imovel, 'latitude' | 'longitude'>> = { ...formData };
             
             // 1. CONSOLIDAÇÃO FINAL DE VALORES NUMÉRICOS
-            const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'andar'];
+            const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'areaTerreno', 'andar'];
             finalNumericFields.forEach(name => {
                 const value = localNumericInputs[name];
                 if (value !== undefined) {
@@ -819,7 +930,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 // Ao atualizar, o payload de update inclui as novas coordenadas (latitude/longitude)
                 const updatePayload = {
                     ...finalFormData, 
-                    fotos: initialData.fotos, // Mantém as fotos antigas
+                    fotos: initialData.fotos, // Mantém as fotos antigas por enquanto
                 } as Imovel; 
                 
                 result = await atualizarImovel(initialData.id, updatePayload);
@@ -829,25 +940,43 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             }
             
             // 4. Processa as fotos (excluir/upload)
-            let finalFotosUrls = result.fotos || [];
-
+            
             // A. Excluir fotos marcadas (se for edição)
             if (fotosAExcluir.length > 0 && isEditing) {
                 const deletePromises = fotosAExcluir.map(url => deleteFotoImovel(url));
                 await Promise.all(deletePromises);
-                
-                finalFotosUrls = finalFotosUrls.filter(url => !fotosAExcluir.includes(url));
             }
             
             // B. Upload de novas fotos
-            if (novasFotos.length > 0) {
-                 const uploadedUrls = await uploadImovelPhotos(novasFotos, result.smartId);
-                 finalFotosUrls = [...finalFotosUrls, ...uploadedUrls].slice(0, MAX_PHOTOS);
+            // Filtra da photoList quem é novo
+            const newFilesToUpload = photoList.filter(p => p.isNew).map(p => p.file!);
+            let uploadedUrls: string[] = [];
+            
+            if (newFilesToUpload.length > 0) {
+                 uploadedUrls = await uploadImovelPhotos(newFilesToUpload, result.smartId);
             }
 
-            // 5. Atualiza o documento Imóvel no Firestore com a lista FINAL de URLs
-            if (novasFotos.length > 0 || fotosAExcluir.length > 0) {
-                 await updateImovelFotos(result.id, finalFotosUrls);
+            // 5. Atualiza o documento Imóvel no Firestore com a lista FINAL de URLs NA ORDEM CERTA
+            // Reconstrói o array final de URLs baseando-se na ordem visual de photoList
+            let finalPhotoUrls: string[] = [];
+            let uploadIndex = 0;
+
+            photoList.forEach(item => {
+                if (item.isNew) {
+                    // Pega a URL do array de uploads recém feitos
+                    if (uploadedUrls[uploadIndex]) {
+                        finalPhotoUrls.push(uploadedUrls[uploadIndex]);
+                        uploadIndex++;
+                    }
+                } else if (item.url && !fotosAExcluir.includes(item.url)) {
+                    // Mantém a URL antiga
+                    finalPhotoUrls.push(item.url);
+                }
+            });
+
+            // Atualiza se houve mudanças
+            if (newFilesToUpload.length > 0 || fotosAExcluir.length > 0 || finalPhotoUrls.length !== initialData?.fotos?.length) {
+                 await updateImovelFotos(result.id, finalPhotoUrls);
             }
             
             router.push(`/imoveis/${result.smartId}`); // Redireciona usando o Smart ID
@@ -860,52 +989,37 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     };
     
-    
+    // NOVO: Componente Stepper Visual (Inserido conforme esboço)
     const ProgressIndicator = () => {
-        // ... (o componente ProgressIndicator completo, omitido por brevidade)
         const percentage = formSteps.length > 1 ? Math.round(((currentStep - 1) / (formSteps.length - 1)) * 100) : 100;
 
         return (
-            <div className="space-y-4 mb-8">
-                <div className="flex justify-between items-center relative">
-                    <div className="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 dark:bg-zinc-700 -z-10 transform -translate-y-1/2 mx-5">
-                         <div 
-                            className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out" 
-                            style={{ width: `${percentage}%` }}
-                        ></div>
-                    </div>
-                    
+            <div className="mb-10 px-2 animate-in fade-in slide-in-from-top-5">
+                <div className="flex justify-between relative mb-4">
                     {formSteps.map((step, index) => {
-                        const isCompleted = index + 1 < currentStep;
-                        const isActive = index + 1 === currentStep;
-
+                        const isActive = step.id <= currentStep;
                         return (
                             <div 
                                 key={step.id} 
                                 className={`flex flex-col items-center z-10 transition-transform duration-300 ${isActive ? 'scale-105' : 'scale-100'} w-1/4`}
                             >
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 shadow-lg ${
-                                    isCompleted ? 'bg-green-500' : 
-                                    isActive ? 'bg-rentou-primary dark:bg-blue-600 border-4 border-white dark:border-zinc-800' : 
-                                    'bg-gray-300 dark:bg-zinc-600'
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 shadow-lg border-4 ${
+                                    isActive ? 'bg-rentou-primary dark:bg-blue-600 border-white dark:border-zinc-800' : 'bg-gray-300 dark:bg-zinc-600 border-white dark:border-zinc-800'
                                 }`}>
-                                    {isCompleted ? <Icon icon={faCheckCircle} className="w-5 h-5" /> : step.id}
+                                    {step.id < currentStep ? <Icon icon={faCheckCircle} className="w-5 h-5" /> : step.id}
                                 </div>
-                                <span className={`text-xs mt-2 text-center max-w-full font-semibold transition-colors ${
-                                    isActive ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
-                                }`}>
+                                <span className={`text-[10px] uppercase tracking-wide mt-2 font-bold text-center ${isActive ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                     {step.name}
                                 </span>
                             </div>
                         );
                     })}
-                </div>
-                
-                <div className="w-full h-2 bg-gray-200 dark:bg-zinc-700 rounded-full relative mt-4">
-                     <div 
-                        className="h-full bg-rentou-primary dark:bg-blue-600 rounded-full transition-all duration-500 ease-out" 
-                        style={{ width: `${percentage}%` }}
-                    >
+                    {/* Linha de progresso fundo */}
+                    <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 dark:bg-zinc-700 -z-10 transform -translate-y-1/2 mx-5">
+                         <div 
+                            className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out" 
+                            style={{ width: `${percentage}%` }}
+                        ></div>
                     </div>
                 </div>
             </div>
@@ -940,7 +1054,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         switch (currentStep) {
             case 1:
                 return (
-                    <div className="space-y-6">
+                    <div className="space-y-6 animate-in fade-in">
                          <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">1. Classificação e Localização</h3>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1005,14 +1119,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                              {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
                         </div>
 
-                        {/* --- SEÇÃO ENDEREÇO DETALHADO (Mantida) --- */}
+                        {/* --- SEÇÃO ENDEREÇO DETALHADO (Mantida + Feedback Visual) --- */}
                         <div className='space-y-4 p-4 border rounded-lg border-gray-200 dark:border-zinc-700'>
                              <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center mb-3">
                                 <Icon icon={faHome} className="w-4 h-4 mr-2" /> Endereço Completo
                             </h4>
                             
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="md:col-span-1">
+                                <div className="md:col-span-1 relative">
                                     <label htmlFor="endereco.cep" className="block text-sm font-medium text-gray-700 dark:text-gray-300">CEP</label>
                                     <input
                                         id="endereco.cep"
@@ -1024,9 +1138,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         required
                                         placeholder="00000-000"
                                         maxLength={9}
-                                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
+                                        className={`mt-1 block w-full px-3 py-2 pr-10 border ${cepSuccess ? 'border-green-500 ring-1 ring-green-500' : 'border-gray-300'} dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary`}
                                         disabled={loading}
                                     />
+                                    {/* SPINNER E CHECK DE SUCESSO DO CEP */}
+                                    <div className="absolute right-3 top-9 flex items-center pointer-events-none">
+                                        {cepLoading && <Icon icon={faSpinner} spin className="text-blue-500" />}
+                                        {cepSuccess && <Icon icon={faCheckCircle} className="text-green-500" />}
+                                    </div>
                                 </div>
                                 <div className="md:col-span-3">
                                     <label htmlFor="endereco.logradouro" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Logradouro (Rua, Av.)</label>
@@ -1043,7 +1162,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 </div>
                             </div>
                             
-                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
                                 <div>
                                     <label htmlFor="endereco.numero" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Número</label>
                                     <input
@@ -1084,7 +1203,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-3 gap-4 mt-4">
                                 <div>
                                     <label htmlFor="endereco.cidade" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Cidade</label>
                                     <input
@@ -1126,12 +1245,15 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     />
                                 </div>
                             </div>
+                            {cepSuccess && <p className="text-xs text-green-600 font-medium flex items-center mt-2"><Icon icon={faCheckCircle} className="mr-1"/> Endereço localizado com sucesso.</p>}
                         </div>
                         {/* --- FIM: SEÇÃO ENDEREÇO DETALHADO --- */}
 
-                        {/* --- OPÇÕES DE CONDOMÍNIO (Mantidas) --- */}
+                        {/* --- OPÇÕES DE CONDOMÍNIO (MELHORADO COM SELECT E BOTÃO NOVO) --- */}
                          <div className='space-y-4 p-4 border border-blue-200 dark:border-blue-900/50 rounded-lg bg-blue-50 dark:bg-zinc-700/50'>
-                             <h4 className="text-lg font-semibold text-rentou-primary dark:text-blue-400 mb-3">Informações de Condomínio</h4>
+                             <h4 className="text-lg font-semibold text-rentou-primary dark:text-blue-400 mb-3 flex items-center">
+                                <Icon icon={faBuilding} className="mr-2"/> Informações de Condomínio
+                             </h4>
                              <CheckboxInput 
                                 label="O imóvel está localizado em Condomínio/Edifício?" 
                                 name="condominio.possuiCondominio" 
@@ -1140,9 +1262,40 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             />
                             
                             {formData.condominio?.possuiCondominio && (
-                                <div className="space-y-4 pt-2">
+                                <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2">
+                                    {/* BUSCA INTELIGENTE DE CONDOMÍNIO */}
+                                    <div className="bg-white dark:bg-zinc-800 p-3 rounded border border-gray-200">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Selecionar Condomínio Cadastrado</label>
+                                        <div className="flex gap-2">
+                                            <select 
+                                                className="flex-1 p-2 border rounded-md text-sm"
+                                                onChange={(e) => {
+                                                    const selectedId = e.target.value;
+                                                    if(selectedId === 'new') {
+                                                        alert("Funcionalidade: Abrir modal de cadastro completo de condomínio (com fotos e infra).");
+                                                        return;
+                                                    }
+                                                    const condo = MOCK_CONDOMINIOS.find(c => c.id === selectedId);
+                                                    if(condo) {
+                                                        setFormData(prev => ({
+                                                            ...prev, 
+                                                            condominio: { ...prev.condominio, nomeCondominio: condo.nome, condominioCadastradoId: condo.id }
+                                                        }));
+                                                    }
+                                                }}
+                                            >
+                                                <option value="">Selecione um condomínio...</option>
+                                                {MOCK_CONDOMINIOS.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                                <option value="new">+ Cadastrar Novo Condomínio</option>
+                                            </select>
+                                            <button type="button" className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold uppercase shadow-sm" onClick={() => alert("Abrir modal de cadastro de condomínio")}>
+                                                Novo
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div>
-                                        <label htmlFor="condominio.nomeCondominio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Condomínio/Edifício</label>
+                                        <label htmlFor="condominio.nomeCondominio" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Condomínio/Edifício (Manual)</label>
                                         <input
                                             id="condominio.nomeCondominio"
                                             name="condominio.nomeCondominio"
@@ -1184,62 +1337,118 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 placeholder="Ex: Apartamento de Luxo (Vista para o Mar)"
                                 value={formData.titulo}
                                 onChange={handleChange}
+                                maxLength={100}
                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
                             />
+                            <div className="flex justify-between mt-1">
+                                <p className="text-xs text-gray-500">Recomendado: 40-60 caracteres.</p>
+                                <p className={`text-xs ${formData.titulo.length > 60 ? 'text-green-600' : 'text-gray-500'}`}>{formData.titulo.length}/100</p>
+                            </div>
                         </div>
                     </div>
                 );
             case 2:
                 return (
-                    <div className="space-y-6">
+                    <div className="space-y-6 animate-in fade-in">
                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Cômodos</h3>
                         
-                        {/* Linha: Contagens de Quartos/Banheiros (ATUALIZADO) */}
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-                             {/* Quartos */}
-                             <div>
-                                {renderNumericInput('quartos', 'Quartos (Total)', formData.quartos, '1')}
-                            </div>
-                            {/* Suítes (NOVO) */}
-                            <div>
-                                {renderNumericInput('suites', 'Suítes', formData.suites, '0')}
-                            </div>
-                            {/* Banheiros (NOVO) */}
-                            <div>
-                                {renderNumericInput('banheiros', 'Banheiros (Social)', formData.banheiros, '1')}
-                            </div>
-                            {/* Lavabos (NOVO) */}
-                            <div>
-                                {renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0')}
-                            </div>
-                             {/* Banheiros de Serviço (NOVO) */}
-                            <div>
-                                {renderNumericInput('banheirosServico', 'Banheiro de Serviço', formData.banheirosServico, '0')}
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                            {/* Vagas Garagem */}
-                            <div>
-                                {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0')}
-                            </div>
-                            {/* Andar (Condicional) */}
-                            {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') ? (
-                                <div>
-                                    {renderNumericInput('andar', 'Andar', formData.andar || 0, 'Ex: 5')}
+                        {/* LÓGICA RURAL VS URBANA */}
+                        {formData.categoriaPrincipal === 'Rural' ? (
+                            <div className="p-4 border-l-4 border-green-600 bg-green-50 dark:bg-green-900/20 rounded-r-lg mb-6 animate-in slide-in-from-left-2">
+                                <h4 className="font-bold text-green-800 dark:text-green-300 flex items-center mb-4 text-lg">
+                                    <Icon icon={faTractor} className="mr-2"/> Estrutura da Propriedade Rural
+                                </h4>
+                                
+                                <div className="grid grid-cols-2 gap-6 mb-6">
+                                    <div>
+                                        {renderNumericInput('areaTotal', 'Área Total (Hectares)', formData.areaTotal, 'Ex: 45.5')}
+                                    </div>
+                                    <div className="flex items-end pb-2">
+                                         <CheckboxInput label="Possui Casa Sede?" name="possuiCasaSede" checked={false} onChange={() => {}} description="Marque se houver residência principal." />
+                                    </div>
                                 </div>
-                            ) : (
-                                <div className='hidden md:block'></div>
-                            )}
-                            {/* Área Total */}
-                             <div>
-                                {renderNumericInput('areaTotal', 'Área Total (m²)', formData.areaTotal, 'Ex: 120.5')}
+
+                                <label className="block text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">Benfeitorias e Estruturas Rurais</label>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-white dark:bg-zinc-800 rounded border border-gray-200">
+                                    {(BENFEITORIAS_RURAIS || []).map(item => (
+                                        <label key={item} className="flex items-center space-x-2 text-sm cursor-pointer p-1 hover:bg-gray-50 rounded">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={formData.caracteristicas.includes(item)} 
+                                                onChange={() => handleCaracteristicaChange(item)} 
+                                                className="rounded text-green-600 border-gray-300 focus:ring-green-500" 
+                                            />
+                                            <span className="text-gray-700 dark:text-gray-300">{item}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
-                             {/* Área Útil */}
-                             <div>
-                                {renderNumericInput('areaUtil', 'Área Útil (m²)', formData.areaUtil, 'Ex: 80.0')}
-                            </div>
-                        </div>
+                        ) : (
+                            /* ESTRUTURA URBANA PADRÃO */
+                            <>
+                                {/* Linha: Contagens de Quartos/Banheiros (ATUALIZADO) */}
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+                                     {/* Quartos */}
+                                     <div>
+                                        {renderNumericInput('quartos', 'Quartos (Total)', formData.quartos, '1')}
+                                    </div>
+                                    {/* Suítes (NOVO) */}
+                                    <div>
+                                        {renderNumericInput('suites', 'Suítes', formData.suites, '0')}
+                                    </div>
+                                    {/* Banheiros (NOVO) */}
+                                    <div>
+                                        {renderNumericInput('banheiros', 'Banheiros (Social)', formData.banheiros, '1')}
+                                    </div>
+                                    {/* Lavabos (NOVO) */}
+                                    <div>
+                                        {renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0')}
+                                    </div>
+                                     {/* Banheiros de Serviço (NOVO) */}
+                                    <div>
+                                        {renderNumericInput('banheirosServico', 'Banheiro de Serviço', formData.banheirosServico, '0')}
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                                    {/* Vagas Garagem */}
+                                    <div>
+                                        {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0')}
+                                    </div>
+                                    {/* Andar (Condicional) */}
+                                    {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') ? (
+                                        <div>
+                                            {renderNumericInput('andar', 'Andar', formData.andar || 0, 'Ex: 5')}
+                                        </div>
+                                    ) : (
+                                        <div className='hidden md:block'></div>
+                                    )}
+                                    {/* Área Total */}
+                                     <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                                            Área Total (m²) <Tooltip text="Área construída + áreas comuns proporcionais."/>
+                                        </label>
+                                        <input id="areaTotal" name="areaTotal" type="text" value={localNumericInputs['areaTotal']} onChange={handleChange} onBlur={handleBlur} className="mt-1 w-full px-3 py-2 border rounded-md" />
+                                    </div>
+                                     {/* Área Útil */}
+                                     <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                                            Área Útil (m²) <Tooltip text="Área interna privativa (vassourável)."/>
+                                        </label>
+                                        <input id="areaUtil" name="areaUtil" type="text" value={localNumericInputs['areaUtil']} onChange={handleChange} onBlur={handleBlur} className="mt-1 w-full px-3 py-2 border rounded-md" />
+                                    </div>
+                                </div>
+                                {/* Área Terreno (Novo) */}
+                                <div className="grid grid-cols-4 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                                            Área Terreno (m²) <Tooltip text="Tamanho total do lote."/>
+                                        </label>
+                                        <input id="areaTerreno" name="areaTerreno" type="text" value={localNumericInputs['areaTerreno']} onChange={handleChange} onBlur={handleBlur} className="mt-1 w-full px-3 py-2 border rounded-md" />
+                                    </div>
+                                </div>
+                            </>
+                        )}
                         
                         {/* --- Piscina Privativa (NOVO) --- */}
                         <div className="space-y-4 p-4 border rounded-lg border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-zinc-700/50">
@@ -1253,7 +1462,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 onChange={handleChange} 
                             />
                             {formData.piscinaPrivativa.possuiPiscina && (
-                                <div className="grid grid-cols-2 gap-4 mt-2">
+                                <div className="grid grid-cols-2 gap-4 mt-2 animate-in fade-in">
                                      <div>
                                         <label htmlFor="piscinaPrivativa.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Revestimento</label>
                                         <select id="piscinaPrivativa.tipo" name="piscinaPrivativa.tipo" value={formData.piscinaPrivativa.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
@@ -1307,7 +1516,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 {formData.salas.length === 0 && formData.cozinhas.length > 0 && (
                                      <button type="button" onClick={addRoom.bind(null, 'salas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
                                         <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Primeira Sala
-                                    </button>
+                                     </button>
                                 )}
                                 {formData.salas.map((item, index) => (
                                     <SalaGroup 
@@ -1327,7 +1536,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 {formData.varandas.length === 0 && formData.salas.length > 0 && (
                                      <button type="button" onClick={addRoom.bind(null, 'varandas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
                                         <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Varanda/Terraço
-                                    </button>
+                                     </button>
                                 )}
                                 {formData.varandas.map((item, index) => (
                                     <VarandaGroup 
@@ -1376,7 +1585,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             case 3:
                  // ... (Conteúdo da Etapa 3 - Valores e Responsabilidade - permanece o mesmo)
                 return (
-                    <div className="space-y-6">
+                    <div className="space-y-6 animate-in fade-in">
                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Valores e Responsabilidade</h3>
                         
                         {/* Linha: Valor Aluguel e Status */}
@@ -1384,7 +1593,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             {/* Valor Aluguel */}
                              <div>
                                 <label htmlFor="valorAluguel" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Valor do Aluguel (R$)</label>
-                                <input id="valorAluguel" name="valorAluguel" type="text" required value={localNumericInputs['valorAluguel'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="3500.00" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary" />
+                                <input id="valorAluguel" name="valorAluguel" type="text" required value={localNumericInputs['valorAluguel'] || ''} onChange={handleChange} onBlur={handleBlur} placeholder="3500.00" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary font-bold text-lg" />
                             </div>
                             
                             {/* Status */}
@@ -1454,6 +1663,26 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     />
                                 </div>
                             </div>
+
+                            {/* SEGUROS (NOVO) */}
+                            <div className="p-4 border border-blue-200 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                <h4 className="font-bold flex items-center text-blue-800 dark:text-blue-300">
+                                    <Icon icon={faShieldAlt} className="mr-2"/> Seguros (Obrigatórios e Opcionais)
+                                </h4>
+                                <div className="space-y-3 mt-3">
+                                    <div className="flex items-center gap-3 bg-white dark:bg-zinc-800 p-3 rounded border border-gray-200 dark:border-zinc-600 shadow-sm">
+                                        <div className="flex-1">
+                                            <span className="block text-sm font-bold text-gray-800 dark:text-white">Seguro Incêndio</span>
+                                            <span className="text-xs text-gray-500">Obrigatório por lei (Lei do Inquilinato).</span>
+                                        </div>
+                                        <input type="number" placeholder="R$ Valor" className="w-24 p-1 border rounded text-sm dark:bg-zinc-700 dark:border-zinc-600" />
+                                        <select className="text-sm p-1 border rounded bg-gray-50 dark:bg-zinc-700 dark:border-zinc-600">
+                                            <option value="INQUILINO">Pago pelo Inquilino</option>
+                                            <option value="PROPRIETARIO">Pago pelo Proprietário</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         {/* --- FIM: DETALHES DE RESPONSABILIDADE FINANCEIRA --- */}
                         
@@ -1467,15 +1696,8 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </div>
                 );
             case 4:
-                // --- INÍCIO DA CORREÇÃO DE ERRO DE TIPO ---
-                const existingPhotos = initialData?.fotos || []; // CORREÇÃO DE TIPO: Garante que é um array
-                 const currentValidPhotosCount = existingPhotos.filter(url => !fotosAExcluir.includes(url)).length;
-                 const totalPhotosCount = currentValidPhotosCount + novasFotos.length;
-                 const availableSlots = MAX_PHOTOS - totalPhotosCount;
-                // --- FIM DA CORREÇÃO DE ERRO DE TIPO ---
-                
                 return (
-                    <div className="space-y-6">
+                    <div className="space-y-6 animate-in fade-in">
                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">4. Mídia e Fotos do Anúncio</h3>
                         
                         {/* CAMPO DESCRIÇÃO LONGA */}
@@ -1495,89 +1717,53 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
                         {/* SEÇÃO DE UPLOAD E GERENCIAMENTO DE FOTOS */}
                         <div className='space-y-4 p-4 border rounded-lg border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800'>
-                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center">
-                                <Icon icon={faImage} className="w-4 h-4 mr-2" /> Galeria de Fotos (Máx. {MAX_PHOTOS})
-                            </h4>
-                             <p className={`text-sm font-medium ${availableSlots === 0 ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}`}>
-                                Slots disponíveis: {availableSlots}. Fotos totais: {totalPhotosCount}
-                            </p>
-
-                            {/* UPLOAD DE NOVAS FOTOS */}
-                            {availableSlots > 0 && (
-                                <div className="mt-1">
-                                    {/* O INPUT FILE É CUSTUMIZADO POR UM LABEL */}
-                                    <label htmlFor="fotos-upload" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-rentou-primary hover:bg-blue-700 transition-colors cursor-pointer">
-                                        <Icon icon={faImage} className="w-4 h-4 mr-2" />
-                                        Selecionar Novas Fotos
-                                    </label>
-                                    <input
-                                        type="file"
-                                        id="fotos-upload"
-                                        accept="image/*"
-                                        multiple
-                                        onChange={handleFileChange}
-                                        className="sr-only" // ESCONDE O INPUT
-                                        disabled={loading || availableSlots <= 0}
-                                    />
+                            <div className="flex justify-between items-center mb-4">
+                                <div>
+                                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center">
+                                        <Icon icon={faImage} className="w-4 h-4 mr-2" /> Galeria de Fotos (Máx. {MAX_PHOTOS})
+                                    </h4>
+                                    <p className={`text-sm font-medium ${getAvailableSlots() === 0 ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}`}>
+                                        Slots disponíveis: {getAvailableSlots()}. Arraste ou use as setas para ordenar.
+                                    </p>
                                 </div>
-                            )}
+                                <label className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-rentou-primary hover:bg-blue-700 transition-colors cursor-pointer">
+                                    <Icon icon={faImage} className="w-4 h-4 mr-2" />
+                                    + Adicionar Fotos
+                                    <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" disabled={loading || getAvailableSlots() <= 0}/>
+                                </label>
+                            </div>
                             
-                            {/* GALERIA DE NOVAS FOTOS (PREVIEW) */}
-                            {novasFotos.length > 0 && (
-                                 <div className='space-y-2 pt-2'>
-                                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Novas para Upload ({novasFotos.length}):</p>
-                                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                                        {novasFotos.map((file, index) => (
-                                            <div key={file.name + index} className="relative group w-full h-24 bg-blue-100 rounded-lg overflow-hidden border-2 border-dashed border-blue-400 flex items-center justify-center">
-                                                <p className="text-center text-xs text-blue-800 p-1 truncate max-w-full">{file.name}</p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleRemoveNewPhoto(index)}
-                                                    className="absolute top-0 right-0 m-1 p-1 bg-red-600 text-white rounded-full hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    title="Remover nova foto"
-                                                >
-                                                    <Icon icon={faTrash} className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* GALERIA DE FOTOS EXISTENTES */}
-                            {existingPhotos.length > 0 && ( // CORREÇÃO AQUI: Usa a variável segura
-                                <div className='space-y-2 pt-2 border-t border-gray-200 dark:border-zinc-700'>
-                                     <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Fotos Atuais ({existingPhotos.length}):</p>
-                                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                                        {existingPhotos.map((url, index) => { // CORREÇÃO AQUI: Usa a variável segura
-                                            const isMarkedForDeletion = fotosAExcluir.includes(url);
-                                            return (
-                                                <div key={url} className="relative group w-full h-24 bg-gray-100 rounded-lg overflow-hidden border">
-                                                    <img 
-                                                        src={url} 
-                                                        alt={`Foto ${index + 1} do Imóvel`} 
-                                                        className={`w-full h-full object-cover transition-opacity ${isMarkedForDeletion ? 'opacity-30' : ''}`}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleToggleExistingPhoto(url)}
-                                                        className={`absolute inset-0 flex items-center justify-center text-white text-xs font-bold transition-all duration-200 ${
-                                                            isMarkedForDeletion 
-                                                            ? 'bg-red-600/80 opacity-100' 
-                                                            : 'bg-black/40 opacity-0 group-hover:opacity-100'
-                                                        }`}
-                                                        title={isMarkedForDeletion ? 'Manter foto' : 'Marcar para Excluir'}
-                                                    >
-                                                        <Icon icon={faTrash} className="w-4 h-4 mr-1" />
-                                                        {isMarkedForDeletion ? 'REMOVER MARCAÇÃO' : 'EXCLUIR'}
-                                                    </button>
-                                                    {isMarkedForDeletion && (
-                                                         <span className="absolute top-0 left-0 bg-red-600 text-white text-xs px-2 py-0.5 rounded-br-lg">Excluir</span>
+                            {/* GALERIA DE FOTOS (COM ORDENAÇÃO) */}
+                            {photoList.length > 0 ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                    {photoList.map((photo, index) => (
+                                        <div key={index} className={`relative group aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden border-2 shadow-sm transition-all ${index === 0 ? 'border-yellow-400 ring-2 ring-yellow-400/30' : 'border-gray-200 hover:border-blue-500'}`}>
+                                            <img src={photo.url} className="w-full h-full object-cover" alt="Imóvel" />
+                                            
+                                            {/* Controls Overlay */}
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
+                                                <div className="flex justify-between w-full">
+                                                    {index === 0 ? (
+                                                        <span className="text-yellow-400 text-xs font-bold bg-black/80 px-2 py-1 rounded flex items-center"><Icon icon={faStar} className="mr-1"/> Capa</span>
+                                                    ) : (
+                                                        <button type="button" onClick={() => movePhoto(index, -index)} className="text-gray-300 hover:text-yellow-400 text-xs font-medium bg-black/50 px-2 rounded hover:bg-black/80" title="Definir como Capa">Definir Capa</button>
                                                     )}
+                                                    <button type="button" onClick={() => removePhoto(index)} className="text-white hover:text-red-400 bg-red-600/80 p-1.5 rounded-full hover:bg-red-700 transition-colors"><Icon icon={faTrash} className="w-3 h-3"/></button>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                                
+                                                <div className="flex justify-center gap-4 text-white pb-1">
+                                                    <button type="button" disabled={index === 0} onClick={() => movePhoto(index, -1)} className="p-1.5 hover:bg-white/20 rounded disabled:opacity-30 disabled:cursor-not-allowed"><Icon icon={faArrowLeft} /></button>
+                                                    <button type="button" disabled={index === photoList.length - 1} onClick={() => movePhoto(index, 1)} className="p-1.5 hover:bg-white/20 rounded disabled:opacity-30 disabled:cursor-not-allowed"><Icon icon={faArrowRight} /></button>
+                                                </div>
+                                            </div>
+                                            {index === 0 && <div className="absolute bottom-0 w-full bg-gradient-to-t from-black/80 to-transparent text-white text-xs text-center py-2 font-bold">Foto Principal</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="col-span-full h-40 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-400 bg-gray-50 dark:bg-zinc-900/50">
+                                    <Icon icon={faImage} className="w-10 h-10 mb-2 opacity-50" />
+                                    <span className="text-sm">Nenhuma foto adicionada ainda.</span>
                                 </div>
                             )}
                         </div>
@@ -1608,14 +1794,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </p>
                 )}
                 
-                {/* <ProgressIndicator /> */}
+                <ProgressIndicator />
                 {renderStepContent()}
                 
                 {/* --- Navigation Buttons --- */}
-                <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center">
+                <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center mt-6">
                     
                     {/* Botão Voltar */}
-                    {currentStep > 1 && (
+                    {currentStep > 1 ? (
                         <button
                             type="button"
                             onClick={() => setCurrentStep(currentStep - 1)}
@@ -1624,7 +1810,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                              <Icon icon={faChevronLeft} className="w-3 h-3 mr-2" />
                             Anterior
                         </button>
-                    )}
+                    ) : <div />}
                     
                     <div className={currentStep === 1 ? 'flex-1' : 'flex-grow'}></div> {/* Espaçador */}
 
@@ -1633,7 +1819,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         type={currentStep === formSteps.length ? 'submit' : 'button'}
                         onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
                         disabled={loading}
-                        className={`w-full flex justify-center py-2 px-6 border border-transparent rounded-md shadow-lg text-sm font-medium text-white transition-colors cursor-pointer ${
+                        className={`w-full md:w-auto flex justify-center py-3 px-8 border border-transparent rounded-md shadow-lg text-sm font-bold text-white transition-colors cursor-pointer ${
                             loading 
                                 ? 'opacity-50 cursor-not-allowed bg-gray-400' 
                                 : 'bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600'
