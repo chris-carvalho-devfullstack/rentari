@@ -76,17 +76,33 @@ export default function Sidebar() {
 
   return (
     // Sidebar: w-64, bg-white no modo claro (padrão)
-    <div className="fixed top-0 left-0 h-screen w-64 bg-white dark:bg-zinc-800 shadow-xl z-20 flex flex-col border-r border-gray-200 dark:border-zinc-700">
-      {/* Logomarca */}
-      <div className="p-4 h-16 flex items-center justify-center border-b border-gray-200 dark:border-zinc-700">
-        <Link href="/dashboard" className="w-full h-full flex items-center justify-center relative">
+    <div className="fixed top-0 left-0 h-screen w-64 bg-white dark:bg-zinc-800 shadow-xl z-20 flex flex-col border-r border-gray-200 dark:border-zinc-700 transition-colors duration-300">
+      
+      {/* Logomarca - ATUALIZADO PARA MODO DARK/LIGHT COM MENOS PADDING */}
+      {/* Alterado de p-4 para p-2 para o logo ocupar mais espaço */}
+      <div className="h-16 flex items-center justify-center border-b border-gray-200 dark:border-zinc-700 p-2">
+        <Link href="/dashboard" className="relative w-full h-full">
+          
+          {/* Logo Modo Claro (some no dark) */}
           <Image
             src="/media/rentou-logo.png" 
             alt="Rentou Logomarca"
             fill 
             priority 
-            className="object-contain" 
+            className="object-contain dark:hidden" 
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
           />
+          
+          {/* Logo Modo Escuro (aparece no dark) */}
+          <Image
+            src="/media/rentou-logo-dark-mode.png" 
+            alt="Rentou Logomarca Dark"
+            fill 
+            priority 
+            className="object-contain hidden dark:block" 
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+          />
+
         </Link>
       </div>
 

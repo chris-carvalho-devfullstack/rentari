@@ -1,4 +1,3 @@
-// src/components/auth/SignupForm.tsx
 'use client';
 
 import { useState } from 'react';
@@ -7,7 +6,7 @@ import Link from 'next/link';
 import { createUserWithEmailAndPassword, updateProfile, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
-import { updateUserInFirestore } from '@/services/UserService'; // Importe direto do serviço
+import { updateUserInFirestore } from '@/services/UserService';
 import { Icon } from '@/components/ui/Icon';
 import { faUser, faEnvelope, faLock, faEye, faEyeSlash, faBuilding, faHome, faSync } from '@fortawesome/free-solid-svg-icons';
 import { PerfilUsuario } from '@/types/usuario';
@@ -29,7 +28,6 @@ export default function SignupForm() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
-  // NOVO: Estado para o perfil selecionado
   const [perfil, setPerfil] = useState<PerfilUsuario>('INQUILINO'); 
   
   const [loading, setLoading] = useState(false);
@@ -40,6 +38,25 @@ export default function SignupForm() {
 
   const handleTogglePassword = () => setShowPassword(prev => !prev);
 
+  // Função auxiliar para estilos dos botões de perfil
+  const getButtonClass = (tipo: PerfilUsuario) => {
+    const isSelected = perfil === tipo;
+    
+    if (isSelected) {
+      return "flex items-center p-3 text-left border rounded-lg text-sm transition-all " +
+             // Estilos CLAROS (Light Mode)
+             "border-rentou-primary bg-blue-50 text-rentou-primary ring-1 ring-rentou-primary " +
+             // Estilos ESCUROS (Dark Mode) - Melhorias aplicadas
+             "dark:bg-blue-600/20 dark:border-blue-400 dark:text-white dark:ring-blue-400";
+    }
+
+    return "flex items-center p-3 text-left border rounded-lg text-sm transition-all " +
+           // Estilos Padrão (Não selecionado)
+           "border-gray-300 text-gray-700 hover:bg-gray-50 " +
+           // Estilos Dark (Não selecionado)
+           "dark:border-zinc-600 dark:text-gray-300 dark:hover:bg-zinc-700 dark:hover:border-zinc-500";
+  };
+
   const handleSuccess = async (user: any, displayName?: string) => {
     const date = new Date();
     date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
@@ -48,7 +65,7 @@ export default function SignupForm() {
     // 1. Garante que o usuário exista no Firestore
     const userData = await fetchUserData(user.uid, user.email || '', displayName || user.displayName || 'Novo Usuário');
     
-    // 2. Atualiza o PERFIL escolhido (caso o fetchUserData tenha criado com o padrão)
+    // 2. Atualiza o PERFIL escolhido
     if (userData.perfil !== perfil) {
         await updateUserInFirestore(user.uid, { perfil });
         userData.perfil = perfil;
@@ -58,9 +75,9 @@ export default function SignupForm() {
 
     // 3. Redirecionamento Baseado no Perfil
     if (perfil === 'INQUILINO') {
-        router.push('/meu-espaco'); // Área do Inquilino
+        router.push('/meu-espaco');
     } else {
-        router.push('/dashboard'); // Dashboard do Proprietário
+        router.push('/dashboard');
     }
   };
 
@@ -109,7 +126,7 @@ export default function SignupForm() {
   };
 
   return (
-    <div className="w-full bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700">
+    <div className="w-full bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700 transition-colors duration-300">
       <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 text-center mb-2">
         Crie sua conta
       </h2>
@@ -148,30 +165,60 @@ export default function SignupForm() {
         {/* SELEÇÃO DE PERFIL */}
         <div className="space-y-2 pb-2">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">O que você busca na Rentou?</label>
-            <div className="grid grid-cols-1 gap-2">
+            <div className="grid grid-cols-1 gap-3">
+                
+                {/* PROPRIETÁRIO */}
                 <button
                     type="button"
                     onClick={() => setPerfil('PROPRIETARIO')}
-                    className={`flex items-center p-3 text-left border rounded-lg text-sm transition-all ${perfil === 'PROPRIETARIO' ? 'border-rentou-primary bg-blue-50 dark:bg-blue-900/30 text-rentou-primary ring-1 ring-rentou-primary' : 'border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 dark:text-gray-300'}`}
+                    className={getButtonClass('PROPRIETARIO')}
                 >
-                    <Icon icon={faBuilding} className="w-4 h-4 mr-3" />
-                    <span>Sou Proprietário <span className="text-xs opacity-75 block font-normal">Quero anunciar e gerir imóveis</span></span>
+                    <Icon 
+                        icon={faBuilding} 
+                        className={`w-5 h-5 mr-3 ${perfil === 'PROPRIETARIO' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} 
+                    />
+                    <div>
+                        <span className="block font-bold">Sou Proprietário</span>
+                        <span className={`text-xs block font-normal mt-0.5 ${perfil === 'PROPRIETARIO' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                            Quero anunciar e gerir imóveis
+                        </span>
+                    </div>
                 </button>
+
+                {/* INQUILINO */}
                 <button
                     type="button"
                     onClick={() => setPerfil('INQUILINO')}
-                    className={`flex items-center p-3 text-left border rounded-lg text-sm transition-all ${perfil === 'INQUILINO' ? 'border-rentou-primary bg-blue-50 dark:bg-blue-900/30 text-rentou-primary ring-1 ring-rentou-primary' : 'border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 dark:text-gray-300'}`}
+                    className={getButtonClass('INQUILINO')}
                 >
-                    <Icon icon={faHome} className="w-4 h-4 mr-3" />
-                    <span>Sou Inquilino <span className="text-xs opacity-75 block font-normal">Quero buscar um imóvel para alugar</span></span>
+                    <Icon 
+                        icon={faHome} 
+                        className={`w-5 h-5 mr-3 ${perfil === 'INQUILINO' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} 
+                    />
+                    <div>
+                        <span className="block font-bold">Sou Inquilino</span>
+                        <span className={`text-xs block font-normal mt-0.5 ${perfil === 'INQUILINO' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                            Quero buscar um imóvel para alugar
+                        </span>
+                    </div>
                 </button>
+
+                {/* AMBOS */}
                 <button
                     type="button"
                     onClick={() => setPerfil('AMBOS')}
-                    className={`flex items-center p-3 text-left border rounded-lg text-sm transition-all ${perfil === 'AMBOS' ? 'border-rentou-primary bg-blue-50 dark:bg-blue-900/30 text-rentou-primary ring-1 ring-rentou-primary' : 'border-gray-300 dark:border-zinc-600 hover:bg-gray-50 dark:hover:bg-zinc-700 dark:text-gray-300'}`}
+                    className={getButtonClass('AMBOS')}
                 >
-                    <Icon icon={faSync} className="w-4 h-4 mr-3" />
-                    <span>Ambos <span className="text-xs opacity-75 block font-normal">Investidor e morador</span></span>
+                    <Icon 
+                        icon={faSync} 
+                        className={`w-5 h-5 mr-3 ${perfil === 'AMBOS' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} 
+                    />
+                    <div>
+                        <span className="block font-bold">Ambos</span>
+                        <span className={`text-xs block font-normal mt-0.5 ${perfil === 'AMBOS' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                             Investidor e morador
+                        </span>
+                    </div>
                 </button>
             </div>
         </div>
@@ -179,7 +226,7 @@ export default function SignupForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome Completo</label>
           <div className="relative mt-1">
-            <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <input type="text" required value={nome} onChange={(e) => setNome(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors" />
             <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faUser} className="h-4 w-4" /></span>
           </div>
         </div>
@@ -187,7 +234,7 @@ export default function SignupForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
           <div className="relative mt-1">
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors" />
             <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faEnvelope} className="h-4 w-4" /></span>
           </div>
         </div>
@@ -195,7 +242,7 @@ export default function SignupForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Senha</label>
           <div className="relative mt-1">
-            <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors" />
             <span className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={handleTogglePassword}><Icon icon={showPassword ? faEye : faEyeSlash} className="h-4 w-4" /></span>
           </div>
         </div>
@@ -203,7 +250,7 @@ export default function SignupForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirmar Senha</label>
           <div className="relative mt-1">
-            <input type={showPassword ? 'text' : 'password'} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm" />
+            <input type={showPassword ? 'text' : 'password'} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors" />
             <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faLock} className="h-4 w-4" /></span>
           </div>
         </div>
@@ -214,7 +261,7 @@ export default function SignupForm() {
       </form>
       
       <div className="mt-6 text-center">
-         <p className="text-xs text-gray-500">Ao se cadastrar, você concorda com os <Link href="/terms" className="hover:underline text-rentou-primary">Termos de Serviço</Link>.</p>
+         <p className="text-xs text-gray-500 dark:text-gray-400">Ao se cadastrar, você concorda com os <Link href="/terms" className="hover:underline text-rentou-primary dark:text-blue-400">Termos de Serviço</Link>.</p>
       </div>
     </div>
   );
