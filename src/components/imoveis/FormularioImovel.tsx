@@ -21,7 +21,7 @@ import {
     faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, 
     faWater, faArrowLeft, faSpinner, faInfoCircle, faShieldAlt, 
     faArrowRight, faStar, faTractor, faWarehouse, faPaw, faDog, faCat, faCar, faSun, faFileContract,
-    faRoad, faHammer
+    faRoad, faHammer, faCloudUploadAlt, faGripVertical, faRulerCombined, faBed, faBath, faToilet, faLayerGroup, faCheck, faBolt, faWheelchair, faBoxOpen
 } from '@fortawesome/free-solid-svg-icons'; 
 
 interface FormularioImovelProps {
@@ -197,10 +197,10 @@ const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; o
             type="checkbox"
             checked={checked}
             onChange={onChange}
-            className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary focus:border-rentou-primary"
+            className="h-4 w-4 text-rentou-primary border-gray-300 rounded focus:ring-rentou-primary focus:border-rentou-primary cursor-pointer"
         />
         <div className="flex flex-col">
-            <label htmlFor={name} className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center cursor-pointer">
+            <label htmlFor={name} className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center cursor-pointer select-none">
                 {icon && <Icon icon={icon} className="mr-2 text-gray-500" />}
                 {label}
             </label>
@@ -231,23 +231,31 @@ const SelectResponsabilidade: React.FC<{ label: string, name: string, value: Res
 );
 
 const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => (
-    <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Comodidades/Atrativos</label>
+    <div className="bg-blue-50/30 dark:bg-zinc-800/30 p-4 rounded-lg border border-blue-100 dark:border-zinc-700">
+        {/* CORREÇÃO: Ícone adicionado e título realçado */}
+        <label className="text-xl font-bold text-rentou-primary dark:text-blue-400 mb-4 flex items-center border-b border-gray-200 dark:border-zinc-600 pb-2">
+            <Icon icon={faStar} className="w-5 h-5 mr-2 text-yellow-500" />
+            Comodidades e Atrativos
+        </label>
         <div className="flex flex-wrap gap-2">
-            {COMODIDADES_RESIDENCIAIS.map((feature: string) => (
-                <button
-                    key={feature}
-                    type="button" 
-                    onClick={() => onSelect(feature)}
-                    className={`py-2 px-4 text-sm font-medium rounded-full transition-all duration-150 border ${
-                        selected.includes(feature)
-                            ? 'bg-rentou-primary text-white border-rentou-primary shadow-md' 
-                            : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-zinc-800 dark:text-gray-300 dark:border-zinc-600 dark:hover:bg-zinc-700' 
-                    }`}
-                >
-                    {feature}
-                </button>
-            ))}
+            {COMODIDADES_RESIDENCIAIS.map((feature: string) => {
+                const isSelected = selected.includes(feature);
+                return (
+                    <button
+                        key={feature}
+                        type="button" 
+                        onClick={() => onSelect(feature)}
+                        className={`py-2 px-3 pl-4 pr-4 text-sm font-medium rounded-full transition-all duration-200 border flex items-center gap-2
+                            ${isSelected 
+                                ? 'bg-blue-50 border-rentou-primary text-rentou-primary shadow-sm dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300' 
+                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50 hover:border-gray-400 dark:bg-zinc-800 dark:text-gray-300 dark:border-zinc-600 dark:hover:bg-zinc-700'}
+                        `}
+                    >
+                        {isSelected && <Icon icon={faCheck} className="w-3 h-3" />}
+                        {feature}
+                    </button>
+                );
+            })}
         </div>
     </div>
 );
@@ -486,6 +494,9 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     
     const [cepLoading, setCepLoading] = useState(false);
     const [cepSuccess, setCepSuccess] = useState(false);
+
+    // Estado para Drag and Drop
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     const { initialFormData, initialLocalInputs } = useMemo(() => getInitialState(initialData), [initialData]);
 
@@ -741,6 +752,25 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         return MAX_PHOTOS - totalPhotos;
     }, [photoList]);
 
+    // --- FUNÇÕES DRAG AND DROP ---
+    const handleDragStart = (index: number) => {
+        setDraggedIndex(index);
+    };
+
+    const handleDragEnter = (index: number) => {
+        if (draggedIndex === null || draggedIndex === index) return;
+        const newPhotoList = [...photoList];
+        const draggedItem = newPhotoList[draggedIndex];
+        newPhotoList.splice(draggedIndex, 1);
+        newPhotoList.splice(index, 0, draggedItem);
+        setPhotoList(newPhotoList);
+        setDraggedIndex(index);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedIndex(null);
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         handlePhotoUpload(e);
     };
@@ -958,33 +988,39 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     };
     
+    // ATUALIZADO: Stepper "Sticky" com correção de sobreposição
     const ProgressIndicator = () => {
         const percentage = formSteps.length > 1 ? Math.round(((currentStep - 1) / (formSteps.length - 1)) * 100) : 100;
 
         return (
-            <div className="mb-10 px-2 animate-in fade-in slide-in-from-top-5">
-                <div className="flex justify-between relative mb-4">
-                    {formSteps.map((step, index) => {
+            // CORREÇÃO: top-24 (aprox 96px) para garantir que fique ABAIXO do menu, z-30 para não cobrir dropdowns
+            <div className="mb-10 pt-4 px-2 animate-in fade-in slide-in-from-top-5 sticky top-24 z-30 bg-white/95 backdrop-blur-sm border-b pb-4 dark:bg-zinc-900/90 dark:border-zinc-700 shadow-sm rounded-b-lg -mx-6 -mt-6 px-8">
+                <div className="flex justify-between relative mb-2 px-4">
+                    {formSteps.map((step) => {
                         const isActive = step.id <= currentStep;
+                        // Permite voltar clicando em etapas anteriores
+                        const isClickable = step.id < currentStep; 
                         return (
                             <div 
                                 key={step.id} 
-                                className={`flex flex-col items-center z-10 transition-transform duration-300 ${isActive ? 'scale-105' : 'scale-100'} w-1/4`}
+                                onClick={() => isClickable ? setCurrentStep(step.id) : null}
+                                className={`flex flex-col items-center z-10 transition-transform duration-300 w-1/5 ${isActive ? 'scale-105' : 'scale-100'} ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
                             >
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 shadow-lg border-4 ${
-                                    isActive ? 'bg-rentou-primary dark:bg-blue-600 border-white dark:border-zinc-800' : 'bg-gray-300 dark:bg-zinc-600 border-white dark:border-zinc-800'
+                                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 shadow-lg border-4 ${
+                                    isActive ? 'bg-rentou-primary dark:bg-blue-600 border-white dark:border-zinc-800 ring-2 ring-offset-2 ring-blue-100 dark:ring-offset-zinc-900 dark:ring-blue-900' : 'bg-gray-300 dark:bg-zinc-600 border-white dark:border-zinc-800'
                                 }`}>
-                                    {step.id < currentStep ? <Icon icon={faCheckCircle} className="w-5 h-5" /> : step.id}
+                                    {step.id < currentStep ? <Icon icon={faCheckCircle} className="w-4 h-4 md:w-5 md:h-5" /> : step.id}
                                 </div>
-                                <span className={`text-[10px] uppercase tracking-wide mt-2 font-bold text-center ${isActive ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                <span className={`text-[9px] md:text-[10px] uppercase tracking-wide mt-2 font-bold text-center ${isActive ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                     {step.name}
                                 </span>
                             </div>
                         );
                     })}
-                    <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 dark:bg-zinc-700 -z-10 transform -translate-y-1/2 mx-5">
+                    {/* Linha de progresso ajustada para não "vazar" */}
+                    <div className="absolute top-4 md:top-5 left-[10%] right-[10%] h-1 bg-gray-200 dark:bg-zinc-700 -z-10 transform -translate-y-1/2">
                          <div 
-                            className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out" 
+                            className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out rounded-full" 
                             style={{ width: `${percentage}%` }}
                         ></div>
                     </div>
@@ -993,31 +1029,38 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         );
     };
 
-    // ATUALIZADO: Suporte a 'info' (tooltip)
-    const renderNumericInput = (name: string, label: string, currentValue: number, placeholder?: string, info?: string) => {
+    // ATUALIZADO: Suporte a 'info' (tooltip) e 'icon'
+    const renderNumericInput = (name: string, label: string, currentValue: number, placeholder?: string, info?: string, icon?: any) => {
         const getDisplayValue = (name: string, currentValue: number) => {
             const localValue = localNumericInputs[name];
             return localValue !== undefined ? localValue : (currentValue === 0 ? '' : String(currentValue));
         };
         
         return (
-            <div>
+            <div className='relative'>
                 <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center mb-1">
                     {label}
                     {/* Tooltip de ajuda restaurada */}
                     {info && <Tooltip text={info} />}
                 </label>
-                <input
-                    id={name}
-                    name={name}
-                    type="text" 
-                    required
-                    value={getDisplayValue(name, currentValue)}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    placeholder={placeholder}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary"
-                />
+                <div className="relative rounded-md shadow-sm">
+                    {icon && (
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Icon icon={icon} className="text-gray-400 w-4 h-4" />
+                        </div>
+                    )}
+                    <input
+                        id={name}
+                        name={name}
+                        type="text" 
+                        required
+                        value={getDisplayValue(name, currentValue)}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        placeholder={placeholder}
+                        className={`block w-full py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary ${icon ? 'pl-10' : 'px-3'}`}
+                    />
+                </div>
             </div>
         );
     };
@@ -1322,10 +1365,16 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 
                                 <div className="grid grid-cols-2 gap-6 mb-6">
                                     <div>
-                                        {renderNumericInput('areaTotal', 'Área Total (Hectares)', formData.areaTotal, 'Ex: 45.5')}
+                                        {renderNumericInput('areaTotal', 'Área Total (Hectares)', formData.areaTotal, 'Ex: 45.5', undefined, faRulerCombined)}
                                     </div>
                                     <div className="flex items-end pb-2">
-                                         <CheckboxInput label="Possui Casa Sede?" name="possuiCasaSede" checked={false} onChange={() => {}} description="Marque se houver residência principal." />
+                                         <CheckboxInput 
+                                            label="Possui Casa Sede?" 
+                                            name="possuiCasaSede" 
+                                            checked={formData.possuiCasaSede || false} 
+                                            onChange={handleChange} 
+                                            description="Marque se houver residência principal." 
+                                        />
                                     </div>
                                 </div>
 
@@ -1347,82 +1396,80 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         ) : (
                             /* ESTRUTURA URBANA PADRÃO */
                             <>
-                                {/* Áreas Gerais (NOVO: Agrupamento de áreas para melhor visualização) */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-lg border border-gray-200 dark:border-zinc-700 mb-6">
-                                     {renderNumericInput('areaTotal', 'Área Total (m²)', formData.areaTotal, undefined, 'Área útil + áreas comuns (proporcional).')}
-                                     {renderNumericInput('areaUtil', 'Área Útil (m²)', formData.areaUtil, undefined, 'Área privativa do imóvel.')}
-                                     {renderNumericInput('areaTerreno', 'Área Terreno (m²)', formData.areaTerreno, undefined, 'Área total do lote.')}
-                                     {renderNumericInput('areaExternaPrivativa', 'Área Externa (m²)', formData.areaExternaPrivativa || 0)}
-                                     {renderNumericInput('areaQuintal', 'Quintal (m²)', formData.areaQuintal || 0)}
-                                </div>
-
-                                {/* Linha: Contagens de Quartos/Banheiros (ATUALIZADO) */}
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-                                     <div>{renderNumericInput('quartos', 'Quartos (Total)', formData.quartos, '1')}</div>
-                                     <div>{renderNumericInput('suites', 'Suítes', formData.suites, '0')}</div>
-                                     <div>{renderNumericInput('banheiros', 'Banheiros (Social)', formData.banheiros, '1')}</div>
-                                     <div>{renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0')}</div>
-                                     <div>{renderNumericInput('banheirosServico', 'Banheiro de Serviço', formData.banheirosServico, '0')}</div>
-                                </div>
-
-                                {/* Metragens Detalhadas (NOVO) */}
-                                <div className="grid grid-cols-3 gap-6 bg-blue-50/50 dark:bg-zinc-700/30 p-3 rounded mt-4 border border-blue-100 dark:border-zinc-700">
-                                    {renderNumericInput('areaMediaQuartos', 'Média m² Quartos', formData.areaMediaQuartos || 0)}
-                                    {renderNumericInput('areaMediaSuites', 'Média m² Suítes', formData.areaMediaSuites || 0)}
-                                    {renderNumericInput('areaTotalBanheiros', 'Total m² Banheiros', formData.areaTotalBanheiros || 0)}
-                                </div>
-
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-4 border-t border-gray-100 dark:border-zinc-700 mt-4">
-                                    <div>
-                                        {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0')}
+                                {/* CARD: Dimensões e Áreas */}
+                                <div className="bg-white dark:bg-zinc-800 p-5 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm">
+                                    <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center border-b pb-2">
+                                        <Icon icon={faRulerCombined} className="mr-2 text-blue-500"/> Dimensões e Áreas (m²)
+                                    </h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+                                         {renderNumericInput('areaTotal', 'Área Total', formData.areaTotal, '0', 'Área construída + comum.', faRulerCombined)}
+                                         {renderNumericInput('areaUtil', 'Área Útil', formData.areaUtil, '0', 'Área privativa do imóvel.', faRulerCombined)}
+                                         {renderNumericInput('areaTerreno', 'Área Terreno', formData.areaTerreno, '0', 'Área total do lote.', faRulerCombined)}
+                                         {renderNumericInput('areaExternaPrivativa', 'Área Externa', formData.areaExternaPrivativa || 0, '0', undefined, faSun)}
+                                         {renderNumericInput('areaQuintal', 'Quintal', formData.areaQuintal || 0, '0', undefined, faSun)}
                                     </div>
-                                    {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') ? (
-                                        <div>
-                                            {renderNumericInput('andar', 'Andar', formData.andar || 0, 'Ex: 5')}
+                                </div>
+
+                                {/* CARD: Composição e Lazer Privativo */}
+                                <div className="bg-white dark:bg-zinc-800 p-5 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm">
+                                    <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center border-b pb-2">
+                                        <Icon icon={faLayerGroup} className="mr-2 text-blue-500"/> Composição do Imóvel
+                                    </h4>
+                                    
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 mb-6">
+                                         <div>{renderNumericInput('quartos', 'Quartos', formData.quartos, '1', undefined, faBed)}</div>
+                                         <div>{renderNumericInput('suites', 'Suítes', formData.suites, '0', undefined, faBed)}</div>
+                                         <div>{renderNumericInput('banheiros', 'Banheiros', formData.banheiros, '1', undefined, faBath)}</div>
+                                         <div>{renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0', undefined, faToilet)}</div>
+                                    </div>
+
+                                    {/* SEÇÃO GARAGEM DENTRO DO CARD DE COMPOSIÇÃO */}
+                                    <div className="bg-blue-50/50 dark:bg-zinc-700/30 rounded-lg p-4 border border-blue-100 dark:border-zinc-600">
+                                        <div className="flex items-center gap-4 mb-3">
+                                            <div className="w-1/3">
+                                                {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}
+                                            </div>
+                                            {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') && (
+                                                <div className="w-1/3">
+                                                    {renderNumericInput('andar', 'Andar', formData.andar || 0, 'Ex: 5', undefined, faBuilding)}
+                                                </div>
+                                            )}
                                         </div>
-                                    ) : (
-                                        <div className='hidden md:block'></div>
-                                    )}
+
+                                        {/* DETALHES DA GARAGEM (MOVIDO DA ETAPA 3) */}
+                                        {formData.vagasGaragem > 0 && (
+                                            <div className="mt-4 pt-3 border-t border-blue-200 dark:border-zinc-600 animate-in slide-in-from-top-2">
+                                                <h5 className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-3">Detalhes da Vaga</h5>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                                    <select name="detalhesVaga.tipoCobertura" value={formData.detalhesVaga?.tipoCobertura} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
+                                                        <option value="COBERTA">Vaga Coberta</option>
+                                                        <option value="DESCOBERTA">Vaga Descoberta</option>
+                                                        <option value="MISTA">Mista</option>
+                                                    </select>
+                                                    <select name="detalhesVaga.tipoManobra" value={formData.detalhesVaga?.tipoManobra} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
+                                                        <option value="LIVRE">Vaga Livre (Sem manobra)</option>
+                                                        <option value="PRESA">Vaga Presa (Gaveta)</option>
+                                                        <option value="MISTA">Algumas presas</option>
+                                                    </select>
+                                                    <select name="detalhesVaga.tipoUso" value={formData.detalhesVaga?.tipoUso} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
+                                                        <option value="INDIVIDUAL">Vaga Fixa/Individual</option>
+                                                        <option value="ROTATIVA">Rotativa</option>
+                                                        <option value="COMPARTILHADA">Compartilhada</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                                    <CheckboxInput label="Vaga Escriturada" name="detalhesVaga.escriturada" checked={formData.detalhesVaga?.escriturada || false} onChange={handleChange} icon={faFileContract} />
+                                                    <CheckboxInput label="Carregador Elétrico" name="detalhesVaga.carregadorCarroEletrico" checked={(formData.detalhesVaga as any)?.carregadorCarroEletrico || false} onChange={handleChange} icon={faBolt} />
+                                                    <CheckboxInput label="Vaga Acessível" name="detalhesVaga.acessivel" checked={(formData.detalhesVaga as any)?.acessivel || false} onChange={handleChange} icon={faWheelchair} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </>
                         )}
-                        
-                        {/* --- Piscina Privativa (ATUALIZADO COM MAIS TIPOS) --- */}
-                        <div className="space-y-4 p-4 border rounded-lg border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-zinc-700/50 mt-6">
-                             <h4 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center">
-                                <Icon icon={faWater} className="w-4 h-4 mr-2" /> Piscina Privativa do Imóvel
-                            </h4>
-                             <CheckboxInput 
-                                label="O imóvel possui piscina privativa?" 
-                                name="piscinaPrivativa.possuiPiscina" 
-                                checked={formData.piscinaPrivativa?.possuiPiscina || false} 
-                                onChange={handleChange} 
-                            />
-                            {formData.piscinaPrivativa.possuiPiscina && (
-                                <div className="grid grid-cols-2 gap-4 mt-2 animate-in fade-in">
-                                     <div>
-                                        <label htmlFor="piscinaPrivativa.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Revestimento</label>
-                                        <select id="piscinaPrivativa.tipo" name="piscinaPrivativa.tipo" value={formData.piscinaPrivativa.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
-                                            <option value="AZULEJO">Azulejo</option>
-                                            <option value="VINIL">Vinil</option>
-                                            <option value="FIBRA">Fibra de Vidro</option>
-                                            <option value="PASTILHA">Pastilha</option>
-                                            <option value="PEDRA_NATURAL">Pedra Natural (Hijau/Hitam)</option>
-                                            <option value="CONCRETO">Concreto Armado</option>
-                                            <option value="AREIA_COMPACTADA">Areia Compactada</option>
-                                            <option value="NATURAL">Natural / Biológica</option>
-                                            <option value="OUTRO">Outro</option>
-                                        </select>
-                                    </div>
-                                    <CheckboxInput 
-                                        label="É Aquecida?" 
-                                        name="piscinaPrivativa.aquecida" 
-                                        checked={formData.piscinaPrivativa?.aquecida || false} 
-                                        onChange={handleChange} 
-                                    />
-                                </div>
-                            )}
-                        </div>
                         
                         {/* --- DETALHES DE CÔMODOS (ARRAYS DINÂMICOS) --- */}
                         <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
@@ -1463,6 +1510,20 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 ))}
                             </div>
 
+                            {/* --- DISPENSA (MOVIDA PARA CÁ) --- */}
+                            <div className='p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700 mt-2'>
+                                <div className="flex items-center mb-2">
+                                    <Icon icon={faBoxOpen} className="mr-2 text-gray-500"/>
+                                    <h5 className="font-medium text-sm text-gray-700 dark:text-gray-200">Área de Armazenamento</h5>
+                                </div>
+                                <CheckboxInput label="Possui Dispensa Embutida?" name="dispensa.possuiDispensa" checked={formData.dispensa.possuiDispensa || false} onChange={handleChange} description="Espaço de armazenamento dedicado (dispensa/despensa)."/>
+                                {formData.dispensa.possuiDispensa && (
+                                     <div className='mt-4 pl-6 border-l-2 border-gray-300 dark:border-zinc-600'>
+                                        <CheckboxInput label="Possui prateleiras embutidas?" name="dispensa.prateleirasEmbutidas" checked={formData.dispensa.prateleirasEmbutidas || false} onChange={handleChange}/>
+                                     </div>
+                                )}
+                            </div>
+
                             <h4 className="text-lg font-semibold mt-6 pt-4 border-t border-gray-200 dark:border-zinc-700 flex items-center">
                                 <Icon icon={faWarehouse} className="mr-2"/> Construções Externas & Edículas
                             </h4>
@@ -1474,15 +1535,43 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     <Icon icon={faPlusCircle} className="mr-2"/> Adicionar Edícula / Construção Externa
                                 </button>
                             </div>
-                            
-                            <div className='p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700 mt-6'>
-                                <CheckboxInput label="Possui Dispensa Embutida?" name="dispensa.possuiDispensa" checked={formData.dispensa.possuiDispensa || false} onChange={handleChange} description="Espaço de armazenamento dedicado (dispensa/despensa)."/>
-                                {formData.dispensa.possuiDispensa && (
-                                     <div className='mt-4'>
-                                        <CheckboxInput label="Possui prateleiras embutidas?" name="dispensa.prateleirasEmbutidas" checked={formData.dispensa.prateleirasEmbutidas || false} onChange={handleChange}/>
-                                     </div>
-                                )}
-                            </div>
+                        </div>
+
+                        {/* --- Piscina Privativa (MOVIDA PARA CÁ - DEPOIS DE CONSTRUÇÕES EXTERNAS) --- */}
+                        <div className="space-y-4 p-4 border rounded-lg border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-zinc-700/50 mt-6">
+                             <h4 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center">
+                                <Icon icon={faWater} className="w-4 h-4 mr-2" /> Piscina Privativa do Imóvel
+                            </h4>
+                             <CheckboxInput 
+                                label="O imóvel possui piscina privativa?" 
+                                name="piscinaPrivativa.possuiPiscina" 
+                                checked={formData.piscinaPrivativa?.possuiPiscina || false} 
+                                onChange={handleChange} 
+                            />
+                            {formData.piscinaPrivativa.possuiPiscina && (
+                                <div className="grid grid-cols-2 gap-4 mt-2 animate-in fade-in">
+                                     <div>
+                                        <label htmlFor="piscinaPrivativa.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Revestimento</label>
+                                        <select id="piscinaPrivativa.tipo" name="piscinaPrivativa.tipo" value={formData.piscinaPrivativa.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                                            <option value="AZULEJO">Azulejo</option>
+                                            <option value="VINIL">Vinil</option>
+                                            <option value="FIBRA">Fibra de Vidro</option>
+                                            <option value="PASTILHA">Pastilha</option>
+                                            <option value="PEDRA_NATURAL">Pedra Natural (Hijau/Hitam)</option>
+                                            <option value="CONCRETO">Concreto Armado</option>
+                                            <option value="AREIA_COMPACTADA">Areia Compactada</option>
+                                            <option value="NATURAL">Natural / Biológica</option>
+                                            <option value="OUTRO">Outro</option>
+                                        </select>
+                                    </div>
+                                    <CheckboxInput 
+                                        label="É Aquecida?" 
+                                        name="piscinaPrivativa.aquecida" 
+                                        checked={formData.piscinaPrivativa?.aquecida || false} 
+                                        onChange={handleChange} 
+                                    />
+                                </div>
+                            )}
                         </div>
                         
                         <div className='pt-4 border-t border-gray-100 dark:border-zinc-700'>
@@ -1671,44 +1760,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 </div>
                             </div>
                         </div>
-                        
-                        {/* Detalhes Vaga */}
-                        {formData.vagasGaragem > 0 && (
-                            <div className="border border-blue-200 bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg">
-                                <h4 className="font-bold mb-3 flex items-center text-blue-700 dark:text-blue-400"><Icon icon={faCar} className="mr-2"/> Detalhes da Garagem</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                    <div>
-                                        <label className="block text-xs font-medium mb-1 text-gray-700 dark:text-gray-300">Cobertura</label>
-                                        <select name="detalhesVaga.tipoCobertura" value={formData.detalhesVaga?.tipoCobertura} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                            <option value="COBERTA">Vaga Coberta</option>
-                                            <option value="DESCOBERTA">Vaga Descoberta</option>
-                                            <option value="MISTA">Mista</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium mb-1 text-gray-700 dark:text-gray-300">Manobra</label>
-                                        <select name="detalhesVaga.tipoManobra" value={formData.detalhesVaga?.tipoManobra} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                            <option value="LIVRE">Vaga Livre (Sem manobra)</option>
-                                            <option value="PRESA">Vaga Presa (Gaveta)</option>
-                                            <option value="MISTA">Algumas presas</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium mb-1 text-gray-700 dark:text-gray-300">Uso</label>
-                                        <select name="detalhesVaga.tipoUso" value={formData.detalhesVaga?.tipoUso} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                            <option value="INDIVIDUAL">Individual / Fixa</option>
-                                            <option value="ROTATIVA">Rotativa</option>
-                                            <option value="COMPARTILHADA">Compartilhada</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="flex gap-4 flex-wrap">
-                                    <CheckboxInput label="Vaga Demarcada" name="detalhesVaga.demarcada" checked={formData.detalhesVaga?.demarcada || false} onChange={handleChange} />
-                                    <CheckboxInput label="Escritura Separada" name="detalhesVaga.escriturada" checked={formData.detalhesVaga?.escriturada || false} onChange={handleChange} />
-                                    <CheckboxInput label="Vagas Paralelas" name="detalhesVaga.paralela" checked={formData.detalhesVaga?.paralela || false} onChange={handleChange} description="Carros lado a lado" />
-                                </div>
-                            </div>
-                        )}
                     </div>
                 );
             case 4:
@@ -1860,16 +1911,32 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                             {photoList.length > 0 ? (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                     {photoList.map((photo, index) => (
-                                        <div key={index} className={`relative group aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden border-2 shadow-sm transition-all ${index === 0 ? 'border-yellow-400 ring-2 ring-yellow-400/30' : 'border-gray-200 hover:border-blue-500'}`}>
-                                            <img src={photo.url} className="w-full h-full object-cover" alt="Imóvel" />
+                                        <div 
+                                            key={index} 
+                                            className={`relative group aspect-[4/3] bg-gray-100 rounded-lg overflow-hidden border-2 shadow-sm transition-all ${index === 0 ? 'border-yellow-400 ring-2 ring-yellow-400/30' : 'border-gray-200 hover:border-blue-500'} ${draggedIndex === index ? 'opacity-50 scale-95' : 'opacity-100'}`}
+                                            // DRAG AND DROP IMPLEMENTADO
+                                            draggable
+                                            onDragStart={() => handleDragStart(index)}
+                                            onDragEnter={() => handleDragEnter(index)}
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={(e) => e.preventDefault()}
+                                        >
+                                            <img src={photo.url} className="w-full h-full object-cover pointer-events-none" alt="Imóvel" />
                                             
+                                            {/* FEEDBACK VISUAL DE UPLOAD */}
+                                            {photo.isNew && (
+                                                <div className="absolute top-2 left-2 bg-blue-600/90 text-white text-[10px] font-bold px-2 py-1 rounded shadow-sm z-10 flex items-center">
+                                                    <Icon icon={faCloudUploadAlt} className="mr-1" /> Pendente
+                                                </div>
+                                            )}
+
+                                            {/* Ícone de Drag (Feedback visual) */}
+                                            <div className="absolute top-2 right-2 text-white/70 bg-black/30 p-1 rounded cursor-move opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Icon icon={faGripVertical} />
+                                            </div>
+
                                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
-                                                <div className="flex justify-between w-full">
-                                                    {index === 0 ? (
-                                                        <span className="text-yellow-400 text-xs font-bold bg-black/80 px-2 py-1 rounded flex items-center"><Icon icon={faStar} className="mr-1"/> Capa</span>
-                                                    ) : (
-                                                        <button type="button" onClick={() => movePhoto(index, -index)} className="text-gray-300 hover:text-yellow-400 text-xs font-medium bg-black/50 px-2 rounded hover:bg-black/80" title="Definir como Capa">Definir Capa</button>
-                                                    )}
+                                                <div className="flex justify-end w-full pt-6">
                                                     <button type="button" onClick={() => removePhoto(index)} className="text-white hover:text-red-400 bg-red-600/80 p-1.5 rounded-full hover:bg-red-700 transition-colors"><Icon icon={faTrash} className="w-3 h-3"/></button>
                                                 </div>
                                                 
@@ -1934,7 +2001,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     <div className={currentStep === 1 ? 'flex-1' : 'flex-grow'}></div> 
 
                     <button
-                        type={currentStep === formSteps.length ? 'submit' : 'button'}
+                        type="submit"
                         onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
                         disabled={loading}
                         className={`w-full md:w-auto flex justify-center py-3 px-8 border border-transparent rounded-md shadow-lg text-sm font-bold text-white transition-colors cursor-pointer ${
