@@ -1,7 +1,7 @@
 // src/services/StorageService.ts
 
 import { storage } from './FirebaseService';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'; // ADICIONADO: deleteObject
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 /**
  * Define o nome do bucket que está ativo e com CORS configurado.
@@ -68,6 +68,33 @@ export async function uploadImovelPhotos(files: File[], imovelId: string): Promi
 }
 
 /**
+ * NOVO: Faz o upload de múltiplas fotos de um CONDOMÍNIO.
+ */
+export async function uploadCondominioPhotos(files: File[], condominioId: string): Promise<string[]> {
+    if (!condominioId) {
+        throw new Error("ID do Condomínio é necessário para upload das fotos.");
+    }
+
+    const uploadPromises = files.map(async (file, index) => {
+        const safeFileName = file.name.replace(/[^a-z0-9.]/gi, '_').toLowerCase();
+        const timestamp = Date.now();
+        const storagePath = `condominios/${condominioId}/foto_${index}_${timestamp}_${safeFileName}`;
+        
+        const storageRef = ref(storage, storagePath);
+        
+        console.log(`[StorageService] Condomínio: Upload da foto ${index + 1} para: ${storageRef.fullPath}`);
+        
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+
+        return downloadURL;
+    });
+
+    const urls = await Promise.all(uploadPromises);
+    return urls;
+}
+
+/**
  * NOVO: Exclui uma foto específica do Firebase Storage usando sua URL.
  * Extrai o caminho do arquivo a partir da URL.
  * @param fileUrl A URL de download completa do arquivo.
@@ -109,3 +136,6 @@ export async function deleteFotoImovel(fileUrl: string): Promise<void> {
         throw new Error("Falha na exclusão do arquivo no Storage.");
     }
 }
+
+// Alias para manter semântica, já que a lógica de exclusão é a mesma por URL
+export const deleteFotoCondominio = deleteFotoImovel;

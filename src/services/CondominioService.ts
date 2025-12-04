@@ -1,4 +1,4 @@
-import { getFirestore, collection, addDoc, doc, updateDoc, getDocs, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, doc, updateDoc, getDocs, getDoc, deleteDoc } from 'firebase/firestore';
 import { getApp } from 'firebase/app';
 import { Condominio } from '@/types/condominio';
 
@@ -34,7 +34,6 @@ export const adicionarCondominio = async (dados: Omit<Condominio, 'id'>): Promis
 export const atualizarCondominio = async (id: string, dados: Partial<Condominio>): Promise<void> => {
     try {
         const db = getDb();
-        // Caminho completo do documento para update
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id);
         await updateDoc(docRef, {
             ...dados,
@@ -69,5 +68,16 @@ export const buscarCondominioPorId = async (id: string): Promise<Condominio | nu
     } catch (error) {
         console.error("Erro ao buscar condomínio:", error);
         return null;
+    }
+};
+
+export const excluirCondominio = async (id: string): Promise<void> => {
+    try {
+        const db = getDb();
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', COLLECTION_NAME, id);
+        await deleteDoc(docRef);
+    } catch (error) {
+        console.error("Erro ao excluir condomínio:", error);
+        throw error;
     }
 };

@@ -239,6 +239,7 @@ export interface Imovel {
   status: 'VAGO' | 'ALUGADO' | 'ANUNCIADO' | 'MANUTENCAO';
   
   valorAluguel: number; 
+  valorVenda?: number; // <--- ADICIONADO PARA CORREÇÃO
   valorCondominio: number; 
   valorIPTU: number; 
   

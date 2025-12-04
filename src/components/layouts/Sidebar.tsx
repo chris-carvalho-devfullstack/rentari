@@ -1,4 +1,3 @@
-// src/components/layouts/Sidebar.tsx
 'use client';
 
 import React from 'react';
@@ -7,12 +6,22 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation'; 
 import { useAuthStore } from '@/hooks/useAuthStore'; 
 import { Icon } from '@/components/ui/Icon'; 
-// Ícones atualizados: Adicionado faUserShield
-import { faTachometerAlt, faBuilding, faWallet, faSignOutAlt, faUser, faGlobe, faUserShield } from '@fortawesome/free-solid-svg-icons'; 
+// Ícones atualizados: Adicionado faUserShield e faCity
+import { 
+    faTachometerAlt, 
+    faBuilding, 
+    faWallet, 
+    faSignOutAlt, 
+    faUser, 
+    faGlobe, 
+    faUserShield,
+    faCity // Ícone para Condomínios
+} from '@fortawesome/free-solid-svg-icons'; 
 
 // Definição dos links de navegação com ícones
 const navItems = [
   { name: 'Dashboard', href: '/dashboard', icon: faTachometerAlt },
+  { name: 'Condomínios', href: '/condominios', icon: faCity }, // NOVO: Gestão de Condomínios/Lançamentos
   { name: 'Imóveis', href: '/imoveis', icon: faBuilding },
   // NOVO: Link para o Portal de Anúncios Público (Visão do Cliente)
   { name: 'Ver Anúncios Públicos', href: '/anuncios', icon: faGlobe }, 
@@ -65,12 +74,16 @@ export default function Sidebar() {
       if (href === '/imoveis' && pathname.startsWith('/imoveis')) {
           return true;
       }
+      // Regra especial para Condomínios
+      if (href === '/condominios' && pathname.startsWith('/condominios')) {
+          return true;
+      }
       // Se a rota for o link direto para o catálogo
       if (href === '/anuncios' && pathname.startsWith('/anuncios')) {
           return true;
       }
       // Regra para Dashboard, Financeiro, Perfil e Admin
-       return pathname.startsWith(href) && href !== '/imoveis'; 
+      return pathname.startsWith(href) && href !== '/imoveis' && href !== '/condominios'; 
   }
 
 

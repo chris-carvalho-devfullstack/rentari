@@ -270,3 +270,11 @@ export async function removerImovel(id: string): Promise<void> {
   const docRef = doc(db, 'imoveis', id);
   await deleteDoc(docRef);
 }
+
+// === NOVA FUNÇÃO ===
+// Esta é a função que estava faltando e causava o erro na página do condomínio
+export async function listarImoveis(): Promise<Imovel[]> {
+    console.log(`[ImovelService] Listando TODOS os imóveis do Firestore (Admin/Condomínio View)...`);
+    const querySnapshot = await getDocs(collection(db, 'imoveis'));
+    return querySnapshot.docs.map(mapDocToImovel);
+}

@@ -3,6 +3,23 @@ import { EnderecoImovel } from './imovel';
 // Tipos auxiliares
 export type PortariaTipo = 'HUMANA_24H' | 'HUMANA_DIURNA' | 'REMOTA/VIRTUAL' | 'HIBRIDA' | 'SEM_PORTARIA';
 export type PadraoAcabamento = 'LUXO' | 'ALTO_PADRAO' | 'MEDIO_PADRAO' | 'ECONOMICO' | 'POPULAR';
+export type FaseObra = 'BREVE_LANCAMENTO' | 'LANCAMENTO' | 'EM_OBRA' | 'PRONTO_PARA_MORAR';
+
+export interface ProgressoObra {
+    geral: number;
+    fundacao: number;
+    estrutura: number;
+    alvenaria: number;
+    acabamento: number;
+}
+
+export interface Planta {
+    titulo: string; // Ex: "Final 1 e 2 - 89m²"
+    descricao?: string;
+    dormitorios: number;
+    areaPrivativa: number;
+    imagemUrl: string;
+}
 
 export interface InfraestruturaCondominio {
     // Lazer & Bem-estar
@@ -56,7 +73,8 @@ export interface InfraestruturaCondominio {
 export interface Condominio {
     id?: string;
     nome: string;
-    cnpj?: string; // Opcional, pois pode ser um prédio antigo sem gestão formalizada
+    cnpj?: string; 
+    descricao?: string; // Descrição comercial do empreendimento
     
     // === 1. Localização ===
     endereco: EnderecoImovel;
@@ -65,46 +83,53 @@ export interface Condominio {
 
     // === 2. DNA Construtivo ===
     construtora: string;
-    incorporadora?: string; // As vezes difere da construtora
+    incorporadora?: string;
     anoConstrucao: number;
-    dataEntrega?: string;
+    dataEntrega?: string; // Data prevista ou realizada
     padraoAcabamento: PadraoAcabamento;
     areaTerrenoTotal?: number; // m²
-    lancamento: boolean; // Flag de lançamento
+    
+    // === 3. Lançamento & Obras (Dados Ricos) ===
+    lancamento: boolean;
+    faseObra?: FaseObra;
+    progressoObra?: ProgressoObra;
+    plantas?: Planta[]; // Plantas baixas disponíveis
+    videoTour?: string; // Link vídeo institucional
+    tourVirtual360?: string; // Link tour 360
 
-    // === 3. Estrutura Física ===
+    // === 4. Estrutura Física ===
     numeroTorres: number;
-    numeroAndares: number; // Média
-    unidadesPorAndar: number; // Média
+    numeroAndares: number;
+    unidadesPorAndar: number;
     totalUnidades: number;
     elevadoresSociais: number;
     elevadoresServico: number;
     vagasVisitantes: number;
 
-    // === 4. Infraestrutura ===
+    // === 5. Infraestrutura ===
     infraestrutura: InfraestruturaCondominio;
 
-    // === 5. Governança & Gestão ===
+    // === 6. Governança & Gestão ===
     tipoPortaria: PortariaTipo;
     administradora?: string;
     zelador?: string;
     telefoneZelador?: string;
-    valorCondominioMedio?: number; // Referência
+    valorCondominioMedio?: number;
     
     // Regras Básicas
     permiteAnimais: boolean;
-    diasMudanca: string; // Ex: "Seg a Sex"
-    horarioMudanca: string; // Ex: "08:00 as 17:00"
+    diasMudanca: string;
+    horarioMudanca: string;
 
-    // === 6. Mídia ===
+    // === 7. Mídia ===
     fotos: string[]; // Fachada, áreas comuns
     capa: string;
 }
 
-// Estado inicial para formulários
 export const defaultCondominioData: Omit<Condominio, 'id'> = {
     nome: '',
     cnpj: '',
+    descricao: '',
     endereco: {
         cep: '',
         logradouro: '',
@@ -118,7 +143,12 @@ export const defaultCondominioData: Omit<Condominio, 'id'> = {
     construtora: '',
     anoConstrucao: new Date().getFullYear(),
     padraoAcabamento: 'MEDIO_PADRAO',
+    
     lancamento: false,
+    faseObra: 'PRONTO_PARA_MORAR',
+    progressoObra: { geral: 100, fundacao: 100, estrutura: 100, alvenaria: 100, acabamento: 100 },
+    plantas: [],
+
     numeroTorres: 1,
     numeroAndares: 1,
     unidadesPorAndar: 4,
