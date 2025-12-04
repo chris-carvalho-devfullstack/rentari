@@ -76,6 +76,15 @@ export interface ConstrucaoExternaData {
     possuiBanheiro?: boolean;
 }
 
+export interface AreaComercialData {
+    tipo: string; // GALPAO, ESCRITORIO, LOJA, ETC.
+    nomeCustomizado?: string;
+    area: number;
+    peDireito?: number;
+    capacidadePiso?: number; // ton/m2
+    temArCondicionado?: boolean;
+}
+
 export interface RegrasAnimaisData {
     permiteGatos: boolean;
     permiteCaes: boolean;
@@ -110,9 +119,9 @@ export interface AcabamentoData {
 
 // 3. Informações Externas e Diferenciais
 export interface CaracteristicasExternasData {
-    posicaoSolar: 'NORTE' | 'SUL' | 'LESTE' | 'OESTE' | 'SOL_DA_MANHA' | 'SOL_DA_TARDE' | 'NAO_INFORMADO';
-    posicaoImovel: 'FRENTE' | 'FUNDOS' | 'LATERAL' | 'INTERNO'; // Separado conforme pedido
-    vista: 'LIVRE' | 'MAR' | 'MONTANHA' | 'JARDIM' | 'CIDADE' | 'INTERNA' | 'PAREDE';
+    posicaoSolar: 'NORTE' | 'SUL' | 'SOL_MANHA' | 'SOL_TARDE' | 'NAO_INFORMADO';
+    posicaoImovel: 'FRENTE' | 'FUNDOS' | 'LATERAL' | 'INTERNO'; 
+    vista: 'LIVRE' | 'MAR' | 'MONTANHA' | 'JARDIM' | 'CIDADE' | 'INTERNA' | 'PAREDE' | 'COMUNIDADE' | 'OUTROS';
     nivelBarulho: 'SILENCIOSO' | 'RUA_TRANQUILA' | 'MODERADO' | 'MOVIMENTADO'; // Barulho
     tipoRua: 'ASFALTADA' | 'PARALELEPIPEDO' | 'TERRA' | 'CASCALHO' | 'PLANA' | 'ACLIVE' | 'DECLIVE';
     deEsquina: boolean;
@@ -173,8 +182,8 @@ export interface Imovel {
   dimensoesTerreno?: { 
       frente: number; // metros lineares
       fundos: number; // metros lineares
-      lateralDireita: number;
-      lateralEsquerda: number;
+      lateralDireita: number; // metros lineares
+      lateralEsquerda: number; // metros lineares
       topografia: 'PLANO' | 'ACLIVE' | 'DECLIVE' | 'IRREGULAR';
   };
 
@@ -210,13 +219,15 @@ export interface Imovel {
   varandas: VarandaData[]; 
   dispensa: DispensaData;
   construcoesExternas: ConstrucaoExternaData[];
+  areasComerciais: AreaComercialData[]; // Novo Array
   
   // === 4. Detalhes Qualitativos e Estado ===
   descricaoLonga: string;
   caracteristicas: string[]; 
   
-  estadoConservacao: 'EM_CONSTRUCAO' | 'NOVO' | 'REFORMADO' | 'USADO' | 'NECESSITA_REFORMA'; // 4. Estado do Imóvel
-  tipoConstrucao?: 'ALVENARIA' | 'STEEL_FRAME' | 'WOOD_FRAME' | 'DRYWALL' | 'MISTA'; // 9. Materiais
+  estadoConservacao: 'NA_PLANTA' | 'EM_CONSTRUCAO' | 'NOVO' | 'REFORMADO' | 'USADO' | 'NECESSITA_REFORMA'; // 4. Estado do Imóvel
+  tipoConstrucao?: 'ALVENARIA' | 'STEEL_FRAME' | 'WOOD_FRAME' | 'DRYWALL' | 'MISTA' | 'PRE_MOLDADO'; // 9. Materiais
+  anoConstrucao?: number; // NOVO: Ano de construção
 
   acabamentos?: AcabamentoData; // Expandido
   dadosExternos?: CaracteristicasExternasData; // 3. Info Externas
@@ -231,6 +242,14 @@ export interface Imovel {
   valorCondominio: number; 
   valorIPTU: number; 
   
+  // Comercial / Industrial Específico
+  peDireito?: number;
+  cargaPiso?: number;
+  numeroDocas?: number;
+  potenciaEnergia?: string;
+  zoneamento?: string;
+  indiceAproveitamento?: number;
+
   seguros: SeguroData[];
   documentacao?: DocumentacaoData; // 5. Documentação
 

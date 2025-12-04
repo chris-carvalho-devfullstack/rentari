@@ -85,9 +85,9 @@ export const IMÓVEIS_HIERARQUIA = [
   }
 ];
 
-// --- LISTAS DE ATRIBUTOS PARA ENRIQUECIMENTO DO CADASTRO ---
+// --- MAPAS DE CARACTERÍSTICAS POR CATEGORIA (INTELIGÊNCIA DE DADOS) ---
 
-export const COMODIDADES_RESIDENCIAIS = [
+export const FEATURES_RESIDENCIAL = [
     'Piscina Privativa', 'Churrasqueira', 'Varanda Gourmet', 'Ar Condicionado', 
     'Mobiliado', 'Semi-mobiliado', 'Armários Embutidos', 'Closet', 'Hidromassagem', 
     'Lareira', 'Jardim de Inverno', 'Escritório / Home Office', 'Cozinha Americana', 
@@ -95,6 +95,48 @@ export const COMODIDADES_RESIDENCIAIS = [
     'Fechadura Digital', 'Automação Residencial', 'Vista Panorâmica', 'Vista para o Mar',
     'Acessibilidade (PCD)', 'Entrada de Serviço Independente', 'Portaria 24h', 
     'Academia', 'Salão de Festas', 'Elevador', 'Playground'
+];
+
+export const FEATURES_COMERCIAL = [
+    'Piso Elevado', 'Forro Modular', 'Ar Condicionado Central', 'Gerador Privativo', 
+    'Estacionamento Rotativo', 'Recepção', 'Copa', 'Vestiário', 'Mezanino', 
+    'Divisórias', 'Catracas Eletrônicas', 'Sala de Reunião', 'Auditório',
+    'Fibra Óptica', 'Cabeamento Estruturado', 'Sistema de Alarme', 'Câmeras de Segurança',
+    'Acessibilidade (PCD)', 'Elevador', 'Heliponto'
+];
+
+export const FEATURES_INDUSTRIAL = [ // Galpões e Logística
+    'Docas / Carga e Descarga', 'Plataforma Niveladora', 'Pé Direito Alto (+6m)', 
+    'Piso de Alta Resistência', 'Ponte Rolante', 'Cabine Primária', 'Energia Trifásica',
+    'Pátio de Manobra', 'Entrada para Caminhões', 'Cross-docking', 'Guarita Blindada',
+    'Sprinklers (J4)', 'Hidrantes', 'Vestiário Funcionários', 'Refeitório',
+    'Balança Rodoviária', 'Câmara Fria'
+];
+
+export const FEATURES_RURAL = [ // Exclusivo para categoria Rural
+    'Casa Sede', 'Casa de Caseiro', 'Casa de Hóspedes', 
+    'Curral', 'Paiol', 'Galpão Agrícola', 'Silo', 'Estábulo / Baias', 
+    'Cerca / Alambrado', 'Piquetes', 'Brete / Tronco', 'Balança Rodoviária',
+    'Poço Artesiano', 'Mina D\'água', 'Açude / Lago', 'Rio / Córrego', 'Represa',
+    'Roda D\'água', 'Energia Elétrica (Monofásica)', 'Energia Elétrica (Trifásica)',
+    'Transformador Próprio', 'Gerador Rural', 'Internet Rural', 
+    'Horta', 'Pomar', 'Apiário', 'Tanque de Piscicultura', 'Área de Pastagem', 'Mata Nativa'
+];
+
+export const FEATURES_TERRENOS = [
+    'Murado', 'Cercado', 'Terraplanado', 'Aterrado', 'Limpo / Desmatado',
+    'Rua Asfaltada', 'Guias e Sarjetas', 'Iluminação Pública', 
+    'Rede de Água', 'Rede de Esgoto', 'Energia Elétrica', 'Gás Encanado',
+    'Poço Artesiano', 'Fossa Séptica', 'Arborizado', 'Vista Panorâmica',
+    'Topografia Plana', 'Topografia Aclive', 'Topografia Declive'
+];
+
+export const FEATURES_ESPECIAIS = [ // Hotéis, Escolas, Hospitais
+    'Cozinha Industrial', 'Refeitório', 'Auditório / Teatro', 'Quadra Poliesportiva',
+    'Piscina Semi-olímpica', 'Estacionamento de Grande Porte', 'Gerador de Energia',
+    'Sistema de Incêndio Completo', 'Elevador de Maca', 'Gás Encanado Industrial',
+    'Isolamento Acústico', 'Ar Condicionado Central', 'Recepção Hoteleira',
+    'Lavanderia Industrial', 'Área de Carga e Descarga'
 ];
 
 export const INFRAESTRUTURA_CONDOMINIO = [
@@ -106,19 +148,27 @@ export const INFRAESTRUTURA_CONDOMINIO = [
     'Bicicletário', 'Carregador de Carro Elétrico', 'Gerador de Energia', 'Elevador', 'Zelador'
 ];
 
-export const CARACTERISTICAS_COMERCIAIS = [
-    'Piso Elevado', 'Forro Modular', 'Ar Central', 'Gerador Privativo', 'Docas', 
-    'Pé Direito Alto', 'Ponte Rolante', 'Cabine Primária', 'Estacionamento Rotativo',
-    'Recepção', 'Copa', 'Vestiário', 'Mezanino', 'Divisórias', 'Catracas Eletrônicas',
-    'Sprinklers (Incêndio)', 'Fibra Óptica'
-];
+// --- HELPER FUNCTION PARA O FORMULÁRIO ---
 
-export const BENFEITORIAS_RURAIS = [
-    'Casa Sede', 'Casa de Caseiro', 'Casa de Hóspedes', 
-    'Curral', 'Paiol', 'Galpão Agrícola', 'Silo', 'Estábulo / Baias', 
-    'Cerca / Alambrado', 'Piquetes', 'Brete / Tronco', 'Balança Rodoviária',
-    'Poço Artesiano', 'Mina D\'água', 'Açude / Lago', 'Rio / Córrego', 'Represa',
-    'Roda D\'água', 'Energia Elétrica (Monofásica)', 'Energia Elétrica (Trifásica)',
-    'Transformador Próprio', 'Gerador Rural', 'Internet Rural', 
-    'Horta', 'Pomar', 'Apiário', 'Tanque de Piscicultura'
-];
+export const getFeaturesByCategory = (categoria: string, tipoDetalhado: string): string[] => {
+    if (categoria === 'Rural') return FEATURES_RURAL;
+    if (categoria === 'Terrenos') return FEATURES_TERRENOS;
+    if (categoria === 'Imóveis Especiais') return FEATURES_ESPECIAIS;
+    
+    if (categoria === 'Comercial') {
+        // Se for do tipo Galpão/Industrial, retorna a lista industrial + comercial
+        if (tipoDetalhado.includes('Galpão') || tipoDetalhado.includes('Industrial') || tipoDetalhado.includes('Armazém')) {
+            // Remove duplicatas se houver
+            return Array.from(new Set([...FEATURES_COMERCIAL, ...FEATURES_INDUSTRIAL]));
+        }
+        return FEATURES_COMERCIAL;
+    }
+    
+    // Default: Residencial (Casas, Aptos, Flats)
+    return FEATURES_RESIDENCIAL;
+};
+
+// MANTIDO PARA COMPATIBILIDADE LEGADA (SE NECESSÁRIO EM OUTROS ARQUIVOS)
+export const COMODIDADES_RESIDENCIAIS = FEATURES_RESIDENCIAL;
+export const BENFEITORIAS_RURAIS = FEATURES_RURAL;
+export const CARACTERISTICAS_COMERCIAIS = FEATURES_COMERCIAL;

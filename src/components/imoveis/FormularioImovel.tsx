@@ -10,18 +10,22 @@ import {
     Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, 
     CozinhaData, SalaData, VarandaData, DispensaData, PiscinaPrivativaData, ResponsavelPagamento, 
     PublicidadeConfig, ConstrucaoExternaData, RegrasAnimaisData, DetalhesVagaData, AcabamentoData, 
-    CaracteristicasExternasData, DocumentacaoData 
+    CaracteristicasExternasData, DocumentacaoData, AreaComercialData 
 } from '@/types/imovel'; 
-import { IMÓVEIS_HIERARQUIA, COMODIDADES_RESIDENCIAIS, BENFEITORIAS_RURAIS } from '@/data/imovelHierarchy'; 
+import { 
+    IMÓVEIS_HIERARQUIA, 
+    getFeaturesByCategory 
+} from '@/data/imovelHierarchy'; 
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { fetchAddressByCep } from '@/services/CepService'; 
 import { Icon } from '@/components/ui/Icon'; 
 import { 
-    faSave, faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, 
+    faChevronRight, faChevronLeft, faCheckCircle, faImage, faHome, faTrash, 
     faPlusCircle, faMinusCircle, faUtensils, faCouch, faBuilding, 
-    faWater, faArrowLeft, faSpinner, faInfoCircle, faShieldAlt, 
-    faArrowRight, faStar, faTractor, faWarehouse, faPaw, faDog, faCat, faCar, faSun, faFileContract,
-    faRoad, faHammer, faCloudUploadAlt, faGripVertical, faRulerCombined, faBed, faBath, faToilet, faLayerGroup, faCheck, faBolt, faWheelchair, faBoxOpen
+    faWater, faArrowLeft, faArrowRight, faSpinner, faInfoCircle, faShieldAlt, 
+    faStar, faTractor, faWarehouse, faCar, faSun, faFileContract,
+    faHammer, faCloudUploadAlt, faGripVertical, faRulerCombined, faBed, faBath, faToilet, 
+    faLayerGroup, faCheck, faBolt, faWheelchair, faBoxOpen, faIndustry
 } from '@fortawesome/free-solid-svg-icons'; 
 
 interface FormularioImovelProps {
@@ -42,6 +46,7 @@ const defaultCozinhaItem: CozinhaData = { tipo: 'FECHADA', nomeCustomizado: '', 
 const defaultSalaItem: SalaData = { tipo: 'ESTAR', nomeCustomizado: '', qtdAssentos: 1, area: 0 };
 const defaultVarandaItem: VarandaData = { tipo: 'SIMPLES', nomeCustomizado: '', possuiChurrasqueira: false, temFechamentoVidro: false, area: 0 };
 const defaultConstrucaoExternaItem: ConstrucaoExternaData = { tipo: 'EDICULA', nomeCustomizado: '', area: 0, possuiBanheiro: false };
+const defaultAreaComercialItem: AreaComercialData = { tipo: 'GALPAO', nomeCustomizado: '', area: 0, peDireito: 0, capacidadePiso: 0, temArCondicionado: false };
 
 const defaultRegrasAnimais: RegrasAnimaisData = { permiteGatos: true, permiteCaes: true, outrosAnimais: false, portePequeno: true, porteMedio: true, porteGrande: false };
 const defaultPublicidade: PublicidadeConfig = { publicadoRentou: true, publicadoPortaisExternos: false, mostrarEnderecoCompleto: false, mostrarNumero: false, statusPublicacao: 'RASCUNHO' };
@@ -58,7 +63,7 @@ const defaultAcabamentos: AcabamentoData = {
     teto: 'GESSO_REBAIXADO', esquadrias: 'ALUMINIO',
 };
 const defaultExternos: CaracteristicasExternasData = { 
-    posicaoSolar: 'SOL_DA_MANHA', posicaoImovel: 'FRENTE', vista: 'LIVRE', 
+    posicaoSolar: 'SOL_MANHA', posicaoImovel: 'FRENTE', vista: 'LIVRE', 
     nivelBarulho: 'SILENCIOSO', tipoRua: 'ASFALTADA', deEsquina: false 
 };
 const defaultDoc: DocumentacaoData = { 
@@ -86,6 +91,9 @@ const defaultFormData: NovoImovelData = {
     dimensoesTerreno: { frente: 0, fundos: 0, lateralDireita: 0, lateralEsquerda: 0, topografia: 'PLANO' },
     areaMediaQuartos: 0, areaMediaSuites: 0, areaTotalBanheiros: 0, areaExternaPrivativa: 0, areaQuintal: 0,
 
+    // Inteligência Comercial / Industrial
+    peDireito: 0, cargaPiso: 0, numeroDocas: 0, potenciaEnergia: '', zoneamento: '', indiceAproveitamento: 0,
+
     // Estrutura
     quartos: 1, suites: 0, banheiros: 1, lavabos: 0, banheirosServico: 0, 
     vagasGaragem: 0, detalhesVaga: defaultVagas,
@@ -95,12 +103,14 @@ const defaultFormData: NovoImovelData = {
     
     // Arrays
     cozinhas: [], salas: [], varandas: [], dispensa: defaultDispensa, construcoesExternas: [],
+    areasComerciais: [], // Novo array dinâmico
 
     // Qualitativo
     descricaoLonga: '',
     caracteristicas: [], 
     estadoConservacao: 'USADO',
     tipoConstrucao: 'ALVENARIA',
+    anoConstrucao: new Date().getFullYear(), // Padrão
     acabamentos: defaultAcabamentos,
     dadosExternos: defaultExternos,
     
@@ -127,8 +137,9 @@ const defaultFormData: NovoImovelData = {
 const isNumericField = (name: string): boolean => 
     ['quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'areaTerreno', 
      'valorAluguel', 'valorCondominio', 'valorIPTU', 'andar', 'totalAndaresNoPredio', 'unidadesPorAndar', 'elevadores',
-     'areaMediaQuartos', 'areaMediaSuites', 'areaTotalBanheiros', 'areaExternaPrivativa', 'areaQuintal',
-     'dimensoesTerreno.frente', 'dimensoesTerreno.fundos'].includes(name) || name.startsWith('dimensoesTerreno.');
+     'areaMediaQuartos', 'areaMediaSuites', 'areaTotalBanheiros', 'areaExternaPrivativa', 'areaQuintal', 'anoConstrucao',
+     'peDireito', 'cargaPiso', 'numeroDocas', 'indiceAproveitamento', // Novos campos numéricos
+     'dimensoesTerreno.frente', 'dimensoesTerreno.fundos', 'dimensoesTerreno.lateralDireita', 'dimensoesTerreno.lateralEsquerda'].includes(name) || name.startsWith('dimensoesTerreno.');
 
 const getInitialState = (initialData?: Imovel) => {
     const initialDataPayload = initialData || {} as Imovel;
@@ -157,6 +168,7 @@ const getInitialState = (initialData?: Imovel) => {
         salas: (initialDataPayload.salas?.length > 0) ? initialDataPayload.salas : [],
         varandas: (initialDataPayload.varandas?.length > 0) ? initialDataPayload.varandas : [],
         construcoesExternas: (initialDataPayload.construcoesExternas?.length > 0) ? initialDataPayload.construcoesExternas : [],
+        areasComerciais: (initialDataPayload.areasComerciais?.length > 0) ? initialDataPayload.areasComerciais : [],
 
         // Garantias
         categoriaPrincipal: initialDataPayload.categoriaPrincipal || defaultFormData.categoriaPrincipal,
@@ -170,11 +182,9 @@ const getInitialState = (initialData?: Imovel) => {
     const initialLocalInputs: Record<string, string> = {};
     initialLocalInputs['endereco.cep'] = initialFormData.endereco.cep ? initialFormData.endereco.cep.replace(/^(\d{5})(\d{3})$/, '$1-$2') : ''; 
     
-    // Helper recursivo para preencher inputs numéricos aninhados se necessário, 
-    // mas aqui faremos direto para os campos conhecidos
     const numericFields = Object.keys(defaultFormData).filter(k => isNumericField(k));
     // Adiciona subcampos manuais
-    ['dimensoesTerreno.frente', 'dimensoesTerreno.fundos'].forEach(k => numericFields.push(k));
+    ['dimensoesTerreno.frente', 'dimensoesTerreno.fundos', 'dimensoesTerreno.lateralDireita', 'dimensoesTerreno.lateralEsquerda'].forEach(k => numericFields.push(k));
 
     return { initialFormData, initialLocalInputs };
 };
@@ -209,7 +219,6 @@ const CheckboxInput: React.FC<{ label: string; name: string; checked: boolean; o
     </div>
 );
 
-// ATUALIZADO: Aceita tooltip
 const SelectResponsabilidade: React.FC<{ label: string, name: string, value: ResponsavelPagamento, onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void, tooltip?: string }> = ({ label, name, value, onChange, tooltip }) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center mb-1">
@@ -230,15 +239,14 @@ const SelectResponsabilidade: React.FC<{ label: string, name: string, value: Res
     </div>
 );
 
-const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void }> = ({ selected, onSelect }) => (
+const ComodidadesSelector: React.FC<{ selected: string[]; onSelect: (caracteristica: string) => void; features: string[]; title: string }> = ({ selected, onSelect, features, title }) => (
     <div className="bg-blue-50/30 dark:bg-zinc-800/30 p-4 rounded-lg border border-blue-100 dark:border-zinc-700">
-        {/* CORREÇÃO: Ícone adicionado e título realçado */}
         <label className="text-xl font-bold text-rentou-primary dark:text-blue-400 mb-4 flex items-center border-b border-gray-200 dark:border-zinc-600 pb-2">
             <Icon icon={faStar} className="w-5 h-5 mr-2 text-yellow-500" />
-            Comodidades e Atrativos
+            {title}
         </label>
         <div className="flex flex-wrap gap-2">
-            {COMODIDADES_RESIDENCIAIS.map((feature: string) => {
+            {features.map((feature: string) => {
                 const isSelected = selected.includes(feature);
                 return (
                     <button
@@ -290,6 +298,128 @@ const RoomGroupControls: React.FC<RoomGroupControlsProps> = ({ onAdd, onRemove, 
     </div>
 );
 
+// --- COMPONENTE PARA ÁREAS COMERCIAIS / INDUSTRIAIS ---
+const AreaComercialGroup: React.FC<{ 
+    item: AreaComercialData, 
+    index: number, 
+    onChange: (name: string, value: any) => void, 
+    onAdd: () => void, 
+    onRemove: (index: number) => void, 
+    count: number 
+}> = ({ item, index, onChange, onAdd, onRemove, count }) => {
+    
+    const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        if (type === 'number') {
+             onChange(name, parseFloat(value) || 0);
+        } else if (type === 'checkbox') {
+             onChange(name, (e.target as HTMLInputElement).checked);
+        } else {
+             onChange(name, value);
+        }
+    };
+
+    const isIndustrialArea = ['GALPAO', 'DOCA', 'DEPOSITO', 'LOJA'].includes(item.tipo);
+
+    return (
+        <div className="p-4 border rounded-lg bg-gray-100 dark:bg-zinc-700/50 border-gray-300 dark:border-zinc-600 relative">
+            <h4 className="text-md font-semibold text-gray-800 dark:text-gray-100 mb-3 flex items-center">
+                 <Icon icon={faWarehouse} className="w-4 h-4 mr-2 text-purple-600" /> 
+                 {item.nomeCustomizado || `Ambiente ${index + 1}`}
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Ambiente</label>
+                    <select 
+                        name="tipo" 
+                        value={item.tipo || ''} 
+                        onChange={handleLocalChange} 
+                        required 
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md"
+                    >
+                        <option value="" disabled>Selecione...</option>
+                        <option value="GALPAO">Galpão / Área Fabril</option>
+                        <option value="ESCRITORIO">Escritório / Open Space</option>
+                        <option value="LOJA">Salão de Vendas / Loja</option>
+                        <option value="MEZANINO">Mezanino</option>
+                        <option value="DOCA">Doca de Carga</option>
+                        <option value="REFEITORIO">Refeitório / Copa</option>
+                        <option value="VESTIARIO">Vestiário</option>
+                        <option value="RECEPCAO">Recepção</option>
+                        <option value="SALA_REUNIAO">Sala de Reunião</option>
+                        <option value="DEPOSITO">Depósito Fechado</option>
+                        <option value="OUTRO">Outro</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Identificação (Opcional)</label>
+                    <input 
+                        type="text" 
+                        name="nomeCustomizado" 
+                        value={item.nomeCustomizado || ''} 
+                        onChange={handleLocalChange} 
+                        placeholder="Ex: Galpão Principal, Sala Diretoria" 
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" 
+                    />
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-3">
+                 <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Área (m²)</label>
+                    <input 
+                        type="number" 
+                        name="area" 
+                        value={item.area || ''} 
+                        onChange={handleLocalChange} 
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" 
+                    />
+                 </div>
+
+                 {isIndustrialArea ? (
+                      <>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Pé Direito (m)</label>
+                            <input 
+                                type="number" 
+                                name="peDireito" 
+                                value={item.peDireito || ''} 
+                                onChange={handleLocalChange} 
+                                placeholder="Ex: 8"
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" 
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Carga Piso (t/m²)</label>
+                            <input 
+                                type="number" 
+                                name="capacidadePiso" 
+                                value={item.capacidadePiso || ''} 
+                                onChange={handleLocalChange} 
+                                placeholder="Ex: 5"
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-md" 
+                            />
+                        </div>
+                      </>
+                  ) : (
+                      <div className="flex items-center pt-6">
+                        <CheckboxInput 
+                            label="Ar Condicionado?" 
+                            name="temArCondicionado" 
+                            checked={item.temArCondicionado || false} 
+                            onChange={handleLocalChange} 
+                        />
+                      </div>
+                  )}
+            </div>
+            
+            <RoomGroupControls onAdd={onAdd} onRemove={onRemove} index={index} count={count} />
+        </div>
+    );
+};
+
+// ... (CozinhaGroup, SalaGroup, VarandaGroup, ConstrucaoExternaGroup mantidos iguais) ...
 const CozinhaGroup: React.FC<{ item: CozinhaData, index: number, onChange: (name: string, value: any) => void, onAdd: () => void, onRemove: (index: number) => void, count: number }> = ({ item, index, onChange, onAdd, onRemove, count }) => {
     const handleLocalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -483,19 +613,122 @@ const ConstrucaoExternaGroup: React.FC<{ item: ConstrucaoExternaData, index: num
    );
 };
 
+// --- COMPONENTES STEPPER NOVOS ---
+
+// Stepper Lateral (Vertical)
+const SideStepper = ({ currentStep, setStep, isVisible }: { currentStep: number, setStep: (s: number) => void, isVisible: boolean }) => {
+    return (
+        <div className={`fixed right-8 top-1/2 transform -translate-y-1/2 z-50 flex flex-col gap-6 transition-all duration-700 ease-in-out ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}>
+            {formSteps.map((step) => {
+                const isActive = step.id <= currentStep;
+                const isCurrent = step.id === currentStep;
+                const isClickable = step.id < currentStep;
+
+                return (
+                    <div key={step.id} className="relative group flex items-center justify-end">
+                        {/* Tooltip Lateral */}
+                        <div className={`absolute right-8 pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap`}>
+                             <span className="bg-gray-900 text-white text-xs py-1 px-2 rounded shadow-lg font-medium">
+                                {step.name}
+                             </span>
+                        </div>
+
+                        <button
+                            onClick={() => isClickable ? setStep(step.id) : null}
+                            disabled={!isClickable && !isActive}
+                            className={`w-3 h-3 rounded-full transition-all duration-300 border-2 ${
+                                isCurrent 
+                                    ? 'bg-rentou-primary border-rentou-primary scale-150 ring-4 ring-blue-100 dark:ring-blue-900' 
+                                    : isActive 
+                                        ? 'bg-blue-400 border-blue-400 hover:bg-rentou-primary' 
+                                        : 'bg-gray-300 dark:bg-zinc-600 border-transparent'
+                            } ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
+                        />
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+// Stepper Superior (Horizontal) - Melhorado
+const TopStepper = ({ currentStep, setStep, isVisible }: { currentStep: number, setStep: (s: number) => void, isVisible: boolean }) => {
+    // Cálculo de porcentagem baseado no número de steps. (0 a 100)
+    const totalSteps = formSteps.length;
+    const progressWidth = totalSteps > 1 ? Math.round(((currentStep - 1) / (totalSteps - 1)) * 100) : 100;
+
+    return (
+        // Wrapper com transição de opacidade e altura (melhorado com max-h e duration-700)
+        <div className={`w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-sm border-b border-gray-100 dark:border-zinc-700 mb-8 transition-all duration-700 ease-in-out origin-top overflow-hidden ${!isVisible ? 'opacity-0 -translate-y-2 max-h-0 py-0 mb-0 pointer-events-none' : 'opacity-100 max-h-40 py-6'}`}>
+            <div className="max-w-5xl mx-auto px-12 sm:px-24 relative"> {/* Aumentado padding horizontal para não colar nas bordas */}
+                
+                {/* Container relativo para posicionamento das linhas e steps */}
+                <div className="relative w-full">
+
+                    <div className="absolute top-5 left-[40px] right-[40px] h-1 -z-10 transform -translate-y-1/2">
+                        {/* Background */}
+                        <div className="absolute inset-0 bg-gray-200 dark:bg-zinc-700 rounded-full"></div>
+                        {/* Foreground */}
+                        <div 
+                            className="absolute top-0 left-0 h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out rounded-full"
+                            style={{ width: `${progressWidth}%` }}
+                        ></div>
+                    </div>
+
+                    <div className="flex justify-between w-full">
+                        {formSteps.map((step) => {
+                            const isActive = step.id <= currentStep;
+                            const isCurrent = step.id === currentStep;
+                            const isClickable = step.id < currentStep;
+                            
+                            return (
+                                <div 
+                                    key={step.id} 
+                                    onClick={() => isClickable ? setStep(step.id) : null}
+                                    className={`flex flex-col items-center z-10 relative group ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
+                                    // Define largura mínima igual para todos para garantir centralização consistente
+                                    style={{ minWidth: '80px' }}
+                                >
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 border-4 shadow-sm ${
+                                        isActive 
+                                        ? 'bg-rentou-primary text-white border-white dark:border-zinc-900 ring-2 ring-rentou-primary/30' 
+                                        : 'bg-gray-100 text-gray-400 border-white dark:bg-zinc-800 dark:border-zinc-900 dark:text-zinc-600'
+                                    } ${isClickable ? 'group-hover:bg-blue-600' : ''}`}>
+                                        {step.id < currentStep ? <Icon icon={faCheck} className="w-4 h-4" /> : step.id}
+                                    </div>
+                                    
+                                    <span className={`text-xs uppercase tracking-wider mt-3 font-bold whitespace-nowrap transition-colors ${
+                                        isCurrent ? 'text-rentou-primary dark:text-blue-400' : 
+                                        isActive ? 'text-gray-600 dark:text-gray-400' : 'text-gray-300 dark:text-zinc-600'
+                                    }`}>
+                                        {step.name}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export default function FormularioImovel({ initialData }: FormularioImovelProps) {
     const router = useRouter();
     const { user } = useAuthStore();
     const [loading, setLoading] = useState(false); 
     const [error, setError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState(1);
+    
+    // Estado para controlar qual stepper exibir
+    const [showTopStepper, setShowTopStepper] = useState(true);
+
     const isEditing = !!initialData;
     const formTitle = isEditing ? 'Editar Imóvel' : 'Novo Imóvel';
     
     const [cepLoading, setCepLoading] = useState(false);
     const [cepSuccess, setCepSuccess] = useState(false);
 
-    // Estado para Drag and Drop
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     const { initialFormData, initialLocalInputs } = useMemo(() => getInitialState(initialData), [initialData]);
@@ -505,6 +738,21 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     const [photoList, setPhotoList] = useState<{ url?: string, file?: File, isNew: boolean }[]>([]);
     const [fotosAExcluir, setFotosAExcluir] = useState<string[]>([]);
     const MAX_PHOTOS = 30;
+
+    // Efeito de Scroll para Alternar Steppers
+    useEffect(() => {
+        const handleScroll = () => {
+            // Se rolar mais de 150px, esconde o topo e mostra o lateral
+            if (window.scrollY > 150) {
+                setShowTopStepper(false);
+            } else {
+                setShowTopStepper(true);
+            }
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     useEffect(() => {
         if (initialData?.fotos) {
@@ -521,13 +769,23 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         return tipo?.finalidade || []; 
     }, [formData.tipoDetalhado, tiposDisponiveis]);
 
+    // FEATURES INTELIGENTES
+    const currentFeaturesList = useMemo(() => {
+        return getFeaturesByCategory(formData.categoriaPrincipal, formData.tipoDetalhado);
+    }, [formData.categoriaPrincipal, formData.tipoDetalhado]);
+
+    // FLAGS DE CONTEXTO
+    const isTerreno = formData.categoriaPrincipal === 'Terrenos';
+    const isRural = formData.categoriaPrincipal === 'Rural';
+    const isComercial = formData.categoriaPrincipal === 'Comercial' || formData.categoriaPrincipal === 'Imóveis Especiais';
+    const isResidencial = formData.categoriaPrincipal === 'Residencial' || isRural;
+
     useEffect(() => {
         const firstTipo = tiposDisponiveis[0];
         if (firstTipo) {
             const defaultTipoDetalhado = firstTipo.subtipos ? `${firstTipo.nome} - ${firstTipo.subtipos[0]}` : firstTipo.nome;
             
             setFormData(prevData => {
-                
                 const keptFinalidades = prevData.finalidades.filter(
                     f => firstTipo.finalidade.includes(f as ImovelFinalidade)
                 );
@@ -556,13 +814,11 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         const target = e.target;
         const isCheckbox = type === 'checkbox';
         
-        // Lógica para campos aninhados (ex: detalhesVaga.tipo)
         if (name.includes('.')) {
             const parts = name.split('.');
             const mainKey = parts[0] as keyof NovoImovelData; 
             const subKey = parts[1];
 
-            // CEP handler
             if (name === 'endereco.cep') {
                 let cleanedValue = value.replace(/\D/g, '').slice(0, 8);
                 let formattedValue = cleanedValue.length > 5 ? `${cleanedValue.slice(0, 5)}-${cleanedValue.slice(5)}` : cleanedValue;
@@ -571,7 +827,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 return;
             }
 
-            // Numeric Nested
             if (isNumericField(name)) {
                  const numericValue = parseFloat(value) || 0;
                  setFormData(prevData => ({
@@ -581,7 +836,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                 return;
             }
 
-            // Generic Nested Update
             setFormData(prevData => ({
                 ...prevData,
                 [mainKey]: { 
@@ -592,13 +846,11 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             return;
         }
 
-        // Top Level Numeric
         if (isNumericField(name)) {
             setLocalNumericInputs(prev => ({ ...prev, [name]: value }));
             return;
         }
         
-        // Top Level Boolean/String
         setFormData((prevData: NovoImovelData) => ({
             ...prevData,
             [name]: isCheckbox ? (target as HTMLInputElement).checked : value,
@@ -612,6 +864,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             else if (key === 'salas') newItem = { ...defaultSalaItem, nomeCustomizado: '' }; 
             else if (key === 'varandas') newItem = { ...defaultVarandaItem, nomeCustomizado: '' }; 
             else if (key === 'construcoesExternas') newItem = { ...defaultConstrucaoExternaItem };
+            else if (key === 'areasComerciais') newItem = { ...defaultAreaComercialItem };
             else return prevData;
 
             return {
@@ -849,19 +1102,22 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             }
         }
         if (currentStep === 2) {
-            if (formData.cozinhas.some(c => !c.tipo) || formData.salas.some(s => !s.tipo) || formData.varandas.some(v => !v.tipo)) {
-                 setError("Certifique-se de que o campo 'Tipo' está selecionado para todos os Cômodos dinâmicos adicionados.");
-                 return;
-             }
-             if (formData.suites > formData.quartos) {
-                 setError("O número de suítes não pode ser maior que o número total de quartos.");
-                 return;
-             }
+            // Validações apenas se NÃO for Terreno
+            if (!isTerreno) {
+                if (isResidencial && (formData.cozinhas.some(c => !c.tipo) || formData.salas.some(s => !s.tipo) || formData.varandas.some(v => !v.tipo))) {
+                     setError("Certifique-se de que o campo 'Tipo' está selecionado para todos os Cômodos dinâmicos adicionados.");
+                     return;
+                 }
+                 if (isResidencial && formData.suites > formData.quartos) {
+                     setError("O número de suítes não pode ser maior que o número total de quartos.");
+                     return;
+                 }
+            }
         }
 
         const numericFieldsToConsolidar: string[] = ['areaTotal', 'areaUtil', 'valorAluguel', 'valorCondominio', 'valorIPTU', 'areaMediaQuartos', 'areaMediaSuites', 'areaTotalBanheiros', 'areaExternaPrivativa', 'areaQuintal'];
         if (currentStep === 2) {
-             numericFieldsToConsolidar.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar', 'areaTerreno'); 
+             numericFieldsToConsolidar.push('quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'andar', 'totalAndaresNoPredio', 'unidadesPorAndar', 'elevadores', 'areaTerreno', 'peDireito', 'cargaPiso', 'indiceAproveitamento', 'anoConstrucao'); 
         }
         
         numericFieldsToConsolidar.forEach(name => {
@@ -895,7 +1151,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         try {
             let finalFormData: NovoImovelData & Partial<Pick<Imovel, 'latitude' | 'longitude'>> = { ...formData };
             
-            const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'areaTerreno', 'andar', 'areaMediaQuartos', 'areaMediaSuites', 'areaTotalBanheiros', 'areaExternaPrivativa', 'areaQuintal'];
+            const finalNumericFields = ['valorAluguel', 'valorCondominio', 'valorIPTU', 'quartos', 'suites', 'banheiros', 'lavabos', 'banheirosServico', 'vagasGaragem', 'areaTotal', 'areaUtil', 'areaTerreno', 'andar', 'areaMediaQuartos', 'areaMediaSuites', 'areaTotalBanheiros', 'areaExternaPrivativa', 'areaQuintal', 'peDireito', 'cargaPiso', 'indiceAproveitamento', 'anoConstrucao'];
             finalNumericFields.forEach(name => {
                 const value = localNumericInputs[name];
                 if (value !== undefined) {
@@ -911,6 +1167,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
             finalFormData.cozinhas = finalFormData.cozinhas.filter(c => c.tipo);
             finalFormData.salas = finalFormData.salas.filter(s => s.tipo);
             finalFormData.varandas = finalFormData.varandas.filter(v => v.tipo);
+            finalFormData.areasComerciais = finalFormData.areasComerciais.filter(a => a.tipo); // Filtra comerciais
             
             let { latitude, longitude } = initialData || {};
 
@@ -988,47 +1245,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
         }
     };
     
-    // ATUALIZADO: Stepper "Sticky" com correção de sobreposição
-    const ProgressIndicator = () => {
-        const percentage = formSteps.length > 1 ? Math.round(((currentStep - 1) / (formSteps.length - 1)) * 100) : 100;
-
-        return (
-            // CORREÇÃO: top-24 (aprox 96px) para garantir que fique ABAIXO do menu, z-30 para não cobrir dropdowns
-            <div className="mb-10 pt-4 px-2 animate-in fade-in slide-in-from-top-5 sticky top-24 z-30 bg-white/95 backdrop-blur-sm border-b pb-4 dark:bg-zinc-900/90 dark:border-zinc-700 shadow-sm rounded-b-lg -mx-6 -mt-6 px-8">
-                <div className="flex justify-between relative mb-2 px-4">
-                    {formSteps.map((step) => {
-                        const isActive = step.id <= currentStep;
-                        // Permite voltar clicando em etapas anteriores
-                        const isClickable = step.id < currentStep; 
-                        return (
-                            <div 
-                                key={step.id} 
-                                onClick={() => isClickable ? setCurrentStep(step.id) : null}
-                                className={`flex flex-col items-center z-10 transition-transform duration-300 w-1/5 ${isActive ? 'scale-105' : 'scale-100'} ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                            >
-                                <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-bold text-white transition-colors duration-300 shadow-lg border-4 ${
-                                    isActive ? 'bg-rentou-primary dark:bg-blue-600 border-white dark:border-zinc-800 ring-2 ring-offset-2 ring-blue-100 dark:ring-offset-zinc-900 dark:ring-blue-900' : 'bg-gray-300 dark:bg-zinc-600 border-white dark:border-zinc-800'
-                                }`}>
-                                    {step.id < currentStep ? <Icon icon={faCheckCircle} className="w-4 h-4 md:w-5 md:h-5" /> : step.id}
-                                </div>
-                                <span className={`text-[9px] md:text-[10px] uppercase tracking-wide mt-2 font-bold text-center ${isActive ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                    {step.name}
-                                </span>
-                            </div>
-                        );
-                    })}
-                    {/* Linha de progresso ajustada para não "vazar" */}
-                    <div className="absolute top-4 md:top-5 left-[10%] right-[10%] h-1 bg-gray-200 dark:bg-zinc-700 -z-10 transform -translate-y-1/2">
-                         <div 
-                            className="h-full bg-rentou-primary dark:bg-blue-600 transition-all duration-500 ease-out rounded-full" 
-                            style={{ width: `${percentage}%` }}
-                        ></div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
-
     // ATUALIZADO: Suporte a 'info' (tooltip) e 'icon'
     const renderNumericInput = (name: string, label: string, currentValue: number, placeholder?: string, info?: string, icon?: any) => {
         const getDisplayValue = (name: string, currentValue: number) => {
@@ -1357,7 +1573,7 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     <div className="space-y-6 animate-in fade-in">
                         <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">2. Estrutura e Cômodos</h3>
                         
-                        {formData.categoriaPrincipal === 'Rural' ? (
+                        {isRural && (
                             <div className="p-4 border-l-4 border-green-600 bg-green-50 dark:bg-green-900/20 rounded-r-lg mb-6 animate-in slide-in-from-left-2">
                                 <h4 className="font-bold text-green-800 dark:text-green-300 flex items-center mb-4 text-lg">
                                     <Icon icon={faTractor} className="mr-2"/> Estrutura da Propriedade Rural
@@ -1377,20 +1593,34 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         />
                                     </div>
                                 </div>
+                            </div>
+                        )}
 
-                                <label className="block text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">Benfeitorias e Estruturas Rurais</label>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-white dark:bg-zinc-800 rounded border border-gray-200">
-                                    {(BENFEITORIAS_RURAIS || []).map(item => (
-                                        <label key={item} className="flex items-center space-x-2 text-sm cursor-pointer p-1 hover:bg-gray-50 rounded">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={formData.caracteristicas.includes(item)} 
-                                                onChange={() => handleCaracteristicaChange(item)} 
-                                                className="rounded text-green-600 border-gray-300 focus:ring-green-500" 
-                                            />
-                                            <span className="text-gray-700 dark:text-gray-300">{item}</span>
-                                        </label>
-                                    ))}
+                        {isTerreno ? (
+                            <div className="bg-white dark:bg-zinc-800 p-5 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm animate-in fade-in">
+                                <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center border-b pb-2">
+                                    <Icon icon={faRulerCombined} className="mr-2 text-blue-500"/> Dimensões e Topografia
+                                </h4>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                    {renderNumericInput('areaTotal', 'Área Total (m²)', formData.areaTotal, '0', undefined, faRulerCombined)}
+                                    {renderNumericInput('areaTerreno', 'Área do Terreno (m²)', formData.areaTerreno, '0', undefined, faRulerCombined)}
+                                    <div><label className="text-xs text-gray-600 dark:text-gray-400">Frente (m)</label><input type="number" name="dimensoesTerreno.frente" value={formData.dimensoesTerreno?.frente} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
+                                    <div><label className="text-xs text-gray-600 dark:text-gray-400">Fundos (m)</label><input type="number" name="dimensoesTerreno.fundos" value={formData.dimensoesTerreno?.fundos} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs text-gray-600 dark:text-gray-400">Topografia</label>
+                                        <select name="dimensoesTerreno.topografia" value={formData.dimensoesTerreno?.topografia} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="PLANO">Plano</option>
+                                            <option value="ACLIVE">Aclive (Sobe)</option>
+                                            <option value="DECLIVE">Declive (Desce)</option>
+                                            <option value="IRREGULAR">Irregular</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-gray-600 dark:text-gray-400">Zoneamento (Opcional)</label>
+                                        <input type="text" name="zoneamento" value={formData.zoneamento || ''} onChange={handleChange} placeholder="Ex: ZM, Industrial" className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -1401,46 +1631,92 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center border-b pb-2">
                                         <Icon icon={faRulerCombined} className="mr-2 text-blue-500"/> Dimensões e Áreas (m²)
                                     </h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
                                          {renderNumericInput('areaTotal', 'Área Total', formData.areaTotal, '0', 'Área construída + comum.', faRulerCombined)}
                                          {renderNumericInput('areaUtil', 'Área Útil', formData.areaUtil, '0', 'Área privativa do imóvel.', faRulerCombined)}
-                                         {renderNumericInput('areaTerreno', 'Área Terreno', formData.areaTerreno, '0', 'Área total do lote.', faRulerCombined)}
-                                         {renderNumericInput('areaExternaPrivativa', 'Área Externa', formData.areaExternaPrivativa || 0, '0', undefined, faSun)}
-                                         {renderNumericInput('areaQuintal', 'Quintal', formData.areaQuintal || 0, '0', undefined, faSun)}
+                                         
+                                         {isResidencial && (
+                                            <>
+                                                {renderNumericInput('areaTerreno', 'Área do Terreno', formData.areaTerreno, '0', undefined, faRulerCombined)}
+                                                {renderNumericInput('areaQuintal', 'Quintal', formData.areaQuintal || 0, '0', undefined, faSun)}
+                                            </>
+                                         )}
+                                         {isResidencial && renderNumericInput('areaExternaPrivativa', 'Área Externa', formData.areaExternaPrivativa || 0, '0', undefined, faSun)}
                                     </div>
                                 </div>
 
-                                {/* CARD: Composição e Lazer Privativo */}
-                                <div className="bg-white dark:bg-zinc-800 p-5 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm">
+                                {isComercial && (
+                                    <div className="mt-6 p-5 bg-purple-50 dark:bg-zinc-800 rounded-xl border border-purple-200 dark:border-zinc-600">
+                                            <h4 className="text-base font-bold text-purple-800 dark:text-purple-300 mb-4 flex items-center">
+                                                <Icon icon={faIndustry} className="mr-2"/> Especificações Técnicas
+                                            </h4>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Pé Direito (m)</label>
+                                                    <input type="number" name="peDireito" value={formData.peDireito || ''} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white" placeholder="Ex: 6.5" />
+                                                </div>
+                                                
+                                                {(formData.tipoDetalhado.includes('Galpão') || formData.tipoDetalhado.includes('Industrial') || formData.tipoDetalhado.includes('Loja')) && (
+                                                    <>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Carga Piso (ton/m²)</label>
+                                                            <input type="number" name="cargaPiso" value={formData.cargaPiso || ''} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white" placeholder="Ex: 5" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nº de Docas</label>
+                                                            <input type="number" name="numeroDocas" value={formData.numeroDocas || ''} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Energia</label>
+                                                            <input type="text" name="potenciaEnergia" value={formData.potenciaEnergia || ''} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white" placeholder="Ex: Trifásica 75kVA" />
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                    </div>
+                                )}
+
+                                <div className="bg-white dark:bg-zinc-800 p-5 rounded-xl border border-gray-200 dark:border-zinc-700 shadow-sm mt-4">
                                     <h4 className="text-base font-semibold text-gray-700 dark:text-gray-200 mb-4 flex items-center border-b pb-2">
                                         <Icon icon={faLayerGroup} className="mr-2 text-blue-500"/> Composição do Imóvel
                                     </h4>
                                     
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 mb-6">
-                                         <div>{renderNumericInput('quartos', 'Quartos', formData.quartos, '1', undefined, faBed)}</div>
-                                         <div>{renderNumericInput('suites', 'Suítes', formData.suites, '0', undefined, faBed)}</div>
+                                         {isResidencial && (
+                                            <>
+                                                <div>{renderNumericInput('quartos', 'Quartos', formData.quartos, '1', undefined, faBed)}</div>
+                                                <div>{renderNumericInput('suites', 'Suítes', formData.suites, '0', undefined, faBed)}</div>
+                                            </>
+                                         )}
                                          <div>{renderNumericInput('banheiros', 'Banheiros', formData.banheiros, '1', undefined, faBath)}</div>
                                          <div>{renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0', undefined, faToilet)}</div>
                                     </div>
 
-                                    {/* SEÇÃO GARAGEM DENTRO DO CARD DE COMPOSIÇÃO */}
-                                    <div className="bg-blue-50/50 dark:bg-zinc-700/30 rounded-lg p-4 border border-blue-100 dark:border-zinc-600">
-                                        <div className="flex items-center gap-4 mb-3">
-                                            <div className="w-1/3">
-                                                {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}
-                                            </div>
-                                            {formData.categoriaPrincipal === 'Residencial' && formData.tipoDetalhado.includes('Apartamento') && (
-                                                <div className="w-1/3">
-                                                    {renderNumericInput('andar', 'Andar', formData.andar || 0, 'Ex: 5', undefined, faBuilding)}
-                                                </div>
-                                            )}
+                                    {/* ANDAR E UNIDADES (SEPARADO DA GARAGEM) */}
+                                    {isResidencial && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                                                <div>{renderNumericInput('andar', 'Andar', formData.andar || 0, '0', undefined, faBuilding)}</div>
+                                                <div>{renderNumericInput('unidadesPorAndar', 'Unidades por Andar', formData.unidadesPorAndar || 0, '0', undefined, faBuilding)}</div>
                                         </div>
+                                    )}
 
-                                        {/* DETALHES DA GARAGEM (MOVIDO DA ETAPA 3) */}
-                                        {formData.vagasGaragem > 0 && (
-                                            <div className="mt-4 pt-3 border-t border-blue-200 dark:border-zinc-600 animate-in slide-in-from-top-2">
+                                    {/* VAGAS DE GARAGEM E DETALHES (ENCAPSULADOS) */}
+                                    {formData.vagasGaragem === 0 ? (
+                                        // Caso: 0 Vagas - Apenas o input em sua linha, com largura restrita
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                                             <div>{renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}</div>
+                                        </div>
+                                    ) : (
+                                        // Caso: > 0 Vagas - Input e Detalhes encapsulados no box colorido
+                                        <div className="mt-4 border border-blue-200 dark:border-zinc-600 bg-blue-50/50 dark:bg-zinc-700/30 p-4 rounded-lg animate-in fade-in">
+                                            {/* Input da Vaga dentro do box, com largura restrita */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 animate-in slide-in-from-top-1">
+                                                 <div>{renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}</div>
+                                            </div>
+
+                                            {/* Bloco de Detalhes */}
+                                            <div className="pt-3 border-t border-blue-200 dark:border-zinc-600">
                                                 <h5 className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-3">Detalhes da Vaga</h5>
-                                                
                                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                                                     <select name="detalhesVaga.tipoCobertura" value={formData.detalhesVaga?.tipoCobertura} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
                                                         <option value="COBERTA">Vaga Coberta</option>
@@ -1448,181 +1724,211 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                                         <option value="MISTA">Mista</option>
                                                     </select>
                                                     <select name="detalhesVaga.tipoManobra" value={formData.detalhesVaga?.tipoManobra} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
-                                                        <option value="LIVRE">Vaga Livre (Sem manobra)</option>
-                                                        <option value="PRESA">Vaga Presa (Gaveta)</option>
-                                                        <option value="MISTA">Algumas presas</option>
+                                                        <option value="LIVRE">Vaga Livre</option>
+                                                        <option value="PRESA">Vaga Presa</option>
+                                                        <option value="MISTA">Mista</option>
                                                     </select>
                                                     <select name="detalhesVaga.tipoUso" value={formData.detalhesVaga?.tipoUso} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
-                                                        <option value="INDIVIDUAL">Vaga Fixa/Individual</option>
+                                                        <option value="INDIVIDUAL">Fixa/Individual</option>
                                                         <option value="ROTATIVA">Rotativa</option>
                                                         <option value="COMPARTILHADA">Compartilhada</option>
                                                     </select>
                                                 </div>
-
-                                                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                                <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
                                                     <CheckboxInput label="Vaga Escriturada" name="detalhesVaga.escriturada" checked={formData.detalhesVaga?.escriturada || false} onChange={handleChange} icon={faFileContract} />
                                                     <CheckboxInput label="Carregador Elétrico" name="detalhesVaga.carregadorCarroEletrico" checked={(formData.detalhesVaga as any)?.carregadorCarroEletrico || false} onChange={handleChange} icon={faBolt} />
                                                     <CheckboxInput label="Vaga Acessível" name="detalhesVaga.acessivel" checked={(formData.detalhesVaga as any)?.acessivel || false} onChange={handleChange} icon={faWheelchair} />
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}
                         
-                        {/* --- DETALHES DE CÔMODOS (ARRAYS DINÂMICOS) --- */}
+                        {/* --- ESTRUTURAS DINÂMICAS --- */}
                         <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Detalhes de Cômodos Dinâmicos</h4>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Adicione instâncias para cada cozinha, sala e varanda para máxima compatibilidade com portais.</p>
-
-                            {formData.cozinhas.length === 0 && (
-                                <button type="button" onClick={addRoom.bind(null, 'cozinhas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-rentou-primary text-white hover:bg-blue-700 dark:hover:bg-blue-600 transition flex items-center justify-center">
-                                    <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Primeira Cozinha
-                                </button>
-                            )}
                             
-                            <div className="space-y-4">
-                                {formData.cozinhas.map((item, index) => (
-                                    <CozinhaGroup key={`coz-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'cozinhas', index)} onAdd={addRoom.bind(null, 'cozinhas')} onRemove={removeRoom.bind(null, 'cozinhas', index)} count={formData.cozinhas.length}/>
-                                ))}
-                            </div>
-                            
-                            <div className="space-y-4">
-                                {formData.salas.length === 0 && formData.cozinhas.length > 0 && (
-                                     <button type="button" onClick={addRoom.bind(null, 'salas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
-                                        <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Primeira Sala
-                                     </button>
-                                )}
-                                {formData.salas.map((item, index) => (
-                                    <SalaGroup key={`sala-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'salas', index)} onAdd={addRoom.bind(null, 'salas')} onRemove={removeRoom.bind(null, 'salas', index)} count={formData.salas.length}/>
-                                ))}
-                            </div>
-                            
-                             <div className="space-y-4">
-                                {formData.varandas.length === 0 && formData.salas.length > 0 && (
-                                     <button type="button" onClick={addRoom.bind(null, 'varandas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
-                                        <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Varanda/Terraço
-                                     </button>
-                                )}
-                                {formData.varandas.map((item, index) => (
-                                    <VarandaGroup key={`varanda-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'varandas', index)} onAdd={addRoom.bind(null, 'varandas')} onRemove={removeRoom.bind(null, 'varandas', index)} count={formData.varandas.length}/>
-                                ))}
-                            </div>
-
-                            {/* --- DISPENSA (MOVIDA PARA CÁ) --- */}
-                            <div className='p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700 mt-2'>
-                                <div className="flex items-center mb-2">
-                                    <Icon icon={faBoxOpen} className="mr-2 text-gray-500"/>
-                                    <h5 className="font-medium text-sm text-gray-700 dark:text-gray-200">Área de Armazenamento</h5>
-                                </div>
-                                <CheckboxInput label="Possui Dispensa Embutida?" name="dispensa.possuiDispensa" checked={formData.dispensa.possuiDispensa || false} onChange={handleChange} description="Espaço de armazenamento dedicado (dispensa/despensa)."/>
-                                {formData.dispensa.possuiDispensa && (
-                                     <div className='mt-4 pl-6 border-l-2 border-gray-300 dark:border-zinc-600'>
-                                        <CheckboxInput label="Possui prateleiras embutidas?" name="dispensa.prateleirasEmbutidas" checked={formData.dispensa.prateleirasEmbutidas || false} onChange={handleChange}/>
-                                     </div>
-                                )}
-                            </div>
-
-                            <h4 className="text-lg font-semibold mt-6 pt-4 border-t border-gray-200 dark:border-zinc-700 flex items-center">
-                                <Icon icon={faWarehouse} className="mr-2"/> Construções Externas & Edículas
-                            </h4>
-                            <div className="space-y-4">
-                                {formData.construcoesExternas.map((item, index) => (
-                                    <ConstrucaoExternaGroup key={`ext-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'construcoesExternas', index)} onAdd={addRoom.bind(null, 'construcoesExternas')} onRemove={removeRoom.bind(null, 'construcoesExternas', index)} count={formData.construcoesExternas.length} />
-                                ))}
-                                <button type="button" onClick={addRoom.bind(null, 'construcoesExternas')} className="w-full p-3 border-2 border-dashed border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 font-bold text-sm flex justify-center items-center transition-colors">
-                                    <Icon icon={faPlusCircle} className="mr-2"/> Adicionar Edícula / Construção Externa
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* --- Piscina Privativa (MOVIDA PARA CÁ - DEPOIS DE CONSTRUÇÕES EXTERNAS) --- */}
-                        <div className="space-y-4 p-4 border rounded-lg border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-zinc-700/50 mt-6">
-                             <h4 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center">
-                                <Icon icon={faWater} className="w-4 h-4 mr-2" /> Piscina Privativa do Imóvel
-                            </h4>
-                             <CheckboxInput 
-                                label="O imóvel possui piscina privativa?" 
-                                name="piscinaPrivativa.possuiPiscina" 
-                                checked={formData.piscinaPrivativa?.possuiPiscina || false} 
-                                onChange={handleChange} 
-                            />
-                            {formData.piscinaPrivativa.possuiPiscina && (
-                                <div className="grid grid-cols-2 gap-4 mt-2 animate-in fade-in">
-                                     <div>
-                                        <label htmlFor="piscinaPrivativa.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Revestimento</label>
-                                        <select id="piscinaPrivativa.tipo" name="piscinaPrivativa.tipo" value={formData.piscinaPrivativa.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
-                                            <option value="AZULEJO">Azulejo</option>
-                                            <option value="VINIL">Vinil</option>
-                                            <option value="FIBRA">Fibra de Vidro</option>
-                                            <option value="PASTILHA">Pastilha</option>
-                                            <option value="PEDRA_NATURAL">Pedra Natural (Hijau/Hitam)</option>
-                                            <option value="CONCRETO">Concreto Armado</option>
-                                            <option value="AREIA_COMPACTADA">Areia Compactada</option>
-                                            <option value="NATURAL">Natural / Biológica</option>
-                                            <option value="OUTRO">Outro</option>
-                                        </select>
+                            {/* COMERCIAL: ARRAY DE AMBIENTES CORPORATIVOS */}
+                            {isComercial && (
+                                <>
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Ambientes e Áreas Corporativas</h4>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">Adicione galpões, salas, docas e áreas de apoio.</p>
+                                        </div>
+                                        {formData.areasComerciais.length === 0 && (
+                                            <button 
+                                                type="button" 
+                                                onClick={addRoom.bind(null, 'areasComerciais')} 
+                                                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 transition"
+                                            >
+                                                <Icon icon={faPlusCircle} className="mr-2"/> Adicionar Ambiente
+                                            </button>
+                                        )}
                                     </div>
-                                    <CheckboxInput 
-                                        label="É Aquecida?" 
-                                        name="piscinaPrivativa.aquecida" 
-                                        checked={formData.piscinaPrivativa?.aquecida || false} 
-                                        onChange={handleChange} 
-                                    />
-                                </div>
+                                    <div className="space-y-4">
+                                        {formData.areasComerciais.map((item, index) => (
+                                            <AreaComercialGroup 
+                                                key={`area-com-${index}`} 
+                                                item={item} 
+                                                index={index} 
+                                                onChange={handleRoomChange.bind(null, 'areasComerciais', index)} 
+                                                onAdd={addRoom.bind(null, 'areasComerciais')} 
+                                                onRemove={removeRoom.bind(null, 'areasComerciais', index)} 
+                                                count={formData.areasComerciais.length}
+                                            />
+                                        ))}
+                                    </div>
+                                </>
                             )}
-                        </div>
-                        
-                        <div className='pt-4 border-t border-gray-100 dark:border-zinc-700'>
-                            <ComodidadesSelector selected={formData.caracteristicas} onSelect={handleCaracteristicaChange} />
+
+                            {/* RESIDENCIAL: ARRAY DE CÔMODOS PADRÃO */}
+                            {isResidencial && (
+                                <>
+                                    <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Detalhes de Cômodos Dinâmicos</h4>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Adicione instâncias para cada cozinha, sala e varanda para máxima compatibilidade com portais.</p>
+                                    
+                                    {formData.cozinhas.length === 0 && (
+                                        <button type="button" onClick={addRoom.bind(null, 'cozinhas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-rentou-primary text-white hover:bg-blue-700 transition flex items-center justify-center">
+                                            <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Cozinha
+                                        </button>
+                                    )}
+                                    <div className="space-y-4">
+                                        {formData.cozinhas.map((item, index) => (
+                                            <CozinhaGroup key={`coz-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'cozinhas', index)} onAdd={addRoom.bind(null, 'cozinhas')} onRemove={removeRoom.bind(null, 'cozinhas', index)} count={formData.cozinhas.length}/>
+                                        ))}
+                                    </div>
+                                    
+                                    <div className="space-y-4 mt-4">
+                                        {formData.salas.length === 0 && formData.cozinhas.length > 0 && (
+                                             <button type="button" onClick={addRoom.bind(null, 'salas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
+                                                 <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Sala
+                                             </button>
+                                        )}
+                                        {formData.salas.map((item, index) => (
+                                            <SalaGroup key={`sala-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'salas', index)} onAdd={addRoom.bind(null, 'salas')} onRemove={removeRoom.bind(null, 'salas', index)} count={formData.salas.length}/>
+                                        ))}
+                                    </div>
+                                    
+                                     <div className="space-y-4 mt-4">
+                                        {formData.varandas.length === 0 && formData.salas.length > 0 && (
+                                             <button type="button" onClick={addRoom.bind(null, 'varandas')} className="w-full text-left p-3 rounded-lg text-sm font-medium bg-gray-200 dark:bg-zinc-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 transition flex items-center justify-center">
+                                                 <Icon icon={faPlusCircle} className="w-4 h-4 mr-2" /> Adicionar Varanda/Terraço
+                                             </button>
+                                        )}
+                                        {formData.varandas.map((item, index) => (
+                                            <VarandaGroup key={`varanda-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'varandas', index)} onAdd={addRoom.bind(null, 'varandas')} onRemove={removeRoom.bind(null, 'varandas', index)} count={formData.varandas.length}/>
+                                        ))}
+                                    </div>
+
+                                    <div className='p-4 border rounded-lg bg-gray-50 dark:bg-zinc-700 mt-4'>
+                                        <div className="flex items-center mb-2">
+                                            <Icon icon={faBoxOpen} className="mr-2 text-gray-500"/>
+                                            <h5 className="font-medium text-sm text-gray-700 dark:text-gray-200">Área de Armazenamento</h5>
+                                        </div>
+                                        <CheckboxInput label="Possui Dispensa Embutida?" name="dispensa.possuiDispensa" checked={formData.dispensa.possuiDispensa || false} onChange={handleChange} description="Espaço de armazenamento dedicado."/>
+                                    </div>
+
+                                    <h4 className="text-lg font-semibold mt-6 pt-4 border-t border-gray-200 dark:border-zinc-700 flex items-center">
+                                        <Icon icon={faWarehouse} className="mr-2"/> Construções Externas & Edículas
+                                    </h4>
+                                    <div className="space-y-4">
+                                        {formData.construcoesExternas.map((item, index) => (
+                                            <ConstrucaoExternaGroup key={`ext-${index}`} item={item} index={index} onChange={handleRoomChange.bind(null, 'construcoesExternas', index)} onAdd={addRoom.bind(null, 'construcoesExternas')} onRemove={removeRoom.bind(null, 'construcoesExternas', index)} count={formData.construcoesExternas.length} />
+                                        ))}
+                                        <button type="button" onClick={addRoom.bind(null, 'construcoesExternas')} className="w-full p-3 border-2 border-dashed border-orange-300 text-orange-600 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 font-bold text-sm flex justify-center items-center transition-colors">
+                                            <Icon icon={faPlusCircle} className="mr-2"/> Adicionar Edícula
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4 p-4 border rounded-lg border-green-200 dark:border-green-900/50 bg-green-50 dark:bg-zinc-700/50 mt-6">
+                                         <h4 className="text-lg font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center">
+                                            <Icon icon={faWater} className="w-4 h-4 mr-2" /> Piscina Privativa
+                                        </h4>
+                                         <CheckboxInput 
+                                            label="O imóvel possui piscina privativa?" 
+                                            name="piscinaPrivativa.possuiPiscina" 
+                                            checked={formData.piscinaPrivativa?.possuiPiscina || false} 
+                                            onChange={handleChange} 
+                                        />
+                                        {formData.piscinaPrivativa.possuiPiscina && (
+                                            <div className="grid grid-cols-2 gap-4 mt-2 animate-in fade-in">
+                                                 <div>
+                                                    <label htmlFor="piscinaPrivativa.tipo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Tipo</label>
+                                                    <select id="piscinaPrivativa.tipo" name="piscinaPrivativa.tipo" value={formData.piscinaPrivativa.tipo} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-600/70 dark:text-white rounded-md">
+                                                        <option value="AZULEJO">Azulejo</option>
+                                                        <option value="VINIL">Vinil</option>
+                                                        <option value="FIBRA">Fibra de Vidro</option>
+                                                        <option value="PASTILHA">Pastilha</option>
+                                                        <option value="CONCRETO">Concreto Armado</option>
+                                                        <option value="PEDRA_NATURAL">Pedra Natural (Hijau/Hitam)</option>
+                                                        <option value="AREIA_COMPACTADA">Areia Compactada</option>
+                                                        <option value="NATURAL">Natural / Biológica</option>
+                                                        <option value="OUTRO">Outro</option>
+                                                    </select>
+                                                </div>
+                                                <CheckboxInput label="É Aquecida?" name="piscinaPrivativa.aquecida" checked={formData.piscinaPrivativa?.aquecida || false} onChange={handleChange} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                         </div>
                     </div>
                 );
             case 3:
                 return (
                     <div className="space-y-8 animate-in fade-in">
-                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Detalhes, Acabamentos e Diferenciais</h3>
+                        <h3 className="text-xl font-semibold text-rentou-primary dark:text-blue-400">3. Detalhes e Características</h3>
                         
-                        {/* Estado do Imóvel & Materiais */}
-                        <div className="p-4 bg-gray-50 dark:bg-zinc-800 border rounded-lg border-gray-200 dark:border-zinc-700">
-                            <h4 className="font-bold mb-3 flex items-center text-gray-700 dark:text-gray-300">
-                                <Icon icon={faHammer} className="mr-2"/> Estado e Estrutura
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Estado de Conservação</label>
-                                    <select name="estadoConservacao" value={formData.estadoConservacao} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="EM_CONSTRUCAO">Em Construção / Na Planta</option>
-                                        <option value="NOVO">Novo (Nunca Habitado)</option>
-                                        <option value="REFORMADO">Reformado</option>
-                                        <option value="USADO">Usado (Bom Estado)</option>
-                                        <option value="NECESSITA_REFORMA">Necessita Reforma</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Tipo de Construção</label>
-                                    <select name="tipoConstrucao" value={formData.tipoConstrucao} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="ALVENARIA">Alvenaria Convencional</option>
-                                        <option value="STEEL_FRAME">Steel Frame</option>
-                                        <option value="DRYWALL">Drywall / Gesso</option>
-                                        <option value="MISTA">Mista</option>
-                                    </select>
+                        {!isTerreno && (
+                            <div className="p-4 bg-gray-50 dark:bg-zinc-800 border rounded-lg border-gray-200 dark:border-zinc-700">
+                                <h4 className="font-bold mb-3 flex items-center text-gray-700 dark:text-gray-300">
+                                    <Icon icon={faHammer} className="mr-2"/> Estado e Estrutura
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Estado de Conservação</label>
+                                        <select name="estadoConservacao" value={formData.estadoConservacao} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="NA_PLANTA">Na Planta</option>
+                                            <option value="EM_CONSTRUCAO">Em Construção</option>
+                                            <option value="NOVO">Novo</option>
+                                            <option value="USADO">Usado</option>
+                                            <option value="REFORMADO">Reformado</option>
+                                            <option value="NECESSITA_REFORMA">Necessita Reforma</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Tipo de Construção</label>
+                                        <select name="tipoConstrucao" value={formData.tipoConstrucao} onChange={handleChange} className="w-full p-2 border rounded dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="ALVENARIA">Alvenaria</option>
+                                            <option value="STEEL_FRAME">Steel Frame</option>
+                                            <option value="WOOD_FRAME">Wood Frame</option>
+                                            <option value="DRYWALL">Drywall / Gesso</option>
+                                            <option value="MISTA">Mista</option>
+                                            <option value="PRE_MOLDADO">Pré-moldado</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Ano de Construção</label>
+                                        {renderNumericInput('anoConstrucao', '', formData.anoConstrucao || 0, 'Ex: 2024', undefined)}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Informações Externas */}
                         <div className="border p-4 rounded-lg bg-white dark:bg-zinc-800 border-yellow-200 dark:border-yellow-900/30">
                             <h4 className="font-bold mb-4 flex items-center text-yellow-700 dark:text-yellow-500"><Icon icon={faSun} className="mr-2"/> Posição, Sol e Rua</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-xs font-bold mb-1 uppercase text-gray-500">Posição Solar</label>
                                     <select name="dadosExternos.posicaoSolar" value={formData.dadosExternos?.posicaoSolar} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="SOL_DA_MANHA">Sol da Manhã (Leste)</option>
-                                        <option value="SOL_DA_TARDE">Sol da Tarde (Oeste)</option>
+                                        <option value="SOL_MANHA">Sol da Manhã (Leste)</option>
+                                        <option value="SOL_TARDE">Sol da Tarde (Oeste)</option>
                                         <option value="NORTE">Norte (Sol o dia todo)</option>
                                         <option value="SUL">Sul (Pouco sol)</option>
+                                        <option value="NAO_INFORMADO">Não Informado</option>
                                     </select>
                                 </div>
                                 <div>
@@ -1638,11 +1944,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                     <label className="block text-xs font-bold mb-1 uppercase text-gray-500">Vista</label>
                                     <select name="dadosExternos.vista" value={formData.dadosExternos?.vista} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
                                         <option value="LIVRE">Vista Livre</option>
-                                        <option value="CIDADE">Vista Cidade</option>
                                         <option value="MAR">Vista Mar</option>
                                         <option value="MONTANHA">Vista Montanha</option>
                                         <option value="JARDIM">Vista Jardim</option>
-                                        <option value="PAREDE">Vista Parede/Devassada</option>
+                                        <option value="CIDADE">Vista Cidade</option>
+                                        <option value="INTERNA">Interna</option>
+                                        <option value="PAREDE">Parede</option>
+                                        <option value="COMUNIDADE">Comunidade</option>
+                                        <option value="OUTROS">Outros</option>
                                     </select>
                                 </div>
                             </div>
@@ -1654,6 +1963,10 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                         <option value="ASFALTADA">Asfaltada</option>
                                         <option value="PARALELEPIPEDO">Paralelepípedo</option>
                                         <option value="TERRA">Terra</option>
+                                        <option value="CASCALHO">Cascalho</option>
+                                        <option value="PLANA">Plana</option>
+                                        <option value="ACLIVE">Aclive</option>
+                                        <option value="DECLIVE">Declive</option>
                                     </select>
                                 </div>
                                 <div>
@@ -1670,95 +1983,111 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                 </div>
                             </div>
                             
-                            {(formData.categoriaPrincipal === 'Terrenos' || formData.categoriaPrincipal === 'Residencial') && (
-                                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-700">
-                                    <label className="block text-xs font-bold mb-2 uppercase text-gray-500">Dimensões do Terreno</label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div><label className="text-xs text-gray-600 dark:text-gray-400">Frente (m)</label><input type="number" name="dimensoesTerreno.frente" value={formData.dimensoesTerreno?.frente} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
-                                        <div><label className="text-xs text-gray-600 dark:text-gray-400">Fundos (m)</label><input type="number" name="dimensoesTerreno.fundos" value={formData.dimensoesTerreno?.fundos} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
-                                        <div className="col-span-2">
-                                            <label className="text-xs text-gray-600 dark:text-gray-400">Topografia</label>
-                                            <select name="dimensoesTerreno.topografia" value={formData.dimensoesTerreno?.topografia} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                                <option value="PLANO">Plano</option>
-                                                <option value="ACLIVE">Aclive (Sobe)</option>
-                                                <option value="DECLIVE">Declive (Desce)</option>
-                                                <option value="IRREGULAR">Irregular</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-zinc-700">
+                                <label className="block text-xs font-bold mb-2 uppercase text-gray-500">Dimensões do Terreno</label>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div><label className="text-xs text-gray-600 dark:text-gray-400">Frente (m)</label><input type="number" name="dimensoesTerreno.frente" value={formData.dimensoesTerreno?.frente} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
+                                    <div><label className="text-xs text-gray-600 dark:text-gray-400">Fundos (m)</label><input type="number" name="dimensoesTerreno.fundos" value={formData.dimensoesTerreno?.fundos} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
+                                    <div><label className="text-xs text-gray-600 dark:text-gray-400">Lat. Direita (m)</label><input type="number" name="dimensoesTerreno.lateralDireita" value={formData.dimensoesTerreno?.lateralDireita} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
+                                    <div><label className="text-xs text-gray-600 dark:text-gray-400">Lat. Esquerda (m)</label><input type="number" name="dimensoesTerreno.lateralEsquerda" value={formData.dimensoesTerreno?.lateralEsquerda} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600"/></div>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* Acabamentos Detalhados */}
-                        <div className="border p-4 rounded-lg bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700">
-                            <h4 className="font-bold mb-3 flex items-center text-gray-600 dark:text-gray-300"><Icon icon={faHome} className="mr-2"/> Acabamentos e Pisos</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold mb-1 text-gray-500">Piso da Sala</label>
-                                    <select name="acabamentos.pisoSala" value={formData.acabamentos?.pisoSala} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="PORCELANATO">Porcelanato</option>
-                                        <option value="LAMINADO">Laminado</option>
-                                        <option value="TACO_MADEIRA">Taco / Madeira</option>
-                                        <option value="CERAMICA">Cerâmica</option>
-                                        <option value="TABUA_CORRIDA">Tábua Corrida</option>
-                                        <option value="CIMENTO_QUEIMADO">Cimento Queimado</option>
-                                        <option value="OUTRO">Outro</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold mb-1 text-gray-500">Piso dos Quartos</label>
-                                    <select name="acabamentos.pisoQuartos" value={formData.acabamentos?.pisoQuartos} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="LAMINADO">Laminado</option>
-                                        <option value="PORCELANATO">Porcelanato</option>
-                                        <option value="VINILICO">Vinílico</option>
-                                        <option value="TACO_MADEIRA">Taco / Madeira</option>
-                                        <option value="CARPETE">Carpete</option>
-                                        <option value="OUTRO">Outro</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold mb-1 text-gray-500">Piso Cozinha</label>
-                                    <select name="acabamentos.pisoCozinha" value={formData.acabamentos?.pisoCozinha} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="PORCELANATO">Porcelanato</option>
-                                        <option value="GRANITO">Granito</option>
-                                        <option value="CERAMICA">Cerâmica</option>
-                                        <option value="CIMENTO_QUEIMADO">Cimento Queimado</option>
-                                        <option value="OUTRO">Outro</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold mb-1 text-gray-500">Piso Banheiros</label>
-                                    <select name="acabamentos.pisoBanheiros" value={formData.acabamentos?.pisoBanheiros} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="CERAMICA">Cerâmica</option>
-                                        <option value="PORCELANATO">Porcelanato</option>
-                                        <option value="GRANITO">Granito</option>
-                                        <option value="PASTILHA">Pastilha</option>
-                                        <option value="MARMORE">Mármore</option>
-                                        <option value="OUTRO">Outro</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold mb-1 text-gray-500">Acabamento Teto</label>
-                                    <select name="acabamentos.teto" value={formData.acabamentos?.teto} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="GESSO_REBAIXADO">Gesso Rebaixado</option>
-                                        <option value="LAJE">Laje</option>
-                                        <option value="SANCAS">Sancas de Gesso</option>
-                                        <option value="MADEIRA">Forro Madeira</option>
-                                        <option value="APARENTE">Aparente / Industrial</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold mb-1 text-gray-500">Esquadrias</label>
-                                    <select name="acabamentos.esquadrias" value={formData.acabamentos?.esquadrias} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
-                                        <option value="ALUMINIO">Alumínio</option>
-                                        <option value="PVC">PVC</option>
-                                        <option value="MADEIRA">Madeira</option>
-                                        <option value="BLINDEX">Vidro Temperado (Blindex)</option>
-                                        <option value="FERRO">Ferro</option>
+                                <div className="mt-3">
+                                    <label className="text-xs text-gray-600 dark:text-gray-400">Topografia</label>
+                                    <select name="dimensoesTerreno.topografia" value={formData.dimensoesTerreno?.topografia} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                        <option value="PLANO">Plano</option>
+                                        <option value="ACLIVE">Aclive (Sobe)</option>
+                                        <option value="DECLIVE">Declive (Desce)</option>
+                                        <option value="IRREGULAR">Irregular</option>
                                     </select>
                                 </div>
                             </div>
+                        </div>
+
+                        {!isTerreno && (
+                            <div className="border p-4 rounded-lg bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700">
+                                <h4 className="font-bold mb-3 flex items-center text-gray-600 dark:text-gray-300"><Icon icon={faHome} className="mr-2"/> Acabamentos e Pisos</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1 text-gray-500">Piso da Sala</label>
+                                        <select name="acabamentos.pisoSala" value={formData.acabamentos?.pisoSala} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="PORCELANATO">Porcelanato</option>
+                                            <option value="LAMINADO">Laminado</option>
+                                            <option value="TACO_MADEIRA">Taco / Madeira</option>
+                                            <option value="TABUA_CORRIDA">Tábua Corrida</option>
+                                            <option value="CERAMICA">Cerâmica</option>
+                                            <option value="CIMENTO_QUEIMADO">Cimento Queimado</option>
+                                            <option value="CARPETE">Carpete</option>
+                                            <option value="MARDOME">Mármore</option>
+                                            <option value="GRANITO">Granito</option>
+                                            <option value="OUTRO">Outro</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1 text-gray-500">Piso dos Quartos</label>
+                                        <select name="acabamentos.pisoQuartos" value={formData.acabamentos?.pisoQuartos} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="LAMINADO">Laminado</option>
+                                            <option value="PORCELANATO">Porcelanato</option>
+                                            <option value="VINILICO">Vinílico</option>
+                                            <option value="TACO_MADEIRA">Taco / Madeira</option>
+                                            <option value="CARPETE">Carpete</option>
+                                            <option value="CERAMICA">Cerâmica</option>
+                                            <option value="OUTRO">Outro</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1 text-gray-500">Piso Cozinha</label>
+                                        <select name="acabamentos.pisoCozinha" value={formData.acabamentos?.pisoCozinha} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="PORCELANATO">Porcelanato</option>
+                                            <option value="GRANITO">Granito</option>
+                                            <option value="CERAMICA">Cerâmica</option>
+                                            <option value="MARMORE">Mármore</option>
+                                            <option value="CIMENTO_QUEIMADO">Cimento Queimado</option>
+                                            <option value="OUTRO">Outro</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1 text-gray-500">Piso Banheiros</label>
+                                        <select name="acabamentos.pisoBanheiros" value={formData.acabamentos?.pisoBanheiros} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="CERAMICA">Cerâmica</option>
+                                            <option value="PORCELANATO">Porcelanato</option>
+                                            <option value="GRANITO">Granito</option>
+                                            <option value="PASTILHA">Pastilha</option>
+                                            <option value="MARMORE">Mármore</option>
+                                            <option value="OUTRO">Outro</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1 text-gray-500">Acabamento Teto</label>
+                                        <select name="acabamentos.teto" value={formData.acabamentos?.teto} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="GESSO_REBAIXADO">Gesso Rebaixado</option>
+                                            <option value="LAJE">Laje</option>
+                                            <option value="SANCAS">Sancas de Gesso</option>
+                                            <option value="PVC">PVC</option>
+                                            <option value="MADEIRA">Forro Madeira</option>
+                                            <option value="APARENTE">Aparente / Industrial</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold mb-1 text-gray-500">Esquadrias</label>
+                                        <select name="acabamentos.esquadrias" value={formData.acabamentos?.esquadrias} onChange={handleChange} className="w-full p-2 border rounded text-sm dark:bg-zinc-700 dark:text-white dark:border-zinc-600">
+                                            <option value="ALUMINIO">Alumínio</option>
+                                            <option value="PVC">PVC</option>
+                                            <option value="MADEIRA">Madeira</option>
+                                            <option value="BLINDEX">Vidro Temperado (Blindex)</option>
+                                            <option value="FERRO">Ferro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className='pt-4 border-t border-gray-100 dark:border-zinc-700'>
+                            <ComodidadesSelector 
+                                title={isComercial ? 'Infraestrutura e Diferenciais' : (isTerreno ? 'Características do Terreno' : 'Comodidades e Lazer')}
+                                features={currentFeaturesList} 
+                                selected={formData.caracteristicas} 
+                                onSelect={handleCaracteristicaChange} 
+                            />
                         </div>
                     </div>
                 );
@@ -1805,7 +2134,6 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                         <div className="space-y-6 pt-4 border-t border-gray-100 dark:border-zinc-700">
                             <h4 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Responsabilidade dos Custos Fixos</h4>
                             
-                            {/* RESTAURADO: Layout com Grid/Caixas igual ao Print 1 e botões de ajuda */}
                             <div className="border border-gray-200 dark:border-zinc-600 rounded-md p-4">
                                 <h4 className="font-bold text-gray-700 dark:text-gray-300 mb-3">Custo do Condomínio</h4>
                                 <div className="grid md:grid-cols-2 gap-4">
@@ -1964,47 +2292,65 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-6">
-            <Link href="/imoveis" className="text-rentou-primary hover:underline font-medium text-sm flex items-center">
-                <Icon icon={faArrowLeft} className="w-3 h-3 mr-2" />
-                Voltar para Lista de Imóveis
-            </Link>
+        <div className="max-w-5xl mx-auto space-y-6 pb-20 relative">
             
-            <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 border-b pb-4">
-                {formTitle}
-            </h1>
+            {/* STEPPER VERTICAL (Lateral - Fixo) */}
+            <SideStepper 
+                currentStep={currentStep} 
+                setStep={(s) => { setCurrentStep(s); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                isVisible={!showTopStepper} 
+            />
 
-            <form onSubmit={handleSubmit} className="p-8 bg-white dark:bg-zinc-800 shadow-2xl rounded-xl border border-gray-100 dark:border-zinc-700">
+            {/* CABEÇALHO */}
+            <div className={`transition-opacity duration-300 ${!showTopStepper ? 'opacity-40' : 'opacity-100'}`}>
+                <div className="flex items-center justify-between mb-2">
+                    <Link href="/imoveis" className="text-rentou-primary hover:underline font-medium text-sm flex items-center">
+                        <Icon icon={faArrowLeft} className="w-3 h-3 mr-2" />
+                        Voltar para Lista de Imóveis
+                    </Link>
+                </div>
+                
+                <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 border-b pb-4 mb-6">
+                    {formTitle}
+                </h1>
+            </div>
+
+            {/* STEPPER SUPERIOR (Fade Out no Scroll) */}
+            <TopStepper 
+                currentStep={currentStep} 
+                setStep={setCurrentStep} 
+                isVisible={showTopStepper}
+            />
+
+            <form onSubmit={handleSubmit} className={`p-8 bg-white dark:bg-zinc-800 shadow-2xl rounded-xl border border-gray-100 dark:border-zinc-700 transition-all duration-500 ${!showTopStepper ? '-mt-4' : 'mt-0'}`}>
                 
                 {error && (
-                    <p className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300 rounded-lg">
-                        {error}
-                    </p>
+                    <div className="p-4 mb-6 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 rounded-lg border-l-4 border-red-500">
+                        <p className="font-bold">Atenção</p>
+                        <p>{error}</p>
+                    </div>
                 )}
                 
-                <ProgressIndicator />
                 {renderStepContent()}
                 
-                <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center mt-6">
+                <div className="pt-6 border-t border-gray-200 dark:border-zinc-700 flex justify-between items-center mt-8">
                     
                     {currentStep > 1 ? (
                         <button
                             type="button"
                             onClick={() => setCurrentStep(currentStep - 1)}
-                            className="flex items-center text-gray-500 dark:text-gray-400 hover:text-rentou-primary transition-colors font-medium cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700"
+                            className="flex items-center text-gray-500 dark:text-gray-400 hover:text-rentou-primary transition-colors font-medium cursor-pointer p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-zinc-700"
                         >
                              <Icon icon={faChevronLeft} className="w-3 h-3 mr-2" />
                             Anterior
                         </button>
                     ) : <div />}
                     
-                    <div className={currentStep === 1 ? 'flex-1' : 'flex-grow'}></div> 
-
                     <button
                         type="submit"
-                        onClick={currentStep < formSteps.length ? handleNextStep : undefined} 
+                        onClick={currentStep < formSteps.length ? handleNextStep : undefined}
                         disabled={loading}
-                        className={`w-full md:w-auto flex justify-center py-3 px-8 border border-transparent rounded-md shadow-lg text-sm font-bold text-white transition-colors cursor-pointer ${
+                        className={`md:w-auto flex justify-center py-3 px-8 border border-transparent rounded-md shadow-lg text-sm font-bold text-white transition-all transform active:scale-95 cursor-pointer ${
                             loading 
                                 ? 'opacity-50 cursor-not-allowed bg-gray-400' 
                                 : 'bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600'
@@ -2016,13 +2362,13 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                     </button>
                 </div>
                 
-                <div className="text-center mt-4">
+                <div className="text-center mt-6">
                     <button
                         type="button"
                         onClick={() => router.push('/imoveis')}
-                        className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 text-sm font-medium cursor-pointer transition-colors"
+                        className="text-gray-400 hover:text-red-600 text-sm font-medium cursor-pointer transition-colors"
                     >
-                        Cancelar
+                        Cancelar Operação
                     </button>
                 </div>
             </form>
