@@ -1,5 +1,8 @@
 'use client';
 
+// ADICIONADO PARA SUPORTE AO CLOUDFLARE PAGES (EDGE RUNTIME)
+export const runtime = 'edge';
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
