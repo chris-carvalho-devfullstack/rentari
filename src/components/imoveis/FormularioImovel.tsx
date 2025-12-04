@@ -6,6 +6,10 @@ import Link from 'next/link';
 import { adicionarNovoImovel, atualizarImovel, updateImovelFotos } from '@/services/ImovelService'; 
 import { uploadImovelPhotos, deleteFotoImovel } from '@/services/StorageService'; 
 import { fetchCoordinatesByAddress } from '@/services/GeocodingService';
+// Importação do serviço de condomínios (Certifique-se que o arquivo services/CondominioService.ts existe)
+import { listarCondominios } from '@/services/CondominioService'; 
+// Importação do tipo Condominio (Certifique-se que o arquivo types/condominio.ts existe)
+import { Condominio } from '@/types/condominio';
 import { 
     Imovel, ImovelCategoria, ImovelFinalidade, NovoImovelData, EnderecoImovel, CondominioData, 
     CozinhaData, SalaData, VarandaData, DispensaData, PiscinaPrivativaData, ResponsavelPagamento, 
@@ -70,12 +74,6 @@ const defaultDoc: DocumentacaoData = {
     possuiEscritura: true, registroCartorio: true, isentoIPTU: false, 
     aceitaFinanciamento: true, aceitaFGTS: false, aceitaPermuta: false, situacaoLegal: 'REGULAR' 
 };
-
-const MOCK_CONDOMINIOS = [
-    { id: 'c1', nome: 'Edifício Solar da Praça' },
-    { id: 'c2', nome: 'Condomínio Alphaville I' },
-    { id: 'c3', nome: 'Residencial Jardins' },
-];
 
 const defaultFormData: NovoImovelData = {
     titulo: '',
@@ -723,6 +721,9 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
     // Estado para controlar qual stepper exibir
     const [showTopStepper, setShowTopStepper] = useState(true);
 
+    // Estado para lista de condomínios reais
+    const [listaCondominios, setListaCondominios] = useState<Condominio[]>([]);
+
     const isEditing = !!initialData;
     const formTitle = isEditing ? 'Editar Imóvel' : 'Novo Imóvel';
     
@@ -752,6 +753,19 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
 
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    // Efeito para carregar condomínios
+    useEffect(() => {
+        const carregarCondominios = async () => {
+            try {
+                const condominios = await listarCondominios();
+                setListaCondominios(condominios);
+            } catch (err) {
+                console.error("Erro ao carregar condomínios", err);
+            }
+        };
+        carregarCondominios();
     }, []);
 
     useEffect(() => {
@@ -1495,10 +1509,11 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                                 onChange={(e) => {
                                                     const selectedId = e.target.value;
                                                     if(selectedId === 'new') {
-                                                        alert("Funcionalidade: Abrir modal de cadastro completo de condomínio (com fotos e infra).");
+                                                        // Redirecionar para página de cadastro de condomínio
+                                                        router.push('/condominios/novo');
                                                         return;
                                                     }
-                                                    const condo = MOCK_CONDOMINIOS.find(c => c.id === selectedId);
+                                                    const condo = listaCondominios.find(c => c.id === selectedId);
                                                     if(condo) {
                                                         setFormData(prev => ({
                                                             ...prev, 
@@ -1508,12 +1523,14 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                                 }}
                                             >
                                                 <option value="">Selecione um condomínio...</option>
-                                                {MOCK_CONDOMINIOS.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                                {listaCondominios.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                                                 <option value="new">+ Cadastrar Novo Condomínio</option>
                                             </select>
-                                            <button type="button" className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold uppercase shadow-sm" onClick={() => alert("Abrir modal de cadastro de condomínio")}>
-                                                Novo
-                                            </button>
+                                            <Link href="/condominios/novo">
+                                                <button type="button" className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-xs font-bold uppercase shadow-sm">
+                                                    Novo
+                                                </button>
+                                            </Link>
                                         </div>
                                     </div>
 
@@ -1692,53 +1709,46 @@ export default function FormularioImovel({ initialData }: FormularioImovelProps)
                                          <div>{renderNumericInput('lavabos', 'Lavabos', formData.lavabos, '0', undefined, faToilet)}</div>
                                     </div>
 
-                                    {/* ANDAR E UNIDADES (SEPARADO DA GARAGEM) */}
+                                    {/* ANDAR E UNIDADES */}
                                     {isResidencial && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                                        <div className="grid grid-cols-2 gap-4 mb-4">
                                                 <div>{renderNumericInput('andar', 'Andar', formData.andar || 0, '0', undefined, faBuilding)}</div>
                                                 <div>{renderNumericInput('unidadesPorAndar', 'Unidades por Andar', formData.unidadesPorAndar || 0, '0', undefined, faBuilding)}</div>
                                         </div>
                                     )}
-
-                                    {/* VAGAS DE GARAGEM E DETALHES (ENCAPSULADOS) */}
-                                    {formData.vagasGaragem === 0 ? (
-                                        // Caso: 0 Vagas - Apenas o input em sua linha, com largura restrita
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                                             <div>{renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}</div>
+                                    
+                                    {/* VAGAS GARAGEM - LINHA SEPARADA */}
+                                    <div className="mb-4">
+                                        <div className="w-full sm:w-1/3"> {/* Limitando a largura a 1/3 */}
+                                            {renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}
                                         </div>
-                                    ) : (
-                                        // Caso: > 0 Vagas - Input e Detalhes encapsulados no box colorido
-                                        <div className="mt-4 border border-blue-200 dark:border-zinc-600 bg-blue-50/50 dark:bg-zinc-700/30 p-4 rounded-lg animate-in fade-in">
-                                            {/* Input da Vaga dentro do box, com largura restrita */}
-                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 animate-in slide-in-from-top-1">
-                                                 <div>{renderNumericInput('vagasGaragem', 'Vagas Garagem', formData.vagasGaragem, '0', undefined, faCar)}</div>
-                                            </div>
+                                    </div>
 
-                                            {/* Bloco de Detalhes */}
-                                            <div className="pt-3 border-t border-blue-200 dark:border-zinc-600">
-                                                <h5 className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-3">Detalhes da Vaga</h5>
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                                                    <select name="detalhesVaga.tipoCobertura" value={formData.detalhesVaga?.tipoCobertura} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
-                                                        <option value="COBERTA">Vaga Coberta</option>
-                                                        <option value="DESCOBERTA">Vaga Descoberta</option>
-                                                        <option value="MISTA">Mista</option>
-                                                    </select>
-                                                    <select name="detalhesVaga.tipoManobra" value={formData.detalhesVaga?.tipoManobra} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
-                                                        <option value="LIVRE">Vaga Livre</option>
-                                                        <option value="PRESA">Vaga Presa</option>
-                                                        <option value="MISTA">Mista</option>
-                                                    </select>
-                                                    <select name="detalhesVaga.tipoUso" value={formData.detalhesVaga?.tipoUso} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
-                                                        <option value="INDIVIDUAL">Fixa/Individual</option>
-                                                        <option value="ROTATIVA">Rotativa</option>
-                                                        <option value="COMPARTILHADA">Compartilhada</option>
-                                                    </select>
-                                                </div>
-                                                <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
-                                                    <CheckboxInput label="Vaga Escriturada" name="detalhesVaga.escriturada" checked={formData.detalhesVaga?.escriturada || false} onChange={handleChange} icon={faFileContract} />
-                                                    <CheckboxInput label="Carregador Elétrico" name="detalhesVaga.carregadorCarroEletrico" checked={(formData.detalhesVaga as any)?.carregadorCarroEletrico || false} onChange={handleChange} icon={faBolt} />
-                                                    <CheckboxInput label="Vaga Acessível" name="detalhesVaga.acessivel" checked={(formData.detalhesVaga as any)?.acessivel || false} onChange={handleChange} icon={faWheelchair} />
-                                                </div>
+                                    {/* DETALHES DA VAGA - ENCAPSULADO */}
+                                    {formData.vagasGaragem > 0 && (
+                                        <div className="mt-4 pt-3 border-t border-blue-200 dark:border-zinc-600 bg-blue-50/50 dark:bg-zinc-700/30 p-4 rounded-lg animate-in fade-in">
+                                            <h5 className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-3">Detalhes da Vaga</h5>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                                <select name="detalhesVaga.tipoCobertura" value={formData.detalhesVaga?.tipoCobertura} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
+                                                    <option value="COBERTA">Vaga Coberta</option>
+                                                    <option value="DESCOBERTA">Vaga Descoberta</option>
+                                                    <option value="MISTA">Mista</option>
+                                                </select>
+                                                <select name="detalhesVaga.tipoManobra" value={formData.detalhesVaga?.tipoManobra} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
+                                                    <option value="LIVRE">Vaga Livre</option>
+                                                    <option value="PRESA">Vaga Presa</option>
+                                                    <option value="MISTA">Mista</option>
+                                                </select>
+                                                <select name="detalhesVaga.tipoUso" value={formData.detalhesVaga?.tipoUso} onChange={handleChange} className="w-full p-2 text-xs border rounded bg-white dark:bg-zinc-800 dark:text-white">
+                                                    <option value="INDIVIDUAL">Fixa/Individual</option>
+                                                    <option value="ROTATIVA">Rotativa</option>
+                                                    <option value="COMPARTILHADA">Compartilhada</option>
+                                                </select>
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
+                                                <CheckboxInput label="Vaga Escriturada" name="detalhesVaga.escriturada" checked={formData.detalhesVaga?.escriturada || false} onChange={handleChange} icon={faFileContract} />
+                                                <CheckboxInput label="Carregador Elétrico" name="detalhesVaga.carregadorCarroEletrico" checked={(formData.detalhesVaga as any)?.carregadorCarroEletrico || false} onChange={handleChange} icon={faBolt} />
+                                                <CheckboxInput label="Vaga Acessível" name="detalhesVaga.acessivel" checked={(formData.detalhesVaga as any)?.acessivel || false} onChange={handleChange} icon={faWheelchair} />
                                             </div>
                                         </div>
                                     )}
