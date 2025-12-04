@@ -6,6 +6,10 @@ import FormularioCondominio from '@/components/condominios/FormularioCondominio'
 import { buscarCondominioPorId } from '@/services/CondominioService';
 import { Condominio } from '@/types/condominio';
 
+// --- CONFIGURAÇÃO CLOUDFLARE PAGES (EDGE RUNTIME) ---
+// Deve ficar APÓS os imports para garantir detecção correta no build
+export const runtime = 'edge';
+
 export default function EditarCondominioPage() {
     const params = useParams();
     const id = Array.isArray(params.id) ? params.id[0] : params.id;

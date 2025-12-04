@@ -1,8 +1,5 @@
 'use client';
 
-// ADICIONADO PARA SUPORTE AO CLOUDFLARE PAGES (EDGE RUNTIME)
-export const runtime = 'edge';
-
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -16,6 +13,10 @@ import {
     faHardHat, faChartLine, faSwimmingPool, faShieldAlt, faBed, faRulerCombined, 
     faCar, faChevronDown, faChevronUp, faHome, faKey, faDollarSign, faImage, faChevronLeft, faChevronRight
 } from '@fortawesome/free-solid-svg-icons';
+
+// --- CONFIGURAÇÃO CLOUDFLARE PAGES (EDGE RUNTIME) ---
+// Deve ficar APÓS os imports para garantir detecção correta no build
+export const runtime = 'edge';
 
 // --- HELPER: Tratamento de URLs de Imagem ---
 const sanitizeUrl = (url: string | undefined, fallback: string = '/media/rentou-logo.png') => {
