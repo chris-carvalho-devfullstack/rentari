@@ -1,76 +1,88 @@
-import { fetchImovelPorSmartId } from '@/services/ImovelService';
+// src/app/anuncios/[smartId]/page.tsx
+import { db } from '@/services/FirebaseService';
+import { collection, getDocs, query, limit, where } from 'firebase/firestore';
 import AnuncioDetalheClient from '@/components/anuncios/AnuncioDetalheClient';
+import { fetchImovelPorSmartId } from '@/services/ImovelService';
+import { fetchBairroGeoJsonLimits } from '@/services/GeocodingService';
 
 export const runtime = 'edge';
+export const dynamic = 'force-dynamic'; // <--- FORÇA O NO-CACHE (CRÍTICO)
 
 type Props = {
     params: Promise<{ smartId: string }>;
 };
 
-// Desabilita metadata temporariamente para evitar erros paralelos
 export async function generateMetadata() {
-    return { title: 'Teste de Variáveis | Rentou' };
+    return { title: 'Teste de Conexão | Rentou' };
 }
 
 export default async function AnuncioDetalhePage({ params }: Props) {
     const { smartId } = await params;
     
-    // 1. TESTE DE VARIÁVEIS DE AMBIENTE
-    const envCheck = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? '✅ PRESENTE' : '❌ AUSENTE (Undefined)',
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? '✅ PRESENTE' : '❌ AUSENTE (Undefined)',
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? '✅ PRESENTE' : '❌ AUSENTE (Undefined)',
-        nodeEnv: process.env.NODE_ENV,
-        smartIdRecebido: smartId
-    };
+    // 1. Tenta buscar o imóvel específico
+    let imovelAlvo = undefined;
+    let listaTeste: any[] = [];
+    let erroGeral = '';
 
-    let imovel = null;
-    let erroFetch = null;
-
-    // 2. TENTATIVA DE BUSCA
     try {
-        console.log('Iniciando busca no Firebase...');
-        imovel = await fetchImovelPorSmartId(smartId);
+        // Busca Específica
+        imovelAlvo = await fetchImovelPorSmartId(smartId);
+
+        // Busca Genérica (PROVA DE VIDA DO BANCO)
+        // Tenta pegar qualquer 3 imóveis para ver se o banco responde
+        const q = query(collection(db, 'imoveis'), limit(3));
+        const snapshot = await getDocs(q);
+        listaTeste = snapshot.docs.map(doc => ({ id: doc.id, smartId: doc.data().smartId }));
+        
     } catch (e: any) {
-        console.error(e);
-        erroFetch = e.message || JSON.stringify(e);
+        erroGeral = JSON.stringify(e, Object.getOwnPropertyNames(e));
     }
 
-    // 3. SE FALHAR, MOSTRA O RELATÓRIO NA TELA (EM VEZ DE 404)
-    if (!imovel) {
-        return (
-            <div className="p-10 font-mono text-sm bg-white text-black min-h-screen">
-                <h1 className="text-2xl font-bold text-red-600 mb-4">DIAGNÓSTICO DE ERRO 404</h1>
-                
-                <div className="mb-6 p-4 bg-gray-100 border border-gray-300 rounded">
-                    <h2 className="font-bold mb-2">1. Checagem de Variáveis (Cloudflare)</h2>
-                    <ul className="space-y-1">
-                        <li><strong>API Key:</strong> {envCheck.apiKey}</li>
-                        <li><strong>Project ID:</strong> {envCheck.projectId}</li>
-                        <li><strong>Auth Domain:</strong> {envCheck.authDomain}</li>
-                        <li><strong>NODE_ENV:</strong> {envCheck.nodeEnv}</li>
-                    </ul>
-                    <p className="mt-2 text-gray-600 text-xs">
-                        *Se estiverem "AUSENTE", o Firebase não conecta e retorna null.
-                    </p>
+    // Se encontrou o imóvel certo, VIDA QUE SEGUE! Renderiza normal.
+    if (imovelAlvo && imovelAlvo.status === 'ANUNCIADO') {
+        let bairroGeoJson = null;
+        if (imovelAlvo.endereco.bairro) {
+             bairroGeoJson = await fetchBairroGeoJsonLimits(imovelAlvo.endereco.bairro, imovelAlvo.endereco.cidade, imovelAlvo.endereco.estado);
+        }
+        return <AnuncioDetalheClient imovel={imovelAlvo} bairroGeoJson={bairroGeoJson} />;
+    }
+
+    // SE FALHOU, MOSTRA O RELATÓRIO "TIRA-TEIMA"
+    return (
+        <div className="min-h-screen bg-white text-black p-8 font-mono text-sm">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">ERRO: Imóvel não carregou</h1>
+            
+            <div className="grid gap-4">
+                <div className="p-4 border rounded bg-gray-50">
+                    <h2 className="font-bold">1. Tentativa de Busca Direta</h2>
+                    <p>ID Buscado: <strong>"{smartId}"</strong></p>
+                    <p>Resultado: <strong>{imovelAlvo ? 'ENCONTRADO' : 'UNDEFINED (Não achou)'}</strong></p>
                 </div>
 
-                <div className="mb-6 p-4 bg-gray-100 border border-gray-300 rounded">
-                    <h2 className="font-bold mb-2">2. Resultado da Busca</h2>
-                    <p><strong>Smart ID buscado:</strong> {smartId}</p>
-                    <p><strong>Resultado:</strong> {imovel === null ? 'NULL (Não encontrado)' : 'Objeto recebido'}</p>
-                    {erroFetch && (
-                        <div className="mt-2 text-red-600">
-                            <strong>Erro capturado:</strong> {erroFetch}
-                        </div>
+                <div className="p-4 border rounded bg-blue-50">
+                    <h2 className="font-bold text-blue-800">2. Prova de Vida do Banco (Teste Geral)</h2>
+                    <p className="mb-2">Tentei listar quaisquer 3 imóveis do banco. Resultado:</p>
+                    
+                    {listaTeste.length > 0 ? (
+                        <ul className="list-disc pl-5">
+                            {listaTeste.map(item => (
+                                <li key={item.id}>
+                                    ID: {item.id} | SmartID: <strong>{item.smartId}</strong>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="text-red-600 font-bold">ZERO IMÓVEIS RETORNADOS. A CONEXÃO ESTÁ MORTA.</p>
                     )}
                 </div>
-            </div>
-        );
-    }
 
-    // Se der certo (milagrosamente), renderiza normal
-    return (
-        <AnuncioDetalheClient imovel={imovel} bairroGeoJson={null} />
+                {erroGeral && (
+                    <div className="p-4 border rounded bg-red-100 text-red-800 break-all">
+                        <h2 className="font-bold">3. Erro Técnico Capturado</h2>
+                        {erroGeral}
+                    </div>
+                )}
+            </div>
+        </div>
     );
 }
