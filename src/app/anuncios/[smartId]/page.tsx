@@ -7,14 +7,13 @@ import AnuncioDetalheClient from '@/components/anuncios/AnuncioDetalheClient';
 
 export const runtime = 'edge';
 
-// CORREÇÃO CRÍTICA: No Next.js 15, 'params' é uma Promise e deve ser tipada como tal.
+// CORREÇÃO CRÍTICA: No Next.js 15, 'params' é uma Promise.
 type Props = {
     params: Promise<{ smartId: string }>;
 };
 
-// 1. GERAÇÃO DE METADADOS DINÂMICOS (SEO)
+// 1. GERAÇÃO DE METADADOS DINÂMICOS (SEO SOCIAL)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-    // Aguarda a resolução dos parâmetros (obrigatório no Next.js 15)
     const { smartId } = await params;
     
     // [DEBUG LOG]
@@ -24,16 +23,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         const imovel = await fetchImovelPorSmartId(smartId);
         
         if (!imovel) {
-            console.log(`[SEO DEBUG] Imóvel não encontrado para metadata.`);
-            return {
-                title: 'Imóvel não encontrado | Rentou',
-            };
+            return { title: 'Imóvel não encontrado | Rentou' };
         }
 
         const title = `${imovel.titulo} | Rentou`;
-        // Resumo para a descrição: Tipo, Bairro, Quartos, Preço
         const description = `${imovel.tipoDetalhado} em ${imovel.endereco.bairro}, ${imovel.endereco.cidade}. ${imovel.quartos} quartos, ${imovel.areaUtil}m². Aluguel: R$ ${imovel.valorAluguel.toLocaleString('pt-BR')}.`;
-        const imageUrl = imovel.fotos[0] || 'https://rentou.com.br/og-image-default.jpg';
+        const imageUrl = imovel.fotos?.[0] || 'https://rentou.com.br/og-image-default.jpg';
 
         return {
             title: title,
@@ -41,14 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             openGraph: {
                 title: title,
                 description: description,
-                images: [
-                    {
-                        url: imageUrl,
-                        width: 1200,
-                        height: 630,
-                        alt: imovel.titulo,
-                    },
-                ],
+                images: [{ url: imageUrl, width: 1200, height: 630, alt: title }],
                 type: 'website',
                 locale: 'pt_BR',
             },
@@ -67,50 +55,43 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 // 2. COMPONENTE SERVIDOR (SSR)
 export default async function AnuncioDetalhePage({ params }: Props) {
-    // Aguarda a resolução dos parâmetros antes de usar
     const { smartId } = await params;
     
-    // [DEBUG LOG] - Início da execução da página
+    // [DEBUG LOG]
     console.log(`[PAGE DEBUG] Iniciando renderização da página para SmartID: ${smartId}`);
     
     let imovel;
 
     try {
-        // Busca de dados no lado do servidor (Sem Loading Spinner para o usuário, HTML já vem pronto)
+        // Busca de dados (REST API)
         imovel = await fetchImovelPorSmartId(smartId);
         
-        // [DEBUG LOG] - Resultado da busca
         if (imovel) {
              console.log(`[PAGE DEBUG] Imóvel encontrado. ID: ${imovel.id}, Status: ${imovel.status}`);
         } else {
-             console.log(`[PAGE DEBUG] fetchImovelPorSmartId retornou NULO/UNDEFINED.`);
+             console.log(`[PAGE DEBUG] fetchImovelPorSmartId retornou NULO.`);
         }
 
     } catch (error) {
-        // [DEBUG LOG] - Erro crítico na conexão (ex: falta de env vars)
         console.error(`[PAGE DEBUG] ERRO CRÍTICO ao buscar imóvel:`, error);
-        throw error; // Deixa o Next.js tratar como erro 500 para diferenciar do 404
+        throw error;
     }
 
     if (!imovel || imovel.status !== 'ANUNCIADO') {
-        // [DEBUG LOG] - Disparando 404
-        console.error(`[PAGE DEBUG] Disparando notFound(). Motivo: ${!imovel ? 'Imóvel Inexistente' : 'Status inválido (' + imovel.status + ')'}`);
-        notFound(); // Retorna página 404 padrão do Next.js
+        console.error(`[PAGE DEBUG] Disparando notFound().`);
+        notFound();
     }
 
-    // --- LÓGICA DE GEOCODING (Convertida para Server-Side) ---
-    // Verifica se já tem coordenadas válidas
+    // --- LÓGICA DE GEOCODING ---
     const hasValidCoords = (imovel.latitude && imovel.longitude && (imovel.latitude !== 0 || imovel.longitude !== 0));
 
     if (!hasValidCoords) {
-        console.log(`[PAGE DEBUG] Coordenadas ausentes. Buscando via Geocoding...`);
         try {
             const coords = await fetchCoordinatesByAddress(imovel.endereco);
             if (coords) {
                 imovel.latitude = coords.latitude;
                 imovel.longitude = coords.longitude;
             } else {
-                // Fallback padrão se falhar
                 imovel.latitude = -23.55052;
                 imovel.longitude = -46.633307;
             }
@@ -118,9 +99,7 @@ export default async function AnuncioDetalhePage({ params }: Props) {
             console.error(`[PAGE DEBUG] Erro no Geocoding:`, err);
         }
     }
-    // --- FIM LÓGICA DE GEOCODING ---
 
-    // Busca limites do bairro (GeoJSON) no Servidor para passar pronto ao cliente
     let bairroGeoJson = null;
     if (imovel.endereco.bairro) {
         try {
@@ -130,44 +109,50 @@ export default async function AnuncioDetalhePage({ params }: Props) {
         }
     }
 
-    // 3. DADOS ESTRUTURADOS (JSON-LD) PARA GOOGLE
-    // Isso "ensina" ao Google sobre o preço, localização e título do imóvel
+    // 3. DADOS ESTRUTURADOS MELHORADOS (PRODUTO) - "O Pulo do Gato"
+    // Mudamos de 'RealEstateListing' para 'Product' para garantir que o Google exiba o preço.
+    
+    const safeAddress = imovel.endereco || {};
+    
     const jsonLd = {
         '@context': 'https://schema.org',
-        '@type': 'RealEstateListing',
+        '@type': 'Product', // <--- MUDANÇA: Product ativa Rich Snippets de Preço
         name: imovel.titulo,
-        description: imovel.descricaoLonga,
-        image: imovel.fotos,
-        address: {
-            '@type': 'PostalAddress',
-            streetAddress: `${imovel.endereco.logradouro}, ${imovel.endereco.numero}`,
-            addressLocality: imovel.endereco.cidade,
-            addressRegion: imovel.endereco.estado,
-            postalCode: imovel.endereco.cep,
-            addressCountry: 'BR',
-        },
-        geo: {
-            '@type': 'GeoCoordinates',
-            latitude: imovel.latitude,
-            longitude: imovel.longitude,
+        description: imovel.descricaoLonga || `Imóvel para alugar em ${safeAddress.cidade}`,
+        image: imovel.fotos || [],
+        sku: imovel.smartId, // Identificador único
+        mpn: imovel.id,
+        brand: {
+            '@type': 'Brand',
+            name: 'Rentou'
         },
         offers: {
             '@type': 'Offer',
-            price: imovel.valorAluguel,
+            url: `https://rentou.com.br/anuncios/${imovel.smartId}`,
             priceCurrency: 'BRL',
-            availability: 'https://schema.org/InStock',
+            price: imovel.valorAluguel,
+            availability: 'https://schema.org/InStock', // Indica que o imóvel está vago
+            itemCondition: 'https://schema.org/NewCondition',
+            priceValidUntil: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0]
         },
+        // Mapeamento extra para não perder a semântica imobiliária
+        additionalProperty: [
+            { '@type': 'PropertyValue', name: 'Quartos', value: imovel.quartos },
+            { '@type': 'PropertyValue', name: 'Banheiros', value: imovel.banheiros },
+            { '@type': 'PropertyValue', name: 'Area', value: `${imovel.areaUtil} m²` },
+            { '@type': 'PropertyValue', name: 'Bairro', value: safeAddress.bairro },
+            { '@type': 'PropertyValue', name: 'Cidade', value: safeAddress.cidade }
+        ]
     };
 
     return (
         <>
-            {/* Injeção de JSON-LD (Invisível ao usuário, visível ao Google) */}
+            {/* Injeção de JSON-LD Otimizado para Produto */}
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
             />
             
-            {/* Renderização do Componente Cliente com Dados Prontos */}
             <AnuncioDetalheClient 
                 imovel={imovel} 
                 bairroGeoJson={bairroGeoJson} 
