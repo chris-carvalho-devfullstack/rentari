@@ -478,7 +478,7 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
                                                         <Icon icon={faStreetView} className="w-3 h-3"/> Lazer Completo
                                                     </span>
                                                 )}
-                                                {imovel.infraestruturaCondominio?.length > 0 ? (
+                                                {imovel.infraestruturaCondominio && imovel.infraestruturaCondominio.length > 0 ? (
                                                     imovel.infraestruturaCondominio.map((item, idx) => (
                                                         <span key={idx} className="bg-gray-50 text-gray-600 text-xs px-2 py-1 rounded-md border border-gray-200">{item}</span>
                                                     ))
