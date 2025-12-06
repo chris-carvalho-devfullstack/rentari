@@ -8,6 +8,18 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore'; 
 import { getStorage } from 'firebase/storage';
 
+// ============================================================================
+// FIX CRÍTICO PARA EDGE RUNTIME / SERVER COMPONENTS
+// O erro "navigator is not defined" ocorre porque o Firebase tenta detectar
+// o User Agent para ajustes do Safari. No Edge, isso não existe.
+// Simulamos um navigator vazio para enganar o SDK.
+// ============================================================================
+if (typeof window === 'undefined' && typeof navigator === 'undefined') {
+  // @ts-ignore
+  global.navigator = { userAgent: 'node' };
+}
+// ============================================================================
+
 // CORREÇÃO CRÍTICA: Hardcode o nome do bucket ativo para eliminar a falha na leitura do ambiente Vercel.
 const ACTIVE_STORAGE_BUCKET = 'rentari-1dc75.firebasestorage.app'; 
 
