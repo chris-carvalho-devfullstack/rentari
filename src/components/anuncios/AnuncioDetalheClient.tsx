@@ -13,7 +13,8 @@ import { ImageLightbox } from '@/components/anuncios/ImageLightbox';
 import { 
   MapPin, Bed, Bath, Square, Heart, Share2, Wifi, Lock, User, Phone, MessageCircle, 
   ChevronRight, Building, Check, Car, AlertCircle, Sparkles, Loader2, Map as MapIcon, 
-  Camera, X, Info, Sun, ShieldCheck, FileText, Hammer, LayoutDashboard, Tag, Calendar, DollarSign
+  Camera, X, Info, Sun, ShieldCheck, FileText, Hammer, LayoutDashboard, Tag, Calendar, DollarSign,
+  PlayCircle, Video
 } from 'lucide-react';
 
 // Mantemos o FontAwesome apenas se necessário para componentes legados internos
@@ -84,9 +85,15 @@ interface AnuncioDetalheClientProps {
     imovel: Imovel;
     bairroGeoJson: any;
     outrosImoveis?: Imovel[];
+    imoveisRelacionados?: Imovel[];
 }
 
-export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImoveis = [] }: AnuncioDetalheClientProps) {
+export default function AnuncioDetalheClient({ 
+    imovel, 
+    bairroGeoJson, 
+    outrosImoveis = [], 
+    imoveisRelacionados = [] 
+}: AnuncioDetalheClientProps) {
     const user = null; // Placeholder para auth
     
     // States Visuais
@@ -122,21 +129,33 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
     }, [imovel.id]);
 
     useEffect(() => {
-        if(imovel.endereco.cep) {
+        if(imovel.endereco.cidade) {
             setLoadingBroadband(true);
-            const timer = setTimeout(() => {
-                setBroadbandData({
-                    avgSpeed: "600Mb",
-                    technology: "Fibra Óptica",
-                    providers: ["Vivo", "Claro", "Oi", "Local"],
-                    bestFor: ["Streaming 4K", "Home Office", "Jogos"],
-                    available: true
-                });
-                setLoadingBroadband(false);
-            }, 1500);
-            return () => clearTimeout(timer);
+            const fetchBroadband = async () => {
+                try {
+                    const response = await fetch(`/api/services/broadband?city=${encodeURIComponent(imovel.endereco.cidade)}`);
+                    if (response.ok) {
+                        const json = await response.json();
+                        setBroadbandData({
+                            avgSpeed: json.data.avgSpeed,
+                            technology: json.data.technology,
+                            providers: json.data.providers,
+                            bestFor: json.data.bestFor,
+                            available: true
+                        });
+                    } else {
+                        setBroadbandData(null);
+                    }
+                } catch (error) {
+                    console.error("Falha ao buscar dados de banda larga:", error);
+                    setBroadbandData(null);
+                } finally {
+                    setLoadingBroadband(false);
+                }
+            };
+            fetchBroadband();
         }
-    }, [imovel.endereco.cep]);
+    }, [imovel.endereco.cidade]);
 
     // --- HANDLERS ---
     const openLightbox = (index: number) => {
@@ -176,26 +195,47 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
     };
 
     // --- IA ---
-    const callGemini = async (prompt: string) => {
-        if (!GEMINI_API_KEY) return "Configuração de IA pendente.";
-        try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-            });
-            const data = await res.json();
-            return data.candidates?.[0]?.content?.parts?.[0]?.text || "Não foi possível gerar.";
-        } catch (e) {
-            console.error("Gemini Error", e);
-            return "Erro de conexão com IA.";
-        }
-    };
+   const callGemini = async (prompt: string) => {
+    try {
+        const res = await fetch('/api/ai/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+        if (!res.ok) throw new Error('Falha na requisição');
+        const data = await res.json();
+        return data.text || "Não foi possível gerar a análise no momento.";
+    } catch (e) {
+        console.error("Erro ao chamar IA:", e);
+        return "O sistema de inteligência está indisponível temporariamente.";
+    }
+};
 
     const generateAIHighlights = async () => {
         if (aiHighlights) return;
         setLoadingAiHighlights(true);
-        const prompt = `Atue como um corretor. Analise: ${imovel.titulo}, ${imovel.quartos} quartos, ${imovel.endereco.bairro}. Descrição: "${imovel.descricaoLonga}". Liste 3 destaques e 1 frase sobre perfil ideal.`;
+        const infra = imovel.infraestruturaCondominio || [];
+        const lazerItems = [...infra];
+        if (imovel.condominio?.portaria24h) lazerItems.push("Portaria 24h");
+        if (imovel.condominio?.areaLazer) lazerItems.push("Área de Lazer");
+        const lazer = lazerItems.length > 0 ? lazerItems.join(', ') : 'Padrão';
+
+        const prompt = `
+            Atue como um corretor de imóveis de alto nível (padrão luxo/executivo).
+            Analise este imóvel para um potencial cliente:
+            - Título: ${imovel.titulo}
+            - Tipo: ${imovel.tipoDetalhado} (${imovel.categoriaPrincipal})
+            - Bairro: ${imovel.endereco.bairro}, ${imovel.endereco.cidade}
+            - Configuração: ${imovel.quartos} quartos, ${imovel.suites} suítes, ${imovel.vagasGaragem} vagas.
+            - Área: ${imovel.areaUtil}m²
+            - Diferenciais: ${imovel.caracteristicas.join(', ')}
+            - Lazer/Condomínio: ${lazer}
+            - Descrição original: "${imovel.descricaoLonga}"
+            Tarefa:
+            1. Crie 3 "Bullet Points" de venda (curtos e impactantes com emojis).
+            2. Escreva 1 frase curta definindo o "Perfil do Morador Ideal".
+            Formate a resposta em Markdown limpo.
+        `;
         const text = await callGemini(prompt);
         setAiHighlights(text);
         setLoadingAiHighlights(false);
@@ -205,7 +245,12 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
         setShowNeighborhoodModal(true);
         if (aiNeighborhood) return;
         setLoadingNeighborhood(true);
-        const prompt = `Guia local. Fale sobre ${imovel.endereco.bairro} em ${imovel.endereco.cidade}. Vibe e segurança. Max 80 palavras.`;
+        const prompt = `
+            Crie um "Guia de Bairro" rápido e envolvente sobre ${imovel.endereco.bairro} em ${imovel.endereco.cidade}, ${imovel.endereco.estado}.
+            Foco: Vibe do local, segurança, conveniência e estilo de vida.
+            O imóvel é ${imovel.categoriaPrincipal}.
+            Limite: 80 a 100 palavras. Use tom profissional mas convidativo.
+        `;
         const text = await callGemini(prompt);
         setAiNeighborhood(text);
         setLoadingNeighborhood(false);
@@ -217,9 +262,10 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
     const valorTotalMensal = imovel.valorAluguel + (imovel.custoCondominioIncluso ? imovel.valorCondominio : 0) + (imovel.custoIPTUIncluso ? imovel.valorIPTU : 0);
     const isTotalPackage = imovel.custoCondominioIncluso || imovel.custoIPTUIncluso;
     
-    const proprietarioNome = "Butters John Bee"; // Mock (Falta trazer do backend)
+    const proprietarioNome = "Butters John Bee"; // Mock
     const proprietarioHandle = imovel.proprietarioId || "agente";
     const finalidadeBadge = getFinalidadeBadge(imovel.finalidades);
+    const videoUrl = getEmbedUrl(imovel.linkVideoTour);
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 font-sans pb-12">
@@ -362,9 +408,48 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
                                     {aiHighlights && <div className="prose prose-sm text-gray-700 animate-in fade-in leading-relaxed whitespace-pre-line">{aiHighlights}</div>}
                                 </div>
                             </div>
+
+                            {/* --- NOVA SEÇÃO: EXPERIÊNCIA VIRTUAL (VÍDEO / 360) --- */}
+                            {/* Localizada estrategicamente após a descrição para aumentar o engajamento */}
+                            {(videoUrl || imovel.visitaVirtual360) && (
+                                <div className="mt-8 border-t border-gray-100 pt-6">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                        <PlayCircle className="w-5 h-5 text-indigo-600"/> Tour Virtual e Vídeo
+                                    </h3>
+                                    
+                                    <div className="grid grid-cols-1 gap-6">
+                                        {/* Player de Vídeo (YouTube) */}
+                                        {videoUrl && (
+                                            <div className="w-full rounded-xl overflow-hidden shadow-md border border-gray-100 bg-black aspect-video relative group">
+                                                <iframe 
+                                                    src={videoUrl} 
+                                                    title="Vídeo do Imóvel"
+                                                    className="w-full h-full" 
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                    allowFullScreen 
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Placeholder/Botão para Tour 360 (Se ativo mas sem URL direta no objeto ainda) */}
+                                        {imovel.visitaVirtual360 && !videoUrl && (
+                                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-8 flex flex-col items-center justify-center text-center">
+                                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">
+                                                    <Video className="w-8 h-8 text-indigo-600" />
+                                                </div>
+                                                <h4 className="font-bold text-gray-900 mb-2">Tour 360° Disponível</h4>
+                                                <p className="text-sm text-gray-600 mb-4 max-w-xs">Explore cada detalhe deste imóvel sem sair de casa com nossa experiência imersiva.</p>
+                                                <button className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition shadow-lg shadow-indigo-200">
+                                                    Acessar Tour Virtual
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </section>
 
-                        {/* --- NOVA SEÇÃO: INFORMAÇÕES DE LOCAÇÃO (TABELA DETALHADA) --- */}
+                        {/* --- SEÇÃO: INFORMAÇÕES DE LOCAÇÃO --- */}
                         <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                             <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                                 <FileText className="w-5 h-5 text-indigo-600"/> Informações de Locação
@@ -442,7 +527,68 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
                             </div>
                         </section>
 
-                        {/* --- NOVA SEÇÃO: CONDOMÍNIO RICO --- */}
+                        {/* Detalhes Técnicos (Acabamento e Posição) */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full">
+                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <Hammer className="w-5 h-5 text-indigo-600"/>
+                                    Acabamentos
+                                </h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between border-b border-gray-50 pb-1">
+                                        <span className="text-gray-500">Ano</span>
+                                        <span className="font-medium">{imovel.anoConstrucao || "-"}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-gray-50 pb-1">
+                                        <span className="text-gray-500">Piso Sala</span>
+                                        <span className="font-medium">{formatEnum(imovel.acabamentos?.pisoSala)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-gray-50 pb-1">
+                                        <span className="text-gray-500">Piso Quartos</span>
+                                        <span className="font-medium">{formatEnum(imovel.acabamentos?.pisoQuartos)}</span>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full">
+                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <Sun className="w-5 h-5 text-yellow-500"/>
+                                    Posição e Luz
+                                </h3>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between border-b border-gray-50 pb-1">
+                                        <span className="text-gray-500">Sol</span>
+                                        <span className="font-medium">{formatEnum(imovel.dadosExternos?.posicaoSolar)}</span>
+                                    </div>
+                                    <div className="flex justify-between border-b border-gray-50 pb-1">
+                                        <span className="text-gray-500">Posição</span>
+                                        <span className="font-medium">{formatEnum(imovel.dadosExternos?.posicaoImovel)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-500">Vista</span>
+                                        <span className="font-medium">{formatEnum(imovel.dadosExternos?.vista)}</span>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+
+                        {/* Comodidades Gerais */}
+                        {imovel.caracteristicas.length > 0 && (
+                            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <LayoutDashboard className="w-5 h-5 text-indigo-600"/> Comodidades do Imóvel
+                                </h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {imovel.caracteristicas.map(c => (
+                                        <span key={c} className="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full flex items-center gap-2">
+                                            <Check className="w-3 h-3 text-green-600"/> {c}
+                                        </span>
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* --- LOCALIZAÇÃO: SEÇÃO CONDOMÍNIO (Movida para antes do Mapa) --- */}
                         {imovel.condominio?.possuiCondominio && (
                             <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                 {/* Header do Condomínio com Imagem de Fundo (Placeholder ou Real) */}
@@ -516,67 +662,6 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </section>
-                        )}
-
-                        {/* Detalhes Técnicos (Acabamento e Posição) */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full">
-                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <Hammer className="w-5 h-5 text-indigo-600"/>
-                                    Acabamentos
-                                </h3>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between border-b border-gray-50 pb-1">
-                                        <span className="text-gray-500">Ano</span>
-                                        <span className="font-medium">{imovel.anoConstrucao || "-"}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b border-gray-50 pb-1">
-                                        <span className="text-gray-500">Piso Sala</span>
-                                        <span className="font-medium">{formatEnum(imovel.acabamentos?.pisoSala)}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b border-gray-50 pb-1">
-                                        <span className="text-gray-500">Piso Quartos</span>
-                                        <span className="font-medium">{formatEnum(imovel.acabamentos?.pisoQuartos)}</span>
-                                    </div>
-                                </div>
-                            </section>
-
-                            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full">
-                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <Sun className="w-5 h-5 text-yellow-500"/>
-                                    Posição e Luz
-                                </h3>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between border-b border-gray-50 pb-1">
-                                        <span className="text-gray-500">Sol</span>
-                                        <span className="font-medium">{formatEnum(imovel.dadosExternos?.posicaoSolar)}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b border-gray-50 pb-1">
-                                        <span className="text-gray-500">Posição</span>
-                                        <span className="font-medium">{formatEnum(imovel.dadosExternos?.posicaoImovel)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-500">Vista</span>
-                                        <span className="font-medium">{formatEnum(imovel.dadosExternos?.vista)}</span>
-                                    </div>
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* Comodidades Gerais */}
-                        {imovel.caracteristicas.length > 0 && (
-                            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <LayoutDashboard className="w-5 h-5 text-indigo-600"/> Comodidades do Imóvel
-                                </h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {imovel.caracteristicas.map(c => (
-                                        <span key={c} className="bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-full flex items-center gap-2">
-                                            <Check className="w-3 h-3 text-green-600"/> {c}
-                                        </span>
-                                    ))}
                                 </div>
                             </section>
                         )}
@@ -665,12 +750,47 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
                             </section>
                         </div>
 
+                        {/* --- NOVA LOCALIZAÇÃO: OUTROS IMÓVEIS DO ANUNCIANTE (Movido da Sidebar) --- */}
+                        {outrosImoveis && outrosImoveis.length > 0 && (
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-8">
+                                <h3 className="font-bold text-gray-900 mb-6 text-sm uppercase tracking-wide flex items-center gap-2">
+                                    <User className="w-4 h-4 text-indigo-600"/> Mais imóveis de {proprietarioNome}
+                                </h3>
+                                {/* Layout em Grid Horizontal (Adaptado) */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                                    {outrosImoveis.slice(0, 6).map(item => (
+                                        <Link href={`/anuncios/${item.smartId}`} key={item.id} className="flex gap-3 group hover:bg-gray-50 p-3 rounded-xl border border-gray-100 hover:border-indigo-200 transition-all duration-300">
+                                            <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0 relative">
+                                                {item.fotos[0] ? (
+                                                    <img src={item.fotos[0]} className="w-full h-full object-cover group-hover:scale-110 transition duration-500" alt={item.titulo} />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-gray-400"><Info className="w-6 h-6"/></div>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col justify-center min-w-0">
+                                                <h4 className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 line-clamp-2 leading-snug mb-1">{item.titulo}</h4>
+                                                <p className="text-indigo-900 font-bold text-sm">
+                                                    {formatCurrency(item.valorAluguel + (item.custoCondominioIncluso ? item.valorCondominio : 0))}
+                                                </p>
+                                                <p className="text-gray-400 text-xs mt-0.5">{item.endereco.bairro}</p>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                                <div className="mt-6 flex justify-center">
+                                    <Link href={`/proprietario/${proprietarioHandle}`} className="text-indigo-600 text-sm font-bold hover:bg-indigo-50 px-6 py-2 rounded-lg transition border border-indigo-100">
+                                        Ver portfólio completo
+                                    </Link>
+                                </div>
+                            </div>
+                        )}
+
                     </article>
 
                     {/* --- COLUNA DIREITA (SIDEBAR) --- */}
                     <aside className="lg:col-span-1 space-y-6">
                         
-                        {/* CARD DE VALOR E CONTATO */}
+                        {/* CARD DE VALOR E CONTATO (Mantido Fixo) */}
                         <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100 sticky top-24">
                             <div className="mb-6">
                                 <span className="text-gray-500 text-sm font-medium block">
@@ -721,39 +841,64 @@ export default function AnuncioDetalheClient({ imovel, bairroGeoJson, outrosImov
                             </div>
                         </div>
 
-                        {/* LISTA: OUTROS IMÓVEIS DO ANUNCIANTE */}
-                        {outrosImoveis && outrosImoveis.length > 0 && (
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wide">Mais deste anunciante</h3>
-                                <div className="space-y-4">
-                                    {outrosImoveis.slice(0, 3).map(item => (
-                                        <Link href={`/anuncios/${item.smartId}`} key={item.id} className="flex gap-3 group hover:bg-gray-50 p-2 rounded-lg -mx-2 transition">
-                                            <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                                                {item.fotos[0] ? (
-                                                    <img src={item.fotos[0]} className="w-full h-full object-cover group-hover:scale-110 transition duration-500" alt={item.titulo} />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center text-gray-400"><Info className="w-6 h-6"/></div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <h4 className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 line-clamp-2 leading-snug">{item.titulo}</h4>
-                                                <p className="text-indigo-900 font-bold text-xs mt-1">
-                                                    {formatCurrency(item.valorAluguel + (item.custoCondominioIncluso ? item.valorCondominio : 0))}
-                                                </p>
-                                                <p className="text-gray-400 text-xs mt-1">{item.endereco.bairro}</p>
-                                            </div>
-                                        </Link>
-                                    ))}
-                                </div>
-                                <Link href={`/proprietario/${proprietarioHandle}`} className="block w-full mt-6 text-center text-indigo-600 text-sm font-bold hover:bg-indigo-50 py-2 rounded-lg transition">
-                                    Ver todos os imóveis
-                                </Link>
-                            </div>
-                        )}
+                        {/* A SEÇÃO "MAIS DESTE ANUNCIANTE" FOI MOVIDA DAQUI PARA A COLUNA ESQUERDA */}
                     </aside>
                 </div>
 
-                {/* FOOTER DO ANÚNCIO */}
+                {/* --- NOVA SEÇÃO: VOCÊ PODE GOSTAR TAMBÉM (Fora do Grid Principal, Largura Total) --- */}
+                {imoveisRelacionados && imoveisRelacionados.length > 0 && (
+                    <section className="mt-16 border-t border-gray-200 pt-12">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">Você pode gostar também</h2>
+                            <Link href="/imoveis" className="text-indigo-600 font-bold text-sm hover:underline flex items-center gap-1">
+                                Ver todos <ChevronRight className="w-4 h-4"/>
+                            </Link>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {imoveisRelacionados.map(item => (
+                                <Link href={`/anuncios/${item.smartId}`} key={item.id} className="group bg-white rounded-xl border border-gray-100 overflow-hidden hover:shadow-lg transition duration-300 flex flex-col h-full">
+                                    <div className="h-48 bg-gray-200 relative overflow-hidden">
+                                        {item.fotos[0] ? (
+                                            <img src={item.fotos[0]} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt={item.titulo} />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-gray-400"><Info className="w-8 h-8"/></div>
+                                        )}
+                                        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur text-indigo-900 text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide">
+                                            {item.categoriaPrincipal}
+                                        </div>
+                                    </div>
+                                    <div className="p-4 flex flex-col flex-1">
+                                        <h3 className="font-bold text-gray-900 text-base mb-1 line-clamp-1 group-hover:text-indigo-600 transition">{item.titulo}</h3>
+                                        <p className="text-gray-500 text-xs mb-3 flex items-center gap-1">
+                                            <MapPin className="w-3 h-3"/> {item.endereco.bairro}, {item.endereco.cidade}
+                                        </p>
+                                        
+                                        <div className="flex items-center gap-3 text-xs text-gray-600 mb-4 border-b border-gray-50 pb-3">
+                                            <span className="flex items-center gap-1"><Bed className="w-3 h-3 text-gray-400"/> {item.quartos}</span>
+                                            <span className="flex items-center gap-1"><Car className="w-3 h-3 text-gray-400"/> {item.vagasGaragem}</span>
+                                            <span className="flex items-center gap-1"><Square className="w-3 h-3 text-gray-400"/> {item.areaUtil}m²</span>
+                                        </div>
+
+                                        <div className="mt-auto pt-1">
+                                            <span className="block text-xs text-gray-400 font-medium uppercase mb-0.5">Aluguel</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-lg font-bold text-indigo-700">
+                                                    {formatCurrency(item.valorAluguel)}
+                                                </span>
+                                                {(item.custoCondominioIncluso || item.custoIPTUIncluso) && (
+                                                    <span className="text-[10px] bg-green-50 text-green-700 px-1.5 rounded font-medium">Pacote</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* FOOTER DO ANÚNCIO (Mantido abaixo da nova seção) */}
                 <footer className="mt-16 border-t border-gray-200 pt-8 pb-4 text-center">
                     <p className="text-xs text-gray-400 max-w-3xl mx-auto leading-relaxed">
                         Referência: {imovel.smartId}. A Rentou não se responsabiliza por erros na descrição. As informações são fornecidas pelo anunciante.

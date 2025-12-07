@@ -163,6 +163,85 @@ export async function fetchAnunciosPublicos(): Promise<Imovel[]> {
     }
 }
 
+/**
+ * Algoritmo de Recomendação Inteligente (REST).
+ * Busca ampla na cidade e ordena por relevância (Bairro > Tipo > Preço).
+ */
+export async function fetchImoveisRelacionados(imovelBase: Imovel): Promise<Imovel[]> {
+    const cidade = imovelBase.endereco.cidade;
+    
+    console.log(`[ImovelService] SMART RECOMMEND: Buscando candidatos em ${cidade}...`);
+    
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery?key=${API_KEY}`;
+
+    const requestBody = {
+        structuredQuery: {
+            from: [{ collectionId: 'imoveis' }],
+            where: {
+                compositeFilter: {
+                    op: 'AND',
+                    filters: [
+                        { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'ANUNCIADO' } } },
+                        { fieldFilter: { field: { fieldPath: 'endereco.cidade' }, op: 'EQUAL', value: { stringValue: cidade } } }
+                    ]
+                }
+            },
+            limit: 30 // Aumentamos o funil para 30 imóveis para poder filtrar e ordenar melhor
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            next: { revalidate: 120 } // Cache de 2 minutos
+        });
+
+        if (!response.ok) return [];
+
+        const data = await response.json();
+        if (!data || !Array.isArray(data)) return [];
+
+        // 1. Converte e Limpa
+        const candidatos = data
+            .filter((item: any) => item.document)
+            .map((item: any) => {
+                const docId = item.document.name.split('/').pop();
+                return { id: docId, ...parseFirestoreDoc(item.document.fields) } as Imovel;
+            })
+            .filter((imovel) => imovel.id !== imovelBase.id && imovel.smartId !== imovelBase.smartId); // Remove o próprio
+
+        // 2. Sistema de Pontuação (Ranking)
+        const ranked = candidatos.map(imovel => {
+            let score = 0;
+            
+            // Peso Bairro (Máxima relevância): +30 pts
+            if (imovel.endereco.bairro === imovelBase.endereco.bairro) score += 30;
+            
+            // Peso Categoria (Relevância média): +10 pts
+            if (imovel.categoriaPrincipal === imovelBase.categoriaPrincipal) score += 10;
+            
+            // Peso Preço (Faixa de 30%): +15 pts
+            const precoMin = imovelBase.valorAluguel * 0.7;
+            const precoMax = imovelBase.valorAluguel * 1.3;
+            if (imovel.valorAluguel >= precoMin && imovel.valorAluguel <= precoMax) score += 15;
+
+            return { imovel, score };
+        });
+
+        // 3. Ordena por Score (Decrescente) e Pega os Top 4
+        return ranked
+            .sort((a, b) => b.score - a.score)
+            .map(item => item.imovel)
+            .slice(0, 4);
+
+    } catch (e) {
+        console.error('[ImovelService] Falha na recomendação:', e);
+        return [];
+    }
+}
+
 // === FUNÇÕES AUXILIARES E DE ESCRITA (MANTIDAS COM SDK) ===
 // Estas funções geralmente rodam no cliente (Dashboard) onde o SDK funciona bem.
 

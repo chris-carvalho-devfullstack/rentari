@@ -107,7 +107,28 @@ export async function fetchNearbyPois(
  * Busca o GeoJSON (limites) via Nominatim (backend).
  */
 export async function fetchBairroGeoJsonLimits(bairro: string, cidade: string, estado: string): Promise<any | null> {
-    const apiUrl = `/api/bairro?bairro=${bairro}&cidade=${cidade}&estado=${estado}`;
+    // CORREÇÃO 1: Definir URL base absoluta para chamadas no Server-Side
+    let baseUrl = '';
+    
+    if (typeof window === 'undefined') {
+        // Estamos no servidor
+        if (process.env.NEXT_PUBLIC_BASE_URL) {
+            baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+        } else if (process.env.VERCEL_URL) {
+            baseUrl = `https://${process.env.VERCEL_URL}`;
+        } else {
+            baseUrl = 'http://localhost:3000'; // Fallback para desenvolvimento local
+        }
+    }
+
+    // CORREÇÃO 2: Usar URLSearchParams para codificar corretamente espaços e caracteres especiais
+    const params = new URLSearchParams({
+        bairro: bairro || '',
+        cidade: cidade || '',
+        estado: estado || ''
+    });
+
+    const apiUrl = `${baseUrl}/api/bairro?${params.toString()}`;
     
     try {
         const response = await fetch(apiUrl);

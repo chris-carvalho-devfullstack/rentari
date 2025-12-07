@@ -2,9 +2,12 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 // Adicionamos a função para buscar outros imóveis do mesmo dono
-import { fetchImovelPorSmartId, fetchAnunciosPorProprietarioHandle } from '@/services/ImovelService';
+import { fetchImovelPorSmartId, fetchAnunciosPorProprietarioHandle, fetchImoveisRelacionados } from '@/services/ImovelService';
 import { fetchCoordinatesByAddress, fetchBairroGeoJsonLimits } from '@/services/GeocodingService';
 import AnuncioDetalheClient from '@/components/anuncios/AnuncioDetalheClient';
+// Novos imports para a integração de IA no Servidor
+import { AiService } from '@/services/AiService';
+import { unstable_cache } from 'next/cache';
 
 export const runtime = 'edge';
 
@@ -12,6 +15,16 @@ export const runtime = 'edge';
 type Props = {
     params: Promise<{ smartId: string }>;
 };
+
+// Cachear a chamada da IA para SEO (para não gastar cota a cada refresh e manter performance)
+const getCachedSeoDescription = unstable_cache(
+    async (titulo: string, bairro: string, caracteristicas: string[]) => {
+        const prompt = `Crie uma meta-description SEO (max 155 chars) muito atraente para aluguel de: ${titulo} em ${bairro}. Inclua destaques: ${caracteristicas.slice(0,3).join(', ')}. Termine com chamada para ação.`;
+        return await AiService.generateText(prompt);
+    },
+    ['seo-description-ai'], // Chave de cache
+    { revalidate: 86400 } // Cache válido por 24h
+);
 
 // 1. GERAÇÃO DE METADADOS DINÂMICOS (SEO SOCIAL)
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -33,7 +46,29 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
         const title = `${imovel.titulo} | Rentou`;
         // Resumo para a descrição: Tipo, Bairro, Quartos, Preço
-        const description = `${imovel.tipoDetalhado} em ${imovel.endereco.bairro}, ${imovel.endereco.cidade}. ${imovel.quartos} quartos, ${imovel.areaUtil}m². Aluguel: R$ ${imovel.valorAluguel.toLocaleString('pt-BR')}.`;
+        // Alterado para let para permitir sobrescrita pela IA
+        let description = `${imovel.tipoDetalhado} em ${imovel.endereco.bairro}, ${imovel.endereco.cidade}. ${imovel.quartos} quartos, ${imovel.areaUtil}m². Aluguel: R$ ${imovel.valorAluguel.toLocaleString('pt-BR')}.`;
+        
+        // --- IMPLEMENTAÇÃO SEO INTELIGENTE ---
+        try {
+            // Verifica se a chave existe para não fazer chamadas desnecessárias
+            if (process.env.GEMINI_API_KEY) {
+                const aiDesc = await getCachedSeoDescription(
+                    imovel.titulo, 
+                    imovel.endereco.bairro, 
+                    imovel.caracteristicas || []
+                );
+                // Validação básica para garantir que não veio uma mensagem de erro
+                if (aiDesc && !aiDesc.includes("Erro") && !aiDesc.includes("indisponível") && aiDesc.length > 10) {
+                    description = aiDesc;
+                }
+            }
+        } catch (e) {
+            // Falha silenciosa para não quebrar a página, mantém a descrição padrão
+            console.error("[SEO DEBUG] IA Falhou, usando fallback padrão.", e);
+        }
+        // -------------------------------------
+
         const imageUrl = imovel.fotos?.[0] || 'https://rentou.com.br/og-image-default.jpg';
 
         return {
@@ -76,6 +111,7 @@ export default async function AnuncioDetalhePage({ params }: Props) {
     
     let imovel;
     let outrosImoveis: any[] = []; // Array para armazenar imóveis relacionados
+    let imoveisRelacionados: any[] = []; // <--- NOVA VARIÁVEL PARA O GRID DO FINAL
 
     try {
         // Busca de dados no lado do servidor (Sem Loading Spinner para o usuário, HTML já vem pronto)
@@ -97,6 +133,15 @@ export default async function AnuncioDetalhePage({ params }: Props) {
                      console.warn('[PAGE DEBUG] Falha ao buscar outros imóveis (não crítico):', err);
                      // Não lançamos erro aqui para não quebrar a página principal
                  }
+             }
+             // -------------------------------------------------------------------
+
+             // --- NOVO 2: Busca Imóveis Relacionados (Algoritmo Inteligente) ---
+             // Passamos o objeto completo 'imovel' para o serviço calcular a relevância
+             try {
+                 imoveisRelacionados = await fetchImoveisRelacionados(imovel);
+             } catch (err) {
+                 console.warn('[PAGE DEBUG] Falha ao buscar imóveis relacionados:', err);
              }
              // -------------------------------------------------------------------
 
@@ -194,6 +239,7 @@ export default async function AnuncioDetalhePage({ params }: Props) {
                 imovel={imovel} 
                 bairroGeoJson={bairroGeoJson}
                 outrosImoveis={outrosImoveis} // Passamos a nova lista para o componente cliente
+                imoveisRelacionados={imoveisRelacionados} // <--- PASSAMOS A NOVA PROP (Agora com lógica inteligente)
             />
         </>
     );
