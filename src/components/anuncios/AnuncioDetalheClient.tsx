@@ -267,6 +267,18 @@ export default function AnuncioDetalheClient({
     const finalidadeBadge = getFinalidadeBadge(imovel.finalidades);
     const videoUrl = getEmbedUrl(imovel.linkVideoTour);
 
+    // --- LÓGICA DE CONDOMÍNIO (ADICIONADA) ---
+    const temDadosCondominio = imovel.condominio && imovel.condominio.possuiCondominio;
+    const nomeCondominioAtual = imovel.condominio?.nomeCondominio?.trim();
+
+    // Filtra vizinhos apenas se tivermos um nome de condomínio válido para comparar
+    const vizinhosDeCondominio = (temDadosCondominio && nomeCondominioAtual && outrosImoveis.length > 0)
+    ? outrosImoveis.filter(vizinho => 
+        vizinho.condominio?.possuiCondominio && 
+        vizinho.condominio?.nomeCondominio?.trim().toLowerCase() === nomeCondominioAtual.toLowerCase()
+      )
+    : [];
+
     return (
         <div className="min-h-screen bg-gray-50 text-gray-800 font-sans pb-12">
             
@@ -588,8 +600,8 @@ export default function AnuncioDetalheClient({
                             </section>
                         )}
 
-                        {/* --- LOCALIZAÇÃO: SEÇÃO CONDOMÍNIO (Movida para antes do Mapa) --- */}
-                        {imovel.condominio?.possuiCondominio && (
+                        {/* --- LOCALIZAÇÃO: SEÇÃO CONDOMÍNIO (CORRIGIDA E REPOSICIONADA) --- */}
+                        {temDadosCondominio && (
                             <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                 {/* Header do Condomínio com Imagem de Fundo (Placeholder ou Real) */}
                                 <div className="h-40 bg-gradient-to-r from-gray-800 to-gray-900 relative flex items-end p-6">
@@ -600,7 +612,7 @@ export default function AnuncioDetalheClient({
                                                 <Building className="w-3 h-3"/> Condomínio Fechado
                                             </div>
                                             <h3 className="text-2xl font-bold text-white leading-none">
-                                                {imovel.condominio.nomeCondominio || "Residencial"}
+                                                {nomeCondominioAtual || "Residencial"}
                                             </h3>
                                         </div>
                                         <button className="bg-white/10 hover:bg-white/20 text-white border border-white/30 px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-sm transition">
@@ -629,6 +641,8 @@ export default function AnuncioDetalheClient({
                                                         <span key={idx} className="bg-gray-50 text-gray-600 text-xs px-2 py-1 rounded-md border border-gray-200">{item}</span>
                                                     ))
                                                 ) : (
+                                                    // Fallback se não houver itens detalhados mas tiver flags booleanas
+                                                    (!imovel.condominio.portaria24h && !imovel.condominio.areaLazer) &&
                                                     <span className="text-gray-400 text-xs italic">Detalhes não informados.</span>
                                                 )}
                                             </div>
@@ -637,26 +651,23 @@ export default function AnuncioDetalheClient({
                                         <div className="border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-6">
                                             <h4 className="font-bold text-gray-900 mb-3 text-sm flex items-center justify-between">
                                                 Outros neste condomínio
-                                                <span className="text-xs font-normal text-indigo-600 cursor-pointer hover:underline">Ver todos</span>
+                                                {vizinhosDeCondominio.length > 2 && <span className="text-xs font-normal text-indigo-600 cursor-pointer hover:underline">Ver todos</span>}
                                             </h4>
-                                            {/* Lista Simulada/Filtrada de Imóveis no mesmo condomínio */}
                                             <div className="space-y-3">
-                                                {outrosImoveis
-                                                    .filter(i => i.condominio?.nomeCondominio === imovel.condominio.nomeCondominio)
-                                                    .slice(0, 2)
-                                                    .map(vizinho => (
-                                                    <Link href={`/anuncios/${vizinho.smartId}`} key={vizinho.id} className="flex items-center gap-3 group">
-                                                        <div className="w-12 h-12 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
-                                                            {vizinho.fotos[0] && <img src={vizinho.fotos[0]} className="w-full h-full object-cover" alt="" />}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-medium text-gray-900 truncate group-hover:text-indigo-600">{vizinho.titulo}</p>
-                                                            <p className="text-xs text-gray-500">{formatCurrency(vizinho.valorAluguel)} • {vizinho.quartos} qtos</p>
-                                                        </div>
-                                                        <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-600"/>
-                                                    </Link>
-                                                ))}
-                                                {outrosImoveis.filter(i => i.condominio?.nomeCondominio === imovel.condominio.nomeCondominio).length === 0 && (
+                                                {vizinhosDeCondominio.length > 0 ? (
+                                                    vizinhosDeCondominio.slice(0, 2).map(vizinho => (
+                                                        <Link href={`/anuncios/${vizinho.smartId}`} key={vizinho.id} className="flex items-center gap-3 group">
+                                                            <div className="w-12 h-12 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
+                                                                {vizinho.fotos[0] && <img src={vizinho.fotos[0]} className="w-full h-full object-cover" alt="" />}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-medium text-gray-900 truncate group-hover:text-indigo-600">{vizinho.titulo}</p>
+                                                                <p className="text-xs text-gray-500">{formatCurrency(vizinho.valorAluguel)} • {vizinho.quartos} qtos</p>
+                                                            </div>
+                                                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-indigo-600"/>
+                                                        </Link>
+                                                    ))
+                                                ) : (
                                                     <p className="text-xs text-gray-400 italic">Nenhum outro imóvel disponível neste condomínio no momento.</p>
                                                 )}
                                             </div>

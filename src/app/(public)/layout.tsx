@@ -1,6 +1,6 @@
 // src/app/(public)/layout.tsx
 import PublicNavbar from '@/components/layouts/PublicNavbar';
-import Footer from '@/components/layouts/Footer'; // Supondo que você crie um footer depois
+import Footer from '@/components/layouts/Footer';
 
 export default function PublicLayout({
   children,
@@ -9,18 +9,19 @@ export default function PublicLayout({
 }) {
   return (
     <div className="flex flex-col min-h-screen bg-white">
-      {/* Menu Superior Público */}
+      {/* Menu Superior (Fixo) */}
       <PublicNavbar />
       
-      {/* Conteúdo da Página */}
-      <main className="flex-grow">
+      {/* CORREÇÃO AQUI: 
+         Adicionei 'pt-20' (padding-top: 80px) para empurrar o conteúdo para baixo 
+         e não ficar escondido atrás do menu que tem altura h-20.
+      */}
+      <main className="flex-grow pt-20">
         {children}
       </main>
 
-      {/* Footer (Rodapé) - Opcional por enquanto */}
-      <footer className="bg-gray-50 border-t border-gray-200 py-8 text-center text-sm text-gray-500">
-        © {new Date().getFullYear()} Rentou. Todos os direitos reservados.
-      </footer>
+      {/* Rodapé */}
+      <Footer />
     </div>
   );
 }
