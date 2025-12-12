@@ -274,16 +274,62 @@ export async function fetchImoveisDoProprietarioOnce(proprietarioId: string): Pr
   return querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Imovel));
 }
 
-// Esta função também pode ser convertida para REST se for usada em página pública no futuro,
-// mas por enquanto mantemos SDK pois costuma ser usada em dashboard ou client-side.
+// FUNÇÃO CORRIGIDA PARA Edge Runtime/REST API:
 export async function fetchAnunciosPorProprietarioHandle(proprietarioId: string): Promise<Imovel[]> {
-    const q = query(
-        collection(db, 'imoveis'), 
-        where('proprietarioId', '==', proprietarioId),
-        where('status', '==', 'ANUNCIADO')
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Imovel));
+    console.log(`[ImovelService] BUSCA REST: Anúncios do Proprietário ${proprietarioId}...`);
+    
+    // Utilize as constantes de ambiente definidas no topo do arquivo (PROJECT_ID e API_KEY)
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery?key=${API_KEY}`;
+
+    const requestBody = {
+        structuredQuery: {
+            from: [{ collectionId: 'imoveis' }],
+            where: {
+                compositeFilter: {
+                    op: 'AND',
+                    filters: [
+                        // Filtra pelo proprietarioId
+                        { fieldFilter: { field: { fieldPath: 'proprietarioId' }, op: 'EQUAL', value: { stringValue: proprietarioId } } },
+                        // Filtra pelo status 'ANUNCIADO'
+                        { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'ANUNCIADO' } } }
+                    ]
+                }
+            },
+            limit: 10 // Limite razoável para a lista de "Mais Imóveis"
+        }
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+            next: { revalidate: 60 } // Cache por 60 segundos
+        });
+
+        if (!response.ok) {
+            console.error(`[ImovelService] Erro REST (Proprietário): ${response.status} ${response.statusText}`);
+            return [];
+        }
+
+        const data = await response.json();
+        
+        if (!data || !Array.isArray(data)) return [];
+
+        // Converte o resultado da API REST para o formato de objeto JavaScript (Imovel[])
+        return data
+            .filter((item: any) => item.document)
+            .map((item: any) => {
+                const docId = item.document.name.split('/').pop();
+                // A função parseFirestoreDoc deve estar definida no início do seu ImovelService.ts
+                const fields = parseFirestoreDoc(item.document.fields);
+                return { id: docId, ...fields } as Imovel;
+            });
+
+    } catch (e) {
+        console.error('[ImovelService] EXCEÇÃO REST (Proprietário):', e);
+        return [];
+    }
 }
 
 export function subscribeToImoveis(proprietarioId: string, callback: (imoveis: Imovel[]) => void, onError: (error: Error) => void) {
