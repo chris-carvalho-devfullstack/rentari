@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, getAdditionalUserInfo } from 'firebase/auth';
@@ -10,6 +10,7 @@ import { updateUserInFirestore } from '@/services/UserService';
 import { Icon } from '@/components/ui/Icon';
 import { faUser, faEnvelope, faLock, faEye, faEyeSlash, faBuilding, faHome, faSync } from '@fortawesome/free-solid-svg-icons';
 import { PerfilUsuario } from '@/types/usuario';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 // --- LÓGICA DE SEGURANÇA (Copiada e adaptada) ---
 const calculateStrength = (password: string, emailUser: string = '') => {
@@ -74,6 +75,10 @@ export default function SignupForm() {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Estados do Cloudflare Turnstile
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<any>(null);
   
   const router = useRouter();
   const { fetchUserData, setUser } = useAuthStore();
@@ -125,6 +130,11 @@ export default function SignupForm() {
 
   // Handler Específico para Google (Com lógica de redirecionamento para seleção)
   const handleGoogleSignUp = async () => {
+    if (!turnstileToken) {
+        setError('Verificação de segurança necessária.');
+        return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -164,6 +174,8 @@ export default function SignupForm() {
       }
 
     } catch (err: any) {
+      if (turnstileRef.current) turnstileRef.current.reset();
+      setTurnstileToken(null);
       console.error(err);
       setError('Falha ao cadastrar com Google.');
     } finally {
@@ -174,6 +186,11 @@ export default function SignupForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!turnstileToken) {
+        setError('Complete a verificação de segurança (Captcha).');
+        return;
+    }
 
     if (strength.isBlocked) {
         setError(strength.message || 'Sua senha é considerada insegura.');
@@ -200,6 +217,8 @@ export default function SignupForm() {
       // Usa o handler de Email que aplica o perfil selecionado
       await handleEmailSignUpSuccess(userCredential.user, nome);
     } catch (err: any) {
+      if (turnstileRef.current) turnstileRef.current.reset();
+      setTurnstileToken(null);
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
         setError('Este e-mail já está cadastrado.');
@@ -354,9 +373,24 @@ export default function SignupForm() {
           )}
         </div>
 
+        {/* CLOUDFLARE TURNSTILE (CAPTCHA) */}
+        <div className="flex justify-center my-4">
+            <Turnstile
+                ref={turnstileRef}
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
+                onSuccess={(token) => setTurnstileToken(token)}
+                onError={() => setTurnstileToken(null)}
+                onExpire={() => setTurnstileToken(null)}
+                options={{
+                    theme: 'auto',
+                    size: 'normal',
+                }}
+            />
+        </div>
+
         <button 
           type="submit" 
-          disabled={loading || (password.length > 0 && (strength.isBlocked || strength.score < 2))} 
+          disabled={loading || (password.length > 0 && (strength.isBlocked || strength.score < 2)) || !turnstileToken} 
           className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? 'Cadastrando...' : 'Criar Conta'}

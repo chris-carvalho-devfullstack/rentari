@@ -90,17 +90,29 @@ export default function LoginForm() {
   };
 
   const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      await handleSuccess(result.user);
-    } catch (err) {
-      setError('Falha no login com Google.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // --- ADICIONE ESTA VERIFICAÇÃO ---
+  if (!turnstileToken) {
+    setError('Verificação de segurança necessária. Aguarde o captcha.');
+    return;
+  }
+  // ---------------------------------
+
+  setLoading(true);
+  setError(null);
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    // Opcional: Resetar o widget após uso
+    if (turnstileRef.current) turnstileRef.current.reset();
+    await handleSuccess(result.user);
+  } catch (err) {
+    // Resetar widget em caso de erro
+    if (turnstileRef.current) turnstileRef.current.reset();
+    setTurnstileToken(null);
+    setError('Falha no login com Google.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="w-full bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700 transition-colors duration-300">
