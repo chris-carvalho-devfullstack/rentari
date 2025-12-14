@@ -3,13 +3,55 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { createUserWithEmailAndPassword, updateProfile, signInWithPopup } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, getAdditionalUserInfo } from 'firebase/auth';
 import { auth, googleProvider } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { updateUserInFirestore } from '@/services/UserService';
 import { Icon } from '@/components/ui/Icon';
 import { faUser, faEnvelope, faLock, faEye, faEyeSlash, faBuilding, faHome, faSync } from '@fortawesome/free-solid-svg-icons';
 import { PerfilUsuario } from '@/types/usuario';
+
+// --- LÓGICA DE SEGURANÇA (Copiada e adaptada) ---
+const calculateStrength = (password: string, emailUser: string = '') => {
+  let score = 0;
+  
+  const passLower = password.toLowerCase();
+  
+  // 0. VERIFICAÇÕES BLOQUEANTES
+  const commonPasswords = [
+    "123456", "12345678", "123456789", "12345", "000000", "111111",
+    "senha", "senha123", "password", "trocarsenha", "admin", "admin123",
+    "rentou", "rentou123", "mudar123", "qwerty"
+  ];
+
+  if (commonPasswords.includes(passLower)) {
+    return { score: 0, label: 'Insegura', color: 'bg-red-500', width: '100%', isBlocked: true, message: 'Esta senha é muito comum.' };
+  }
+
+  if (emailUser) {
+    const userPart = emailUser.split('@')[0].toLowerCase();
+    if (userPart.length > 3 && passLower.includes(userPart)) {
+      return { score: 0, label: 'Insegura', color: 'bg-red-500', width: '100%', isBlocked: true, message: 'Não use parte do seu e-mail na senha.' };
+    }
+  }
+
+  if (/(\w)\1{3,}/.test(password)) {
+    return { score: 0, label: 'Insegura', color: 'bg-red-500', width: '100%', isBlocked: true, message: 'Evite repetir o mesmo caractere muitas vezes.' };
+  }
+
+  // --- CÁLCULO DE SCORE NORMAL ---
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/[0-9]/.test(password)) score += 1;
+  if (password.length >= 8) score += 1;
+
+  if (!password) return { score: 0, label: '', color: 'bg-transparent', width: '0%', isBlocked: false, message: '' };
+  
+  if (score <= 1) return { score, label: 'Fraca', color: 'bg-red-500', width: '25%', isBlocked: false, message: '' };
+  if (score === 2) return { score, label: 'Razoável', color: 'bg-orange-400', width: '50%', isBlocked: false, message: '' };
+  if (score === 3) return { score, label: 'Forte', color: 'bg-green-500', width: '75%', isBlocked: false, message: '' };
+  return { score, label: 'Fortíssima', color: 'bg-emerald-600', width: '100%', isBlocked: false, message: '' };
+};
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5 mr-3" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
@@ -36,36 +78,36 @@ export default function SignupForm() {
   const router = useRouter();
   const { fetchUserData, setUser } = useAuthStore();
 
+  // Calcula a força da senha em tempo real
+  const strength = calculateStrength(password, email);
+
+  // Verifica se as senhas conferem para uso na UI
+  const passwordsMatch = !confirmPassword || password === confirmPassword;
+
   const handleTogglePassword = () => setShowPassword(prev => !prev);
 
-  // Função auxiliar para estilos dos botões de perfil
   const getButtonClass = (tipo: PerfilUsuario) => {
     const isSelected = perfil === tipo;
-    
     if (isSelected) {
       return "flex items-center p-3 text-left border rounded-lg text-sm transition-all " +
-             // Estilos CLAROS (Light Mode)
              "border-rentou-primary bg-blue-50 text-rentou-primary ring-1 ring-rentou-primary " +
-             // Estilos ESCUROS (Dark Mode) - Melhorias aplicadas
              "dark:bg-blue-600/20 dark:border-blue-400 dark:text-white dark:ring-blue-400";
     }
-
     return "flex items-center p-3 text-left border rounded-lg text-sm transition-all " +
-           // Estilos Padrão (Não selecionado)
            "border-gray-300 text-gray-700 hover:bg-gray-50 " +
-           // Estilos Dark (Não selecionado)
            "dark:border-zinc-600 dark:text-gray-300 dark:hover:bg-zinc-700 dark:hover:border-zinc-500";
   };
 
-  const handleSuccess = async (user: any, displayName?: string) => {
+  // Handler APENAS para o formulário de Email/Senha (onde o usuário escolheu o perfil visualmente)
+  const handleEmailSignUpSuccess = async (user: any, displayName?: string) => {
     const date = new Date();
     date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
     document.cookie = `rentou-auth-token=${user.uid}; expires=${date.toUTCString()}; path=/; SameSite=Lax; Secure`;
 
-    // 1. Garante que o usuário exista no Firestore
+    // 1. Busca dados
     const userData = await fetchUserData(user.uid, user.email || '', displayName || user.displayName || 'Novo Usuário');
     
-    // 2. Atualiza o PERFIL escolhido
+    // 2. FORÇA a atualização do perfil baseado no que está selecionado no formulário (State)
     if (userData.perfil !== perfil) {
         await updateUserInFirestore(user.uid, { perfil });
         userData.perfil = perfil;
@@ -73,7 +115,7 @@ export default function SignupForm() {
     
     setUser(userData);
 
-    // 3. Redirecionamento Baseado no Perfil
+    // 3. Redirecionamento
     if (perfil === 'INQUILINO') {
         router.push('/meu-espaco');
     } else {
@@ -81,16 +123,72 @@ export default function SignupForm() {
     }
   };
 
+  // Handler Específico para Google (Com lógica de redirecionamento para seleção)
+  const handleGoogleSignUp = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      const additionalInfo = getAdditionalUserInfo(result);
+      const isNewUser = additionalInfo?.isNewUser;
+
+      // Configura Cookie
+      const date = new Date();
+      date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
+      document.cookie = `rentou-auth-token=${user.uid}; expires=${date.toUTCString()}; path=/; SameSite=Lax; Secure`;
+
+      // Busca dados do usuário (cria se não existir, mas NÃO define perfil padrão ainda)
+      const userData = await fetchUserData(user.uid, user.email || '', user.displayName || 'Novo Usuário');
+      setUser(userData);
+
+      // --- LÓGICA DE DECISÃO DE ROTA ---
+      
+      // Se for usuário novo, ele NÃO escolheu perfil ainda -> Manda para página de seleção
+      if (isNewUser) {
+        router.push('/selecao-perfil');
+        return;
+      }
+
+      // Se for usuário existente, verificamos se ele já tem um perfil definido
+      if (userData.perfil) {
+        // Já tem perfil, manda para a área correta
+        if (userData.perfil === 'INQUILINO') {
+           router.push('/meu-espaco');
+        } else {
+           router.push('/dashboard');
+        }
+      } else {
+        // Usuário existe mas por algum motivo não tem perfil (cadastro antigo incompleto)
+        router.push('/selecao-perfil');
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setError('Falha ao cadastrar com Google.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
+    if (strength.isBlocked) {
+        setError(strength.message || 'Sua senha é considerada insegura.');
+        return;
+    }
+    if (strength.score < 2) {
+        setError('Sua senha é muito fraca. Tente adicionar números, letras maiúsculas ou símbolos.');
+        return;
+    }
     if (password !== confirmPassword) {
       setError('As senhas não conferem.');
       return;
     }
-    if (password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.');
+    if (password.length < 8) {
+      setError('A senha deve ter pelo menos 8 caracteres.');
       return;
     }
 
@@ -99,7 +197,8 @@ export default function SignupForm() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: nome });
-      await handleSuccess(userCredential.user, nome);
+      // Usa o handler de Email que aplica o perfil selecionado
+      await handleEmailSignUpSuccess(userCredential.user, nome);
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
@@ -107,19 +206,6 @@ export default function SignupForm() {
       } else {
         setError('Erro ao criar conta. Tente novamente.');
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignUp = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      await handleSuccess(result.user);
-    } catch (err: any) {
-      setError('Falha ao cadastrar com Google.');
     } finally {
       setLoading(false);
     }
@@ -155,7 +241,7 @@ export default function SignupForm() {
       </div>
 
       {error && (
-        <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800">
+        <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/50">
           {error}
         </div>
       )}
@@ -166,59 +252,17 @@ export default function SignupForm() {
         <div className="space-y-2 pb-2">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">O que você busca na Rentou?</label>
             <div className="grid grid-cols-1 gap-3">
-                
-                {/* PROPRIETÁRIO */}
-                <button
-                    type="button"
-                    onClick={() => setPerfil('PROPRIETARIO')}
-                    className={getButtonClass('PROPRIETARIO')}
-                >
-                    <Icon 
-                        icon={faBuilding} 
-                        className={`w-5 h-5 mr-3 ${perfil === 'PROPRIETARIO' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} 
-                    />
-                    <div>
-                        <span className="block font-bold">Sou Proprietário</span>
-                        <span className={`text-xs block font-normal mt-0.5 ${perfil === 'PROPRIETARIO' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                            Quero anunciar e gerir imóveis
-                        </span>
-                    </div>
+                <button type="button" onClick={() => setPerfil('PROPRIETARIO')} className={getButtonClass('PROPRIETARIO')}>
+                    <Icon icon={faBuilding} className={`w-5 h-5 mr-3 ${perfil === 'PROPRIETARIO' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} />
+                    <div><span className="block font-bold">Sou Proprietário</span><span className={`text-xs block font-normal mt-0.5 ${perfil === 'PROPRIETARIO' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>Quero anunciar e gerir imóveis</span></div>
                 </button>
-
-                {/* INQUILINO */}
-                <button
-                    type="button"
-                    onClick={() => setPerfil('INQUILINO')}
-                    className={getButtonClass('INQUILINO')}
-                >
-                    <Icon 
-                        icon={faHome} 
-                        className={`w-5 h-5 mr-3 ${perfil === 'INQUILINO' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} 
-                    />
-                    <div>
-                        <span className="block font-bold">Sou Inquilino</span>
-                        <span className={`text-xs block font-normal mt-0.5 ${perfil === 'INQUILINO' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                            Quero buscar um imóvel para alugar
-                        </span>
-                    </div>
+                <button type="button" onClick={() => setPerfil('INQUILINO')} className={getButtonClass('INQUILINO')}>
+                    <Icon icon={faHome} className={`w-5 h-5 mr-3 ${perfil === 'INQUILINO' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} />
+                    <div><span className="block font-bold">Sou Inquilino</span><span className={`text-xs block font-normal mt-0.5 ${perfil === 'INQUILINO' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>Quero buscar um imóvel para alugar</span></div>
                 </button>
-
-                {/* AMBOS */}
-                <button
-                    type="button"
-                    onClick={() => setPerfil('AMBOS')}
-                    className={getButtonClass('AMBOS')}
-                >
-                    <Icon 
-                        icon={faSync} 
-                        className={`w-5 h-5 mr-3 ${perfil === 'AMBOS' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} 
-                    />
-                    <div>
-                        <span className="block font-bold">Ambos</span>
-                        <span className={`text-xs block font-normal mt-0.5 ${perfil === 'AMBOS' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                             Investidor e morador
-                        </span>
-                    </div>
+                <button type="button" onClick={() => setPerfil('AMBOS')} className={getButtonClass('AMBOS')}>
+                    <Icon icon={faSync} className={`w-5 h-5 mr-3 ${perfil === 'AMBOS' ? 'text-rentou-primary dark:text-blue-400' : 'text-gray-400'}`} />
+                    <div><span className="block font-bold">Ambos</span><span className={`text-xs block font-normal mt-0.5 ${perfil === 'AMBOS' ? 'text-blue-600 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>Investidor e morador</span></div>
                 </button>
             </div>
         </div>
@@ -242,20 +286,79 @@ export default function SignupForm() {
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Senha</label>
           <div className="relative mt-1">
-            <input type={showPassword ? 'text' : 'password'} required value={password} onChange={(e) => setPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors" />
+            <input 
+              type={showPassword ? 'text' : 'password'} 
+              required 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              className={`block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors ${strength.isBlocked ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`} 
+            />
             <span className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onClick={handleTogglePassword}><Icon icon={showPassword ? faEye : faEyeSlash} className="h-4 w-4" /></span>
           </div>
+
+          {password && (
+            <div className="mt-2 space-y-2 animate-in slide-in-from-top-1">
+              {strength.isBlocked ? (
+                  <div className="w-full h-1.5 rounded-full bg-red-500 transition-all duration-300" />
+              ) : (
+                  <div className="flex gap-1 h-1.5 w-full">
+                      <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 0 ? strength.color : 'bg-gray-200 dark:bg-zinc-600'}`} style={{ width: '25%' }} />
+                      <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 2 ? strength.color : 'bg-gray-200 dark:bg-zinc-600'}`} style={{ width: '25%' }} />
+                      <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 3 ? strength.color : 'bg-gray-200 dark:bg-zinc-600'}`} style={{ width: '25%' }} />
+                      <div className={`h-full rounded-full transition-all duration-300 ${strength.score >= 4 ? strength.color : 'bg-gray-200 dark:bg-zinc-600'}`} style={{ width: '25%' }} />
+                  </div>
+              )}
+              
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-gray-500 dark:text-gray-400">
+                  {strength.isBlocked ? 'Senha inválida' : 'Nível de segurança'}
+                </span>
+                <span className={`font-bold ${strength.color.replace('bg-', 'text-')}`}>
+                  {strength.label}
+                </span>
+              </div>
+              
+              {strength.isBlocked && (
+                  <p className="text-xs text-red-500 font-medium mt-1">{strength.message}</p>
+              )}
+
+              {!strength.isBlocked && (
+                  <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                    <span className={/[^A-Za-z0-9]/.test(password) ? 'text-green-600 dark:text-green-400 font-bold' : ''}>• Especial</span>
+                    <span className={/[A-Z]/.test(password) ? 'text-green-600 dark:text-green-400 font-bold' : ''}>• Maiúscula</span>
+                    <span className={/[0-9]/.test(password) ? 'text-green-600 dark:text-green-400 font-bold' : ''}>• Número</span>
+                    <span className={password.length >= 8 ? 'text-green-600 dark:text-green-400 font-bold' : ''}>• 8+ chars</span>
+                  </div>
+              )}
+            </div>
+          )}
+
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirmar Senha</label>
           <div className="relative mt-1">
-            <input type={showPassword ? 'text' : 'password'} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors" />
+            <input 
+              type={showPassword ? 'text' : 'password'} 
+              required 
+              value={confirmPassword} 
+              onChange={(e) => setConfirmPassword(e.target.value)} 
+              className={`block w-full px-3 py-2 pr-10 border rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors dark:bg-zinc-700/70 dark:text-white ${!passwordsMatch ? 'border-red-500 focus:border-red-500 focus:ring-red-500 dark:border-red-500' : 'border-gray-300 dark:border-zinc-600'}`} 
+            />
             <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none"><Icon icon={faLock} className="h-4 w-4" /></span>
           </div>
+          {!passwordsMatch && (
+            <p className="text-xs text-red-500 mt-1 font-medium animate-in slide-in-from-top-1">
+              As senhas não conferem.
+            </p>
+          )}
         </div>
 
-        <button type="submit" disabled={loading} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer transition-colors">
+        <button 
+          type="submit" 
+          disabled={loading || (password.length > 0 && (strength.isBlocked || strength.score < 2))} 
+          className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           {loading ? 'Cadastrando...' : 'Criar Conta'}
         </button>
       </form>

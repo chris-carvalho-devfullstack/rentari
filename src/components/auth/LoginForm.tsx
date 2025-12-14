@@ -1,7 +1,6 @@
-// src/components/auth/LoginForm.tsx
 'use client'; 
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation'; 
 import Link from 'next/link';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
@@ -9,6 +8,7 @@ import { auth, googleProvider } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Icon } from '@/components/ui/Icon';
 import { faEye, faEyeSlash, faEnvelope } from '@fortawesome/free-solid-svg-icons';
+import { Turnstile } from '@marsidev/react-turnstile';
 
 // Ícone do Google
 const GoogleIcon = () => (
@@ -28,6 +28,10 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   
+  // Estados do Cloudflare Turnstile
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileRef = useRef<any>(null);
+
   const router = useRouter();
   const { fetchUserData, setUser } = useAuthStore();
 
@@ -38,19 +42,45 @@ export default function LoginForm() {
 
       const userData = await fetchUserData(user.uid, user.email || '', user.displayName || 'Usuário Rentou');
       setUser(userData);
-      router.push('/dashboard');
+
+      // Redirecionamento Inteligente baseado no perfil
+      if (!userData.perfil) {
+        router.push('/selecao-perfil');
+      } else if (userData.perfil === 'INQUILINO') {
+        router.push('/meu-espaco');
+      } else {
+        router.push('/dashboard');
+      }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    // Validação do Turnstile
+    if (!turnstileToken) {
+        setError('Verificação de segurança necessária. Aguarde a confirmação.');
+        return;
+    }
+
+    setLoading(true);
+    
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Reseta widget após sucesso (boa prática)
+      if (turnstileRef.current) turnstileRef.current.reset();
+      
       await handleSuccess(userCredential.user);
     } catch (err: any) {
+      // Reseta widget em caso de erro para forçar nova verificação
+      if (turnstileRef.current) turnstileRef.current.reset();
+      setTurnstileToken(null);
+
       if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
           setError('E-mail ou senha incorretos.');
+      } else if (err.code === 'auth/too-many-requests') {
+          setError('Muitas tentativas. Tente novamente mais tarde.');
       } else {
           setError('Erro ao entrar. Tente novamente.');
       }
@@ -73,14 +103,13 @@ export default function LoginForm() {
   };
 
   return (
-    <div className="w-full bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700">
+    <div className="w-full bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700 transition-colors duration-300">
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 text-center mb-2">
           Faça seu login
         </h2>
         
         <p className="text-center text-sm mb-6 text-gray-600 dark:text-gray-400">
             Ainda não tem conta?{' '}
-            {/* LINK CORRETO PARA A PÁGINA DE CADASTRO SEPARADA */}
             <Link href="/signup" className="text-rentou-primary font-bold hover:underline cursor-pointer transition-colors">
                 Faça seu cadastro
             </Link>
@@ -90,7 +119,7 @@ export default function LoginForm() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-600 transition-all cursor-pointer mb-4"
+            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-600 transition-all cursor-pointer mb-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary"
         >
             <GoogleIcon />
             Entrar com o Google
@@ -102,7 +131,11 @@ export default function LoginForm() {
             <div className="flex-grow border-t border-gray-200 dark:border-zinc-600"></div>
         </div>
 
-        {error && <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">{error}</div>}
+        {error && (
+            <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/50">
+                {error}
+            </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -113,7 +146,7 @@ export default function LoginForm() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm"
+                    className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors"
                 />
                 <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none">
                     <Icon icon={faEnvelope} className="h-4 w-4" />
@@ -129,29 +162,44 @@ export default function LoginForm() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm"
+                  className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors"
                 />
                 <span 
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                     onClick={() => setShowPassword(!showPassword)}
                 >
-                    <Icon icon={showPassword ? faEye : faEyeSlash} className="h-5 w-5" />
+                    <Icon icon={showPassword ? faEye : faEyeSlash} className="h-4 w-4" />
                 </span>
             </div>
           </div>
 
+          {/* CLOUDFLARE TURNSTILE (CAPTCHA) */}
+          <div className="flex justify-center my-4">
+            <Turnstile
+                ref={turnstileRef}
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}
+                onSuccess={(token) => setTurnstileToken(token)}
+                onError={() => setTurnstileToken(null)}
+                onExpire={() => setTurnstileToken(null)}
+                options={{
+                    theme: 'auto',
+                    size: 'normal',
+                }}
+            />
+          </div>
+
           <button
               type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 transition-colors cursor-pointer"
+              disabled={loading || !turnstileToken}
+              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
           
           <div className="text-center pt-2">
-            <Link href="/recuperar-senha" className="font-medium text-rentou-primary dark:text-gray-200 text-sm hover:underline">
-  Esqueci minha senha
-</Link>
+            <Link href="/recuperar-senha" className="font-medium text-rentou-primary dark:text-blue-400 text-sm hover:underline">
+               Esqueci minha senha
+            </Link>
           </div>
         </form>
     </div>
