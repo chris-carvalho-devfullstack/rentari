@@ -32,7 +32,8 @@ const mapDocToUsuario = (docData: DocumentData, id: string): Usuario => {
         nome: docData.nome || 'Usuário Rentou',
         tipo: docData.tipo || 'PROPRIETARIO', 
         // NOVO: Mapeamento do perfil e pontos importantes
-        perfil: docData.perfil || 'PROPRIETARIO', 
+        // ATUALIZAÇÃO: Define como null se não existir, para forçar seleção
+        perfil: docData.perfil || null, 
         pontosImportantes: docData.pontosImportantes || [],
         
         telefone: docData.telefone || '',
@@ -93,8 +94,8 @@ export async function createNewUserDocument(uid: string, email: string, name: st
         email,
         nome: defaultName,
         tipo: 'PROPRIETARIO',
-        // NOVO: Define o perfil inicial
-        perfil: perfilInicial || 'PROPRIETARIO',
+        // NOVO: Define o perfil inicial como null se não for informado, forçando a seleção
+        perfil: perfilInicial || null,
         pontosImportantes: [],
         
         fotoUrl: '',

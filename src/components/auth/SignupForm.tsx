@@ -1,3 +1,5 @@
+// src/components/auth/SignupForm.tsx
+
 'use client';
 
 import { useState, useRef } from 'react';
@@ -80,6 +82,9 @@ export default function SignupForm() {
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<any>(null);
   
+  // Ref para o container do captcha para scroll
+  const captchaContainerRef = useRef<HTMLDivElement>(null);
+  
   const router = useRouter();
   const { fetchUserData, setUser } = useAuthStore();
 
@@ -94,11 +99,11 @@ export default function SignupForm() {
   const getButtonClass = (tipo: PerfilUsuario) => {
     const isSelected = perfil === tipo;
     if (isSelected) {
-      return "flex items-center p-3 text-left border rounded-lg text-sm transition-all " +
+      return "flex items-center p-3 text-left border rounded-lg text-sm transition-all cursor-pointer " +
              "border-rentou-primary bg-blue-50 text-rentou-primary ring-1 ring-rentou-primary " +
              "dark:bg-blue-600/20 dark:border-blue-400 dark:text-white dark:ring-blue-400";
     }
-    return "flex items-center p-3 text-left border rounded-lg text-sm transition-all " +
+    return "flex items-center p-3 text-left border rounded-lg text-sm transition-all cursor-pointer " +
            "border-gray-300 text-gray-700 hover:bg-gray-50 " +
            "dark:border-zinc-600 dark:text-gray-300 dark:hover:bg-zinc-700 dark:hover:border-zinc-500";
   };
@@ -131,7 +136,9 @@ export default function SignupForm() {
   // Handler Específico para Google (Com lógica de redirecionamento para seleção)
   const handleGoogleSignUp = async () => {
     if (!turnstileToken) {
-        setError('Verificação de segurança necessária.');
+        setError('Verificação de segurança necessária. Aguarde o captcha.');
+        // Foca no captcha
+        captchaContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
 
@@ -189,6 +196,7 @@ export default function SignupForm() {
 
     if (!turnstileToken) {
         setError('Complete a verificação de segurança (Captcha).');
+        captchaContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
     }
 
@@ -374,7 +382,7 @@ export default function SignupForm() {
         </div>
 
         {/* CLOUDFLARE TURNSTILE (CAPTCHA) */}
-        <div className="flex justify-center my-4">
+        <div ref={captchaContainerRef} className="flex justify-center my-4">
             <Turnstile
                 ref={turnstileRef}
                 siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ""}

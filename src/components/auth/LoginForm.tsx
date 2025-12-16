@@ -166,13 +166,15 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 text-center mb-2">
           Faça seu login
         </h2>
+        
         {/* Link de Cadastro (Similar ao Alude) */}
         <p className="text-center text-sm mb-6 text-gray-600 dark:text-gray-400">
             Ainda não tem conta?{' '}
-            {/* ATUALIZADO: Cor mais escura no hover */}
+            {/* ATUALIZADO: Cor mais escura no hover, Negrito e Title */}
             <a 
               href="/signup" 
-              className="text-rentou-primary font-medium hover:underline hover:text-blue-800 dark:hover:text-blue-400 transition-colors"
+              title="Crie sua conta agora e comece a usar a Rentou!"
+              className="text-rentou-primary font-bold hover:underline hover:text-blue-800 dark:hover:text-blue-400 transition-colors cursor-pointer"
             >
               Faça seu cadastro
             </a>
