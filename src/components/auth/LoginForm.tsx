@@ -1,16 +1,17 @@
+// src/components/auth/LoginForm.tsx
+
 'use client'; 
 
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation'; 
-import Link from 'next/link';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
-import { Icon } from '@/components/ui/Icon';
-import { faEye, faEyeSlash, faEnvelope } from '@fortawesome/free-solid-svg-icons';
+import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
+import { faEye, faEyeSlash, faEnvelope } from '@fortawesome/free-solid-svg-icons'; // Ícones de visibilidade e envelope
 import { Turnstile } from '@marsidev/react-turnstile';
 
-// Ícone do Google
+// Ícone do Google (Adicionado conforme correção)
 const GoogleIcon = () => (
   <svg className="w-5 h-5 mr-3" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
     <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
@@ -21,29 +22,52 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function LoginForm() {
+interface LoginFormProps {
+  onSuccess?: () => void;
+}
+
+// FUNÇÃO DE CORREÇÃO: Define o cookie de autenticação para o Middleware
+const setAuthCookie = (token: string, days: number = 7) => {
+  const date = new Date();
+  date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+  const expires = "; expires=" + date.toUTCString();
+  // Define o cookie para que o Middleware possa ler na próxima requisição.
+  document.cookie = `rentou-auth-token=${token}${expires}; path=/; SameSite=Lax; Secure`;
+  console.log("--- [DEBUG] Cookie 'rentou-auth-token' mockado definido.");
+};
+// *****************************************************************************
+
+/**
+ * @fileoverview Formulário de login para o Portal Rentou, atualizado com design Alude-style e ícones FA.
+ */
+export default function LoginForm({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // Adicionado para toggle de senha
   
-  // Estados do Cloudflare Turnstile
+  // Estados do Cloudflare Turnstile (FIX DE SEGURANÇA)
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileRef = useRef<any>(null);
 
-  const router = useRouter();
+  const router = useRouter(); 
   const { fetchUserData, setUser } = useAuthStore();
+  
+  const handleTogglePassword = () => setShowPassword(prev => !prev);
 
-  const handleSuccess = async (user: any) => {
-      const date = new Date();
-      date.setTime(date.getTime() + (7 * 24 * 60 * 60 * 1000));
-      document.cookie = `rentou-auth-token=${user.uid}; expires=${date.toUTCString()}; path=/; SameSite=Lax; Secure`;
+  // Função auxiliar para processar o sucesso do login e redirecionar
+  const handleLoginSuccess = async (user: any) => {
+      // --- PASSO CRÍTICO AQUI: Definir o cookie com o UID ---
+      setAuthCookie(user.uid); 
+      // -----------------------------------------------------
 
       const userData = await fetchUserData(user.uid, user.email || '', user.displayName || 'Usuário Rentou');
       setUser(userData);
+      
+      console.log('--- [DEBUG] Dados do usuário carregados. Redirecionando...');
 
-      // Redirecionamento Inteligente baseado no perfil
+      // Redirecionamento Inteligente baseado no perfil (FIX DE NAVEGAÇÃO)
       if (!userData.perfil) {
         router.push('/selecao-perfil');
       } else if (userData.perfil === 'INQUILINO') {
@@ -51,87 +75,116 @@ export default function LoginForm() {
       } else {
         router.push('/dashboard');
       }
+
+      onSuccess?.();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError(null);
 
     // Validação do Turnstile
     if (!turnstileToken) {
         setError('Verificação de segurança necessária. Aguarde a confirmação.');
+        setLoading(false);
         return;
     }
 
-    setLoading(true);
-    
     try {
+      console.log('--- [DEBUG] Iniciando tentativa de login.');
+      
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
+      // Se chegar aqui, o login com Firebase Auth foi um sucesso.
+      console.log('--- [DEBUG] Login Firebase SUCESSO. UID:', userCredential.user.uid);
+
       // Reseta widget após sucesso (boa prática)
       if (turnstileRef.current) turnstileRef.current.reset();
-      
-      await handleSuccess(userCredential.user);
+
+      await handleLoginSuccess(userCredential.user);
+
     } catch (err: any) {
       // Reseta widget em caso de erro para forçar nova verificação
       if (turnstileRef.current) turnstileRef.current.reset();
       setTurnstileToken(null);
 
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-          setError('E-mail ou senha incorretos.');
-      } else if (err.code === 'auth/too-many-requests') {
-          setError('Muitas tentativas. Tente novamente mais tarde.');
-      } else {
-          setError('Erro ao entrar. Tente novamente.');
+      console.error('--- [DEBUG] ERRO DURANTE O PROCESSO DE LOGIN CATCH:', err);
+      if (err && typeof err === 'object' && err.code) {
+          console.error('--- [DEBUG] Código de Erro:', err.code);
       }
+      
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('E-mail ou senha inválidos. Tente novamente.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Muitas tentativas. Tente novamente mais tarde.');
+      } else {
+        setError(`Ocorreu um erro inesperado. Verifique o console para detalhes.`);
+      }
+    } finally {
+      console.log('--- [DEBUG] Finalizando tentativa de login. Loading = false');
+      setLoading(false);
+    }
+  };
+
+  // Handler para Login com Google (FIX FUNCIONALIDADE)
+  const handleGoogleSignIn = async () => {
+    if (!turnstileToken) {
+      setError('Verificação de segurança necessária. Aguarde o captcha.');
+      return;
+    }
+  
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('--- [DEBUG] Iniciando Login Google.');
+      const result = await signInWithPopup(auth, googleProvider);
+      
+      // Opcional: Resetar o widget após uso
+      if (turnstileRef.current) turnstileRef.current.reset();
+      
+      console.log('--- [DEBUG] Login Google SUCESSO. UID:', result.user.uid);
+      await handleLoginSuccess(result.user);
+
+    } catch (err: any) {
+      // Resetar widget em caso de erro
+      if (turnstileRef.current) turnstileRef.current.reset();
+      setTurnstileToken(null);
+      console.error('--- [DEBUG] Erro Google:', err);
+      setError('Falha no login com Google.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-  // --- ADICIONE ESTA VERIFICAÇÃO ---
-  if (!turnstileToken) {
-    setError('Verificação de segurança necessária. Aguarde o captcha.');
-    return;
-  }
-  // ---------------------------------
-
-  setLoading(true);
-  setError(null);
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    // Opcional: Resetar o widget após uso
-    if (turnstileRef.current) turnstileRef.current.reset();
-    await handleSuccess(result.user);
-  } catch (err) {
-    // Resetar widget em caso de erro
-    if (turnstileRef.current) turnstileRef.current.reset();
-    setTurnstileToken(null);
-    setError('Falha no login com Google.');
-  } finally {
-    setLoading(false);
-  }
-};
-
   return (
-    <div className="w-full bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700 transition-colors duration-300">
+    // ADICIONADO: mb-10 para dar espaço ao footer de copyright
+    <div className="flex flex-col items-center justify-center p-4 mb-10">
+      <div className="w-full max-w-sm bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl border border-gray-100 dark:border-zinc-700 transition-colors duration-300">
+        
+        {/* Título (Foco no centro do Card) */}
         <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 text-center mb-2">
           Faça seu login
         </h2>
-        
+        {/* Link de Cadastro (Similar ao Alude) */}
         <p className="text-center text-sm mb-6 text-gray-600 dark:text-gray-400">
             Ainda não tem conta?{' '}
-            <Link href="/signup" className="text-rentou-primary font-bold hover:underline cursor-pointer transition-colors">
-                Faça seu cadastro
-            </Link>
+            {/* ATUALIZADO: Cor mais escura no hover */}
+            <a 
+              href="/signup" 
+              className="text-rentou-primary font-medium hover:underline hover:text-blue-800 dark:hover:text-blue-400 transition-colors"
+            >
+              Faça seu cadastro
+            </a>
         </p>
         
+        {/* Botão de Login Social (FIX: Botão real funcional) */}
         <button
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-600 transition-all cursor-pointer mb-4 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary"
+            // Estilização atualizada para padrão Google (White/Gray) conforme fix
+            className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-zinc-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary mb-4 transition-all cursor-pointer"
         >
             <GoogleIcon />
             Entrar com o Google
@@ -144,22 +197,26 @@ export default function LoginForm() {
         </div>
 
         {error && (
-            <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/50">
-                {error}
-            </div>
+          <p className="p-3 mb-4 text-sm text-red-700 bg-red-100 dark:bg-red-900 dark:text-red-300 rounded-lg border border-red-200 dark:border-red-800/50">
+            {error}
+          </p>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">E-mail</label>
             <div className="relative mt-1">
                 <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors"
+                id="email"
+                name="email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                // Campo com fundo levemente azul/cinza, como no print
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
                 />
+                {/* Adicionado ícone de envelope para paridade com fix */}
                 <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none">
                     <Icon icon={faEnvelope} className="h-4 w-4" />
                 </span>
@@ -167,25 +224,30 @@ export default function LoginForm() {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Senha</label>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Senha</label>
             <div className="relative mt-1">
                 <input
+                  id="password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm focus:ring-rentou-primary focus:border-rentou-primary sm:text-sm transition-colors"
+                  // Campo com fundo levemente azul/cinza, como no print
+                  className="mt-1 block w-full px-3 py-2 pr-10 border border-gray-300 dark:border-zinc-600 dark:bg-zinc-700/70 dark:text-white rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
                 />
+                {/* Ícone de "Mostrar/Esconder Senha" com Font Awesome */}
                 <span 
                     className="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={handleTogglePassword}
+                    title={showPassword ? 'Esconder senha' : 'Mostrar senha'}
                 >
                     <Icon icon={showPassword ? faEye : faEyeSlash} className="h-4 w-4" />
                 </span>
             </div>
           </div>
 
-          {/* CLOUDFLARE TURNSTILE (CAPTCHA) */}
+          {/* CLOUDFLARE TURNSTILE (CAPTCHA) - FIX DE SEGURANÇA */}
           <div className="flex justify-center my-4">
             <Turnstile
                 ref={turnstileRef}
@@ -200,20 +262,35 @@ export default function LoginForm() {
             />
           </div>
 
-          <button
+          <div>
+            <button
               type="submit"
               disabled={loading || !turnstileToken}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary"
+              // Botão Principal Azul (Rentou Primary), com ajuste dark:hover
+              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-base font-semibold text-white bg-rentou-primary hover:bg-blue-700 dark:hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-rentou-primary transition-colors cursor-pointer ${
+                (loading || !turnstileToken) ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
             >
-              {loading ? 'Entrando...' : 'Entrar'}
+              {loading ? 'Continuando...' : 'Continuar'}
             </button>
-          
-          <div className="text-center pt-2">
-            <Link href="/recuperar-senha" className="font-medium text-rentou-primary dark:text-blue-400 text-sm hover:underline">
-               Esqueci minha senha
-            </Link>
           </div>
+          
+          {/* Link "Esqueceu minha senha" (Centralizado) */}
+          <div className="text-center pt-2">
+            <a href="/recuperar-senha" className="font-medium text-rentou-primary text-sm hover:underline">
+              Esqueci minha senha
+            </a>
+          </div>
+
         </form>
+        
+        {/* Rodapé do Card (Termos de Serviço e Ajuda) */}
+        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-6 border-t pt-4 border-gray-100 dark:border-zinc-700">
+            <a href="#" className="hover:underline">Termos de serviço</a>
+            <a href="#" className="hover:underline">Ajuda</a>
+        </div>
+        
+      </div>
     </div>
   );
 }
