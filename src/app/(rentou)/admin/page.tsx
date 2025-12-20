@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { db } from '@/services/FirebaseService';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Imovel } from '@/types/imovel';
+import { SystemStatusWidget } from '@/components/admin/SystemStatusWidget';
 
 // Interface para as estatísticas
 interface AdminStats {
@@ -639,28 +640,8 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Status Geral */}
-               <Link 
-                    href="/admin/system/status" 
-                    className="bg-white dark:bg-zinc-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-zinc-700 flex flex-col justify-between hover:scale-[1.02] transition-transform cursor-pointer group"
-                >
-                     <div>
-                        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider group-hover:text-blue-600 transition-colors">
-                            Estado do Sistema
-                        </h3>
-                        <div className="mt-2 flex items-center space-x-2">
-                            <span className="flex h-3 w-3 relative">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                            </span>
-                            <span className="font-bold text-green-600 text-lg">Operacional</span>
-                        </div>
-                    </div>
-                    <div className="flex justify-between items-end mt-2">
-                        <p className="text-xs text-gray-400">Clique para diagnóstico detalhado.</p>
-                        <Icon icon={faChartLine} className="text-gray-300 w-4 h-4 group-hover:text-blue-500 transition-colors" />
-                    </div>
-                </Link>
+               {/* Status Geral (Agora Dinâmico) */}
+                <SystemStatusWidget />
             </div>
 
             {/* === LINHA 2: INFRAESTRUTURA & SAÚDE (NOVAS MÉTRICAS) === */}
