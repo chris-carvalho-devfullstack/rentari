@@ -1,0 +1,31 @@
+name: Health Check Monitor
+
+on:
+  schedule:
+    # CRON: Roda no minuto 0 de cada hora (ex: 13:00, 14:00, 15:00...)
+    - cron: '0 * * * *'
+  
+  # Permite rodar manualmente pelo painel do GitHub para testar agora
+  workflow_dispatch:
+
+jobs:
+  check-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acordar API de Health Check
+        run: |
+          # URL da sua API de diagnóstico
+          URL="https://www.rentou.com.br/api/system/health"
+          
+          echo "Iniciando verificação automática em: $URL"
+          
+          # Faz a requisição e captura o código de resposta (200, 404, 500)
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL")
+          
+          if [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "✅ SUCESSO: Sistema Operacional e Cache Aquecido (Status 200)"
+            exit 0
+          else
+            echo "❌ FALHA: O sistema respondeu com Status $HTTP_STATUS"
+            exit 1
+          fi
