@@ -4,7 +4,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/providers/AuthProvider";
 
-// IMPORTAÇÃO DIRETA DA NOVA BIBLIOTECA
+// Import da biblioteca de toasts (Notificações Modernas)
+import { Toaster } from 'sonner';
+
+// IMPORTAÇÃO DA BARRA DE PROGRESSO
 import NextTopLoader from 'nextjs-toploader';
 
 // Import Font Awesome CSS e configuração
@@ -56,6 +59,8 @@ export default function RootLayout({
         
         <AuthProvider> 
           {children}
+          {/* Componente Global de Notificações (Sonner) */}
+          <Toaster richColors position="top-center" closeButton />
         </AuthProvider>
       </body>
     </html>

@@ -1,6 +1,9 @@
 // src/components/anuncios/AnuncioDetalheClient.tsx
 'use client';
 
+// 1. Imports de UI e Navegação
+import { toast } from 'sonner';
+import { useRouter, usePathname } from 'next/navigation'; 
 import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -8,6 +11,7 @@ import { Imovel } from '@/types/imovel';
 import { PoiResult } from '@/services/GeocodingService'; 
 import { PoiList } from '@/components/anuncios/PoiList'; 
 import { ImageLightbox } from '@/components/anuncios/ImageLightbox'; 
+import { auth } from '@/services/FirebaseService'; // Importação do Auth
 
 // Ícones Modernos (Lucide React)
 import { 
@@ -17,11 +21,10 @@ import {
   PlayCircle, Video
 } from 'lucide-react';
 
-// Mantemos o FontAwesome apenas se necessário para componentes legados internos
 import { Icon } from '@/components/ui/Icon';
 import { faStreetView } from '@fortawesome/free-solid-svg-icons';
 
-// Carregamento Dinâmico do Mapa (MapDisplay)
+// Carregamento Dinâmico do Mapa
 const DynamicMapDisplay = dynamic(() => 
     import('@/components/ui/MapDisplay').then((mod) => mod.MapDisplay),
     { 
@@ -49,7 +52,6 @@ const getEmbedUrl = (link: string | undefined): string | null => {
     return null;
 };
 
-// Helper para determinar o selo de finalidade
 const getFinalidadeBadge = (finalidades: string[]) => {
     const isVenda = finalidades.some(f => f.includes('Venda'));
     const isLocacao = finalidades.some(f => f.includes('Locação'));
@@ -60,7 +62,6 @@ const getFinalidadeBadge = (finalidades: string[]) => {
     return { label: finalidades[0] || 'Imóvel', color: 'bg-gray-100 text-gray-800' };
 };
 
-// --- MODAL STREET VIEW ---
 const StreetViewModal = ({ isOpen, onClose, url }: { isOpen: boolean; onClose: () => void; url: string; }) => {
     if (!isOpen || !url) return null;
     return (
@@ -94,8 +95,11 @@ export default function AnuncioDetalheClient({
     outrosImoveis = [], 
     imoveisRelacionados = [] 
 }: AnuncioDetalheClientProps) {
-    const user = null; // Placeholder para auth
     
+    // Hook de navegação para redirecionar ao login
+    const router = useRouter();
+    const pathname = usePathname();
+
     // States Visuais
     const [isLightboxOpen, setIsLightboxOpen] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -117,8 +121,6 @@ export default function AnuncioDetalheClient({
     const [aiNeighborhood, setAiNeighborhood] = useState("");
     const [loadingNeighborhood, setLoadingNeighborhood] = useState(false);
     const [showNeighborhoodModal, setShowNeighborhoodModal] = useState(false);
-
-    const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || ""; 
 
     // --- EFEITOS ---
     useEffect(() => {
@@ -184,7 +186,7 @@ export default function AnuncioDetalheClient({
         await new Promise(r => setTimeout(r, 600));
         localStorage.setItem(`note_${imovel.id}`, note);
         setIsNoteSaving(false);
-        alert("Nota salva localmente!");
+        toast.success("Nota salva localmente!"); // Melhoria visual aqui também
     };
 
     const toggleFavorite = () => {
@@ -194,26 +196,63 @@ export default function AnuncioDetalheClient({
         else localStorage.removeItem(`fav_${imovel.id}`);
     };
 
-    // --- IA ---
-   const callGemini = async (prompt: string) => {
-    try {
-        const res = await fetch('/api/ai/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
-        });
-        if (!res.ok) throw new Error('Falha na requisição');
-        const data = await res.json();
-        return data.text || "Não foi possível gerar a análise no momento.";
-    } catch (e) {
-        console.error("Erro ao chamar IA:", e);
-        return "O sistema de inteligência está indisponível temporariamente.";
-    }
-};
+    // --- IA COM SEGURANÇA (FIXED & IMPROVED UX) ---
+    const callGemini = async (prompt: string) => {
+        try {
+            // 1. Verifica se há usuário logado
+            const user = auth.currentUser;
+            if (!user) {
+                // Notificação Moderna com Ação de Login
+                toast.error("Acesso Restrito", {
+                    description: "Você precisa estar logado para usar a Inteligência Artificial.",
+                    action: {
+                        label: "Fazer Login",
+                        onClick: () => router.push(`/login?redirect=${encodeURIComponent(pathname)}`)
+                    },
+                    duration: 5000,
+                });
+                return null;
+            }
+
+            // 2. Obtém o token seguro
+            const token = await user.getIdToken();
+
+            // 3. Faz a requisição enviando o token
+            const res = await fetch('/api/ai/generate', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ prompt })
+            });
+
+            if (res.status === 401 || res.status === 403) {
+                throw new Error("Sessão expirada ou inválida. Faça login novamente.");
+            }
+
+            if (!res.ok) throw new Error('Falha na requisição');
+            
+            const data = await res.json();
+            return data.text || "Não foi possível gerar a análise no momento.";
+
+        } catch (e: any) {
+            console.error("Erro ao chamar IA:", e);
+            if (e.message.includes("Sessão")) {
+                toast.error(e.message, {
+                    action: { label: "Login", onClick: () => router.push('/login') }
+                });
+            } else {
+                toast.error("O sistema de inteligência está indisponível temporariamente.");
+            }
+            return null; 
+        }
+    };
 
     const generateAIHighlights = async () => {
         if (aiHighlights) return;
         setLoadingAiHighlights(true);
+        
         const infra = imovel.infraestruturaCondominio || [];
         const lazerItems = [...infra];
         if (imovel.condominio?.portaria24h) lazerItems.push("Portaria 24h");
@@ -236,23 +275,38 @@ export default function AnuncioDetalheClient({
             2. Escreva 1 frase curta definindo o "Perfil do Morador Ideal".
             Formate a resposta em Markdown limpo.
         `;
+        
         const text = await callGemini(prompt);
-        setAiHighlights(text);
+        if (text) setAiHighlights(text);
         setLoadingAiHighlights(false);
     };
 
     const generateNeighborhoodGuide = async () => {
-        setShowNeighborhoodModal(true);
-        if (aiNeighborhood) return;
-        setLoadingNeighborhood(true);
         const prompt = `
             Crie um "Guia de Bairro" rápido e envolvente sobre ${imovel.endereco.bairro} em ${imovel.endereco.cidade}, ${imovel.endereco.estado}.
             Foco: Vibe do local, segurança, conveniência e estilo de vida.
             O imóvel é ${imovel.categoriaPrincipal}.
             Limite: 80 a 100 palavras. Use tom profissional mas convidativo.
         `;
+        
+        // Só abre o modal e carrega se tiver usuário
+        if (!auth.currentUser) {
+            toast.info("Recurso Exclusivo", {
+                description: "Faça login para desbloquear o Guia Inteligente do Bairro.",
+                action: {
+                    label: "Entrar agora",
+                    onClick: () => router.push(`/login?redirect=${encodeURIComponent(pathname)}`)
+                }
+            });
+            return;
+        }
+
+        setShowNeighborhoodModal(true);
+        if (aiNeighborhood) return;
+        
+        setLoadingNeighborhood(true);
         const text = await callGemini(prompt);
-        setAiNeighborhood(text);
+        if (text) setAiNeighborhood(text);
         setLoadingNeighborhood(false);
     };
 
@@ -267,11 +321,10 @@ export default function AnuncioDetalheClient({
     const finalidadeBadge = getFinalidadeBadge(imovel.finalidades);
     const videoUrl = getEmbedUrl(imovel.linkVideoTour);
 
-    // --- LÓGICA DE CONDOMÍNIO (ADICIONADA) ---
+    // --- LÓGICA DE CONDOMÍNIO ---
     const temDadosCondominio = imovel.condominio && imovel.condominio.possuiCondominio;
     const nomeCondominioAtual = imovel.condominio?.nomeCondominio?.trim();
 
-    // Filtra vizinhos apenas se tivermos um nome de condomínio válido para comparar
     const vizinhosDeCondominio = (temDadosCondominio && nomeCondominioAtual && outrosImoveis.length > 0)
     ? outrosImoveis.filter(vizinho => 
         vizinho.condominio?.possuiCondominio && 
@@ -422,7 +475,6 @@ export default function AnuncioDetalheClient({
                             </div>
 
                             {/* --- NOVA SEÇÃO: EXPERIÊNCIA VIRTUAL (VÍDEO / 360) --- */}
-                            {/* Localizada estrategicamente após a descrição para aumentar o engajamento */}
                             {(videoUrl || imovel.visitaVirtual360) && (
                                 <div className="mt-8 border-t border-gray-100 pt-6">
                                     <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -443,7 +495,7 @@ export default function AnuncioDetalheClient({
                                             </div>
                                         )}
 
-                                        {/* Placeholder/Botão para Tour 360 (Se ativo mas sem URL direta no objeto ainda) */}
+                                        {/* Placeholder/Botão para Tour 360 */}
                                         {imovel.visitaVirtual360 && !videoUrl && (
                                             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-8 flex flex-col items-center justify-center text-center">
                                                 <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-4">

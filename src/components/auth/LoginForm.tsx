@@ -3,13 +3,16 @@
 'use client'; 
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation'; 
+// IMPORT ATUALIZADO: Adicionado useSearchParams para ler a URL de retorno
+import { useRouter, useSearchParams } from 'next/navigation'; 
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { auth, googleProvider } from '@/services/FirebaseService';
 import { useAuthStore } from '@/hooks/useAuthStore';
 import { Icon } from '@/components/ui/Icon'; // Importar Icon Componente
 import { faEye, faEyeSlash, faEnvelope } from '@fortawesome/free-solid-svg-icons'; // Ícones de visibilidade e envelope
 import { Turnstile } from '@marsidev/react-turnstile';
+// IMPORT NOVO: Notificações modernas
+import { toast } from 'sonner';
 
 // Ícone do Google (Adicionado conforme correção)
 const GoogleIcon = () => (
@@ -52,6 +55,10 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const turnstileRef = useRef<any>(null);
 
   const router = useRouter(); 
+  // HOOK NOVO: Captura parâmetros da URL (ex: ?redirect=/anuncios/123)
+  const searchParams = useSearchParams();
+  const redirectUrl = searchParams.get('redirect');
+
   const { fetchUserData, setUser } = useAuthStore();
   
   const handleTogglePassword = () => setShowPassword(prev => !prev);
@@ -66,9 +73,13 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       setUser(userData);
       
       console.log('--- [DEBUG] Dados do usuário carregados. Redirecionando...');
+      toast.success(`Bem-vindo de volta, ${userData.nome?.split(' ')[0] || 'Usuário'}!`);
 
-      // Redirecionamento Inteligente baseado no perfil (FIX DE NAVEGAÇÃO)
-      if (!userData.perfil) {
+      // Redirecionamento Inteligente (FIX DE NAVEGAÇÃO + MELHORIA DE UX)
+      // Se houver uma URL de redirecionamento, prioriza ela
+      if (redirectUrl) {
+        router.push(redirectUrl);
+      } else if (!userData.perfil) {
         router.push('/selecao-perfil');
       } else if (userData.perfil === 'INQUILINO') {
         router.push('/meu-espaco');
@@ -87,6 +98,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
     // Validação do Turnstile
     if (!turnstileToken) {
         setError('Verificação de segurança necessária. Aguarde a confirmação.');
+        toast.warning('Verificação de segurança necessária.');
         setLoading(false);
         return;
     }
@@ -114,13 +126,17 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
           console.error('--- [DEBUG] Código de Erro:', err.code);
       }
       
+      let errorMessage = `Ocorreu um erro inesperado.`;
+
       if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        setError('E-mail ou senha inválidos. Tente novamente.');
+        errorMessage = 'E-mail ou senha inválidos. Tente novamente.';
       } else if (err.code === 'auth/too-many-requests') {
-        setError('Muitas tentativas. Tente novamente mais tarde.');
-      } else {
-        setError(`Ocorreu um erro inesperado. Verifique o console para detalhes.`);
+        errorMessage = 'Muitas tentativas. Tente novamente mais tarde.';
       }
+      
+      setError(errorMessage);
+      toast.error(errorMessage); // Feedback visual moderno
+
     } finally {
       console.log('--- [DEBUG] Finalizando tentativa de login. Loading = false');
       setLoading(false);
@@ -131,6 +147,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
   const handleGoogleSignIn = async () => {
     if (!turnstileToken) {
       setError('Verificação de segurança necessária. Aguarde o captcha.');
+      toast.warning('Aguarde o captcha de segurança.');
       return;
     }
   
@@ -152,6 +169,7 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
       setTurnstileToken(null);
       console.error('--- [DEBUG] Erro Google:', err);
       setError('Falha no login com Google.');
+      toast.error('Falha ao conectar com Google.');
     } finally {
       setLoading(false);
     }
