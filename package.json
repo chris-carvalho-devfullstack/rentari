@@ -2,6 +2,7 @@
   "name": "rentou",
   "version": "0.1.0",
   "private": true,
+
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,6 +10,7 @@
     "start": "next start",
     "lint": "eslint"
   },
+
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.5.2",
     "@fortawesome/free-solid-svg-icons": "^6.5.2",
@@ -17,25 +19,24 @@
     "firebase": "^12.5.0",
     "lucide-react": "^0.556.0",
     "mapbox-gl": "^3.1.2",
-    "next": "^15.0.3",
+    "next": "15.5.9",
     "nextjs-toploader": "^3.9.17",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-map-gl": "^7.1.7",
     "zustand": "^5.0.8"
   },
+
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.16",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
-    "@vercel/next": "^4.15.3",
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "^15.0.0",
     "tailwindcss": "^4",
-    "typescript": "^5",
-    "vercel": "^48.10.3"
+    "typescript": "^5"
   }
 }
