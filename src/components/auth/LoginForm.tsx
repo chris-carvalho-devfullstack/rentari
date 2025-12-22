@@ -2,7 +2,7 @@
 
 'use client'; 
 
-import { useState, useRef } from 'react';
+import { useState, useRef, Suspense } from 'react';
 // IMPORT ATUALIZADO: Adicionado useSearchParams para ler a URL de retorno
 import { useRouter, useSearchParams } from 'next/navigation'; 
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
@@ -13,6 +13,8 @@ import { faEye, faEyeSlash, faEnvelope } from '@fortawesome/free-solid-svg-icons
 import { Turnstile } from '@marsidev/react-turnstile';
 // IMPORT NOVO: Notificações modernas
 import { toast } from 'sonner';
+// Ícone de carregamento para o Suspense
+import { Loader2 } from 'lucide-react';
 
 // Ícone do Google (Adicionado conforme correção)
 const GoogleIcon = () => (
@@ -41,9 +43,9 @@ const setAuthCookie = (token: string, days: number = 7) => {
 // *****************************************************************************
 
 /**
- * @fileoverview Formulário de login para o Portal Rentou, atualizado com design Alude-style e ícones FA.
+ * Conteúdo interno do formulário que usa searchParams
  */
-export default function LoginForm({ onSuccess }: LoginFormProps) {
+function LoginFormContent({ onSuccess }: LoginFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -312,5 +314,23 @@ export default function LoginForm({ onSuccess }: LoginFormProps) {
         
       </div>
     </div>
+  );
+}
+
+/**
+ * @fileoverview Componente Principal de Login
+ * Envolve o conteúdo em Suspense para evitar erro de build no Next.js ao usar useSearchParams
+ */
+export default function LoginForm(props: LoginFormProps) {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center p-4 min-h-[500px]">
+        <div className="w-full max-w-sm bg-white dark:bg-zinc-800 p-8 rounded-xl shadow-2xl flex justify-center items-center">
+          <Loader2 className="w-8 h-8 animate-spin text-rentou-primary" />
+        </div>
+      </div>
+    }>
+      <LoginFormContent {...props} />
+    </Suspense>
   );
 }
